@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Http\Requests\KompenResponHubTableRequest;
 use App\Http\Resources\KompenResponHubDetailResource;
+use App\Http\Resources\KompenResponHubImportResource;
 use App\Http\Resources\KompenResponHubStudentResource;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -68,7 +69,7 @@ class KompenResponHubController extends Controller
         $filters = $request->validated();
         $activeTab = $filters['tab'] ?? ($isAdmin ? 'upload' : 'students');
 
-        if (! $isAdmin && $activeTab === 'upload') {
+        if (! $isAdmin && in_array($activeTab, ['upload', 'imports'], true)) {
             $activeTab = 'students';
         }
 
@@ -89,6 +90,12 @@ class KompenResponHubController extends Controller
                     KompenResponHubDetailResource::class,
                 )
                 : null,
+            'imports' => $isAdmin && $activeTab === 'imports'
+                ? $this->resourcePaginator(
+                    $this->dataQuery->imports()->paginate($this->perPage($filters))->withQueryString(),
+                    KompenResponHubImportResource::class,
+                )
+                : null,
         ]);
     }
 
@@ -99,7 +106,7 @@ class KompenResponHubController extends Controller
     }
 
     /**
-     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource>  $resource
+     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportResource>  $resource
      * @return array<string, mixed>
      */
     private function resourcePaginator(LengthAwarePaginator $paginator, string $resource): array

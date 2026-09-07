@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\KompenResponHub\ImportKompenResponHubWorkbook;
 use App\Actions\KompenResponHub\ParseKompenResponHubWorkbook;
 use App\Http\Requests\StoreKompenResponHubImportRequest;
+use App\Models\KompenResponHubAdmin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +28,8 @@ class KompenResponHubImportController extends Controller
         ParseKompenResponHubWorkbook $parser,
         ImportKompenResponHubWorkbook $importer,
     ): RedirectResponse {
+        /** @var KompenResponHubAdmin $admin */
+        $admin = $request->user('admin');
         $file = $request->file('file');
         $storedPath = $file->store('kompen-respon-hub/imports');
         $fullPath = Storage::disk('local')->path($storedPath);
@@ -56,6 +59,9 @@ class KompenResponHubImportController extends Controller
             $file->getClientOriginalName(),
             $storedPath,
             hash_file('sha256', $fullPath),
+            $admin->id,
+            $request->string('uploader_name')->trim()->toString(),
+            $admin->email,
         );
 
         return to_route('admin.kompen-respon.index')

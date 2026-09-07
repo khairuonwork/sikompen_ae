@@ -3,11 +3,15 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class KompenResponHubImport extends Model
 {
     protected $fillable = [
+        'uploaded_by_admin_id',
+        'uploader_name',
+        'uploader_email',
         'periode_semester',
         'original_filename',
         'stored_path',
@@ -33,5 +37,10 @@ class KompenResponHubImport extends Model
     public function students(): HasMany
     {
         return $this->hasMany(KompenResponHubStudent::class);
+    }
+
+    public function uploadedByAdmin(): BelongsTo
+    {
+        return $this->belongsTo(KompenResponHubAdmin::class, 'uploaded_by_admin_id');
     }
 }

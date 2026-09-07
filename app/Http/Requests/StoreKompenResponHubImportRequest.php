@@ -14,6 +14,7 @@ class StoreKompenResponHubImportRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'uploader_name' => ['required', 'string', 'max:100'],
             'file' => ['required', 'file', 'mimes:xlsx', 'max:20480'],
         ];
     }

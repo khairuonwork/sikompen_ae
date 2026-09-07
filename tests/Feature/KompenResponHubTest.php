@@ -114,6 +114,7 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
     $admin = KompenResponHubAdmin::factory()->create();
 
     $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
         'file' => UploadedFile::fake()->createWithContent(
             'kompen-respon.xlsx',
             workbookContents(),
@@ -126,10 +127,32 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
     expect($student->nim)->toBe('123456789')
         ->and($student->total_hutang_jam)->toBe('3.5000');
 
+    $import = KompenResponHubImport::query()->latest('id')->firstOrFail();
+    expect($import->uploaded_by_admin_id)->toBe($admin->id)
+        ->and($import->uploader_name)->toBe('Khairul Anwar')
+        ->and($import->uploader_email)->toBe($admin->email);
+
+    $this->actingAs($admin, 'admin')->get('/admin/kompen-respon?tab=imports')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('activeTab', 'imports')
+            ->has('imports.data', 2)
+            ->where('imports.data.0.uploader_name', 'Khairul Anwar')
+            ->where('imports.data.0.uploader_email', $admin->email),
+        );
+
     $this->getJson('/api/kompen-respon/details?nim=123456789')
         ->assertOk()
         ->assertJsonPath('data.0.nama_dosen', 'Ibu Sari')
         ->assertJsonPath('data.0.jam_kompensasi', '1.5000');
+});
+
+test('an admin must enter their name before importing a workbook', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'file' => UploadedFile::fake()->create('kompen-respon.xlsx'),
+    ])->assertSessionHasErrors('uploader_name');
 });
 
 function createStudent(): KompenResponHubStudent

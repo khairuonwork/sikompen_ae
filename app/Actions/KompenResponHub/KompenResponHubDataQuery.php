@@ -3,12 +3,20 @@
 namespace App\Actions\KompenResponHub;
 
 use App\Models\KompenResponHubDetail;
+use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class KompenResponHubDataQuery
 {
+    public function imports(): Builder
+    {
+        return KompenResponHubImport::query()
+            ->orderByDesc('imported_at')
+            ->orderByDesc('id');
+    }
+
     /** @return array{tingkat: Collection<int, int>, kelas: Collection<int, string>, periode_semester: Collection<int, string>} */
     public function filterOptions(): array
     {

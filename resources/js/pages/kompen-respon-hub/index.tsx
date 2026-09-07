@@ -77,6 +77,18 @@ type Detail = {
     jam_responsi: string;
 };
 
+type ImportLog = {
+    id: number;
+    uploader_name: string | null;
+    uploader_email: string | null;
+    periode_semester: string;
+    original_filename: string;
+    class_count: number;
+    student_count: number;
+    detail_count: number;
+    imported_at: string | null;
+};
+
 type Pagination<T> = {
     data: T[];
     links: { prev: string | null; next: string | null };
@@ -98,19 +110,21 @@ type FilterOptions = {
 };
 
 type KompenResponHubPageProps = {
-    activeTab: 'upload' | 'students' | 'details';
+    activeTab: 'upload' | 'students' | 'details' | 'imports';
     isAdmin: boolean;
     filters: Filters;
     filterOptions: FilterOptions;
     flash: { success: string | null };
     students: Pagination<Student> | null;
     details: Pagination<Detail> | null;
+    imports: Pagination<ImportLog> | null;
 };
 
 const adminTabs = [
     ['upload', 'Upload dokumen'],
     ['students', 'Kompen dan Respon'],
     ['details', 'Detail Kompen'],
+    ['imports', 'Log upload'],
 ] as const;
 
 const studentTabs = [
@@ -319,6 +333,85 @@ function DetailTable({
     );
 }
 
+function UploadLogTable({
+    data,
+}: {
+    data: Pagination<ImportLog>;
+}): React.JSX.Element {
+    const headings = [
+        'Waktu upload',
+        'Nama admin',
+        'Email admin',
+        'Periode',
+        'Nama file',
+        'Kelas',
+        'Mahasiswa',
+        'Detail',
+    ];
+
+    return (
+        <section className="bg-card overflow-hidden rounded-xl border shadow-sm">
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[1050px] text-sm">
+                    <thead className="bg-muted/60 text-muted-foreground text-left text-xs tracking-wide uppercase">
+                        <tr>
+                            {headings.map((heading) => (
+                                <th
+                                    key={heading}
+                                    className="px-3 py-3 font-medium"
+                                >
+                                    {heading}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                        {data.data.map((importLog) => (
+                            <tr
+                                key={importLog.id}
+                                className="hover:bg-muted/40"
+                            >
+                                <td className="px-3 py-3 whitespace-nowrap">
+                                    {importLog.imported_at
+                                        ? new Intl.DateTimeFormat('id-ID', {
+                                              dateStyle: 'medium',
+                                              timeStyle: 'short',
+                                          }).format(
+                                              new Date(importLog.imported_at),
+                                          )
+                                        : '—'}
+                                </td>
+                                <td className="px-3 py-3 font-medium">
+                                    {importLog.uploader_name ?? 'Data lama'}
+                                </td>
+                                <td className="px-3 py-3">
+                                    {importLog.uploader_email ?? '—'}
+                                </td>
+                                <td className="px-3 py-3">
+                                    {importLog.periode_semester}
+                                </td>
+                                <td className="max-w-64 truncate px-3 py-3">
+                                    {importLog.original_filename}
+                                </td>
+                                <td className="px-3 py-3 text-right tabular-nums">
+                                    {importLog.class_count}
+                                </td>
+                                <td className="px-3 py-3 text-right tabular-nums">
+                                    {importLog.student_count}
+                                </td>
+                                <td className="px-3 py-3 text-right tabular-nums">
+                                    {importLog.detail_count}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <Pager data={data} />
+        </section>
+    );
+}
+
 function UploadPanel(): React.JSX.Element {
     return (
         <Card className="mx-auto w-full max-w-3xl">
@@ -333,6 +426,21 @@ function UploadPanel(): React.JSX.Element {
                 {({ errors, processing, progress }) => (
                     <>
                         <CardContent className="grid gap-2">
+                            <Label htmlFor="uploader-name">
+                                Nama admin yang mengunggah
+                            </Label>
+                            <Input
+                                id="uploader-name"
+                                name="uploader_name"
+                                autoComplete="name"
+                                maxLength={100}
+                                required
+                            />
+                            {errors.uploader_name ? (
+                                <p className="text-destructive text-sm">
+                                    {errors.uploader_name}
+                                </p>
+                            ) : null}
                             <Label htmlFor="kompen-respon-workbook">
                                 Workbook XLSX
                             </Label>
@@ -531,8 +639,8 @@ export default function KompenResponHubIndex({
     flash,
     students,
     details,
+    imports,
 }: KompenResponHubPageProps): React.JSX.Element {
-    const currentTable = activeTab === 'students' ? students : details;
     const indexAction = isAdmin ? adminIndex : studentIndex;
     const tabs = isAdmin ? adminTabs : studentTabs;
 
@@ -607,7 +715,7 @@ export default function KompenResponHubIndex({
                             key={tab}
                             href={indexAction.url({
                                 query:
-                                    tab === 'upload'
+                                    tab === 'upload' || tab === 'imports'
                                         ? { tab }
                                         : { ...filters, tab },
                             })}
@@ -628,7 +736,17 @@ export default function KompenResponHubIndex({
 
                 {activeTab === 'upload' ? <UploadPanel /> : null}
 
-                {activeTab !== 'upload' ? (
+                {activeTab === 'imports' ? (
+                    imports?.data.length ? (
+                        <UploadLogTable data={imports} />
+                    ) : (
+                        <div className="text-muted-foreground rounded-xl border border-dashed p-10 text-center text-sm">
+                            Belum ada riwayat upload.
+                        </div>
+                    )
+                ) : null}
+
+                {activeTab === 'students' || activeTab === 'details' ? (
                     <section className="flex flex-col gap-4">
                         <FilterPanel
                             key={activeTab}
@@ -637,7 +755,8 @@ export default function KompenResponHubIndex({
                             filters={filters}
                             filterOptions={filterOptions}
                         />
-                        {currentTable?.data.length ? (
+                        {(activeTab === 'students' ? students : details)?.data
+                            .length ? (
                             activeTab === 'students' && students ? (
                                 <StudentTable data={students} />
                             ) : details ? (
