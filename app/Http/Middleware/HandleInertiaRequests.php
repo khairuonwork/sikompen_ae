@@ -40,6 +40,7 @@ class HandleInertiaRequests extends Middleware
             'name' => config('app.name'),
             'flash' => [
                 'success' => fn (): ?string => $request->session()->get('success'),
+                'adminSetupCode' => fn (): ?string => $request->session()->get('admin_setup_code'),
             ],
         ];
     }

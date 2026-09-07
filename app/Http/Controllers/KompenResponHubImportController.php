@@ -58,7 +58,7 @@ class KompenResponHubImportController extends Controller
             hash_file('sha256', $fullPath),
         );
 
-        return to_route('kompen-respon-hub.index')
+        return to_route('admin.kompen-respon.index')
             ->with('success', "Impor selesai: {$result['student_count']} mahasiswa dan {$result['detail_count']} detail kompen disimpan.");
     }
 }

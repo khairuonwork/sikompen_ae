@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubStudent;
@@ -15,7 +16,8 @@ test('the public page and data API do not require a login', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('kompen-respon-hub/index')
-            ->where('activeTab', 'upload')
+            ->where('activeTab', 'students')
+            ->where('isAdmin', false)
             ->has('filterOptions.periode_semester', 1),
         );
 
@@ -24,7 +26,7 @@ test('the public page and data API do not require a login', function () {
         ->assertJsonPath('data.0.nim', $student->nim)
         ->assertJsonPath('data.0.total_hutang_jam', '3.5000');
 
-    $this->get('/login')->assertNotFound();
+    $this->get('/admin/login')->assertOk();
 });
 
 test('the dynamic filters only expose uploaded periods and filter their records', function () {
@@ -94,16 +96,29 @@ test('the student API returns the complete kompen and respon payload for one stu
         ->assertJsonPath('data.details.0.jam_responsi', '2.0000');
 });
 
-test('uploading a valid workbook immediately replaces the matching class data', function () {
+test('students can download an XLSX limited to the selected uploaded period', function () {
+    createStudent();
+
+    $this->get('/mahasiswa/downloads/students')
+        ->assertRedirect()
+        ->assertSessionHasErrors('periode_semester');
+
+    $this->get('/mahasiswa/downloads/students?periode_semester=2026%2F2027%20Ganjil')
+        ->assertOk()
+        ->assertDownload('kompen-dan-respon-2026-2027-ganjil.xlsx');
+});
+
+test('an authenticated admin can upload a valid workbook that replaces matching class data', function () {
     Storage::fake('local');
     $oldStudent = createStudent();
+    $admin = KompenResponHubAdmin::factory()->create();
 
-    $this->post('/kompen-respon/imports', [
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
         'file' => UploadedFile::fake()->createWithContent(
             'kompen-respon.xlsx',
             workbookContents(),
         ),
-    ])->assertRedirect('/kompen-respon');
+    ])->assertRedirect('/admin/kompen-respon');
 
     expect(KompenResponHubStudent::query()->find($oldStudent->id))->toBeNull();
 

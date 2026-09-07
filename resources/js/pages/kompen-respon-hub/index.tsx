@@ -4,6 +4,7 @@ import {
     FileSpreadsheet,
     ListFilter,
     Search,
+    Settings,
     UploadCloud,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -11,6 +12,12 @@ import {
     downloadTemplate,
     store,
 } from '@/actions/App/Http/Controllers/KompenResponHubImportController';
+import { destroy as logout } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
+import { settings as adminSettings } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
+import {
+    details as downloadDetails,
+    students as downloadStudents,
+} from '@/actions/App/Http/Controllers/KompenResponHubDownloadController';
 import { student as studentApi } from '@/actions/App/Http/Controllers/KompenResponHubController';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -32,7 +39,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { index } from '@/routes/kompen-respon-hub';
+import { index as adminIndex } from '@/routes/admin/kompen-respon';
+import { index as studentIndex } from '@/routes/student/kompen-respon';
 
 type Student = {
     id: number;
@@ -91,6 +99,7 @@ type FilterOptions = {
 
 type KompenResponHubPageProps = {
     activeTab: 'upload' | 'students' | 'details';
+    isAdmin: boolean;
     filters: Filters;
     filterOptions: FilterOptions;
     flash: { success: string | null };
@@ -98,8 +107,13 @@ type KompenResponHubPageProps = {
     details: Pagination<Detail> | null;
 };
 
-const tabs = [
+const adminTabs = [
     ['upload', 'Upload dokumen'],
+    ['students', 'Kompen dan Respon'],
+    ['details', 'Detail Kompen'],
+] as const;
+
+const studentTabs = [
     ['students', 'Kompen dan Respon'],
     ['details', 'Detail Kompen'],
 ] as const;
@@ -359,10 +373,12 @@ function UploadPanel(): React.JSX.Element {
 
 function FilterPanel({
     activeTab,
+    isAdmin,
     filters,
     filterOptions,
 }: {
     activeTab: 'students' | 'details';
+    isAdmin: boolean;
     filters: Filters;
     filterOptions: FilterOptions;
 }): React.JSX.Element {
@@ -372,10 +388,23 @@ function FilterPanel({
     const [perPage, setPerPage] = useState(
         filters.per_page?.toString() ?? '15',
     );
+    const indexAction = isAdmin ? adminIndex : studentIndex;
+    const downloadAction =
+        activeTab === 'students' ? downloadStudents : downloadDetails;
+    const downloadUrl = periode
+        ? downloadAction.url({
+              query: {
+                  search: filters.search,
+                  tingkat: tingkat || undefined,
+                  kelas: kelas || undefined,
+                  periode_semester: periode,
+              },
+          })
+        : null;
 
     return (
         <Form
-            {...index.form()}
+            {...indexAction.form()}
             className="bg-card grid gap-3 rounded-xl border p-4 lg:grid-cols-[minmax(220px,1fr)_repeat(4,minmax(140px,auto))]"
         >
             <input name="tab" type="hidden" value={activeTab} />
@@ -460,12 +489,26 @@ function FilterPanel({
                     Terapkan
                 </Button>
             </div>
-            <Link
-                href={index.url({ query: { tab: activeTab } })}
-                className="text-muted-foreground hover:text-foreground col-span-full justify-self-start text-sm"
-            >
-                Reset filter
-            </Link>
+            <div className="col-span-full flex flex-wrap items-center justify-between gap-3">
+                <Link
+                    href={indexAction.url({ query: { tab: activeTab } })}
+                    className="text-muted-foreground hover:text-foreground text-sm"
+                >
+                    Reset filter
+                </Link>
+                {downloadUrl ? (
+                    <Button asChild size="sm" variant="outline">
+                        <a href={downloadUrl}>
+                            <Download className="size-4" />
+                            Download XLSX
+                        </a>
+                    </Button>
+                ) : (
+                    <span className="text-muted-foreground text-xs">
+                        Pilih periode untuk mengunduh data.
+                    </span>
+                )}
+            </div>
         </Form>
     );
 }
@@ -482,6 +525,7 @@ function EmptyTableState(): React.JSX.Element {
 
 export default function KompenResponHubIndex({
     activeTab,
+    isAdmin,
     filters,
     filterOptions,
     flash,
@@ -489,6 +533,8 @@ export default function KompenResponHubIndex({
     details,
 }: KompenResponHubPageProps): React.JSX.Element {
     const currentTable = activeTab === 'students' ? students : details;
+    const indexAction = isAdmin ? adminIndex : studentIndex;
+    const tabs = isAdmin ? adminTabs : studentTabs;
 
     return (
         <>
@@ -502,24 +548,46 @@ export default function KompenResponHubIndex({
                         </div>
                         <div>
                             <p className="text-primary text-sm font-medium">
-                                Admin tanpa login
+                                {isAdmin
+                                    ? 'Panel admin'
+                                    : 'Akses mahasiswa · baca saja'}
                             </p>
                             <h1 className="mt-1 text-3xl font-semibold tracking-tight">
                                 Kompen Respon Hub
                             </h1>
                             <p className="text-muted-foreground mt-2 max-w-2xl text-sm">
-                                Impor workbook Sikompen dan kelola ringkasan
-                                Kompen/Respon maupun detail kehadiran.
+                                {isAdmin
+                                    ? 'Impor workbook Sikompen dan kelola ringkasan Kompen/Respon maupun detail kehadiran.'
+                                    : 'Lihat data Kompen/Respon dan Detail Kompen, lalu unduh hasil sesuai periode yang dipilih.'}
                             </p>
                         </div>
                     </div>
-                    <a
-                        className="bg-background hover:bg-accent inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium shadow-xs"
-                        href={downloadTemplate.url()}
-                    >
-                        <Download className="size-4" />
-                        Download template
-                    </a>
+                    {isAdmin ? (
+                        <div className="flex flex-wrap gap-2">
+                            <Button asChild variant="outline">
+                                <Link href={adminSettings.url()}>
+                                    <Settings className="size-4" />
+                                    Pengaturan
+                                </Link>
+                            </Button>
+                            <a
+                                className="bg-background hover:bg-accent inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium shadow-xs"
+                                href={downloadTemplate.url()}
+                            >
+                                <Download className="size-4" />
+                                Download template
+                            </a>
+                            <Button asChild variant="outline">
+                                <Link
+                                    href={logout.url()}
+                                    method="post"
+                                    as="button"
+                                >
+                                    Keluar
+                                </Link>
+                            </Button>
+                        </div>
+                    ) : null}
                 </header>
 
                 {flash.success ? (
@@ -532,12 +600,12 @@ export default function KompenResponHubIndex({
 
                 <nav
                     className="flex flex-wrap gap-2 border-b"
-                    aria-label="Menu admin"
+                    aria-label={isAdmin ? 'Menu admin' : 'Menu mahasiswa'}
                 >
                     {tabs.map(([tab, label]) => (
                         <Link
                             key={tab}
-                            href={index.url({
+                            href={indexAction.url({
                                 query:
                                     tab === 'upload'
                                         ? { tab }
@@ -565,6 +633,7 @@ export default function KompenResponHubIndex({
                         <FilterPanel
                             key={activeTab}
                             activeTab={activeTab}
+                            isAdmin={isAdmin}
                             filters={filters}
                             filterOptions={filterOptions}
                         />
