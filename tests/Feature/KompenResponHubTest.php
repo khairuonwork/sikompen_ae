@@ -1,10 +1,13 @@
 <?php
 
+use App\Jobs\ProcessKompenResponHubImport;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImport;
+use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -110,7 +113,7 @@ test('students can download an XLSX limited to the selected uploaded period', fu
 
 test('an authenticated admin can upload a valid workbook that replaces matching class data', function () {
     Storage::fake('local');
-    $oldStudent = createStudent();
+    $oldStudent = createStudent('2026/2027 Gasal');
     $admin = KompenResponHubAdmin::factory()->create();
 
     $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
@@ -119,7 +122,7 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
             'kompen-respon.xlsx',
             workbookContents(),
         ),
-    ])->assertRedirect('/admin/kompen-respon');
+    ])->assertRedirect('/admin/kompen-respon?tab=upload');
 
     expect(KompenResponHubStudent::query()->find($oldStudent->id))->toBeNull();
 
@@ -128,7 +131,8 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
         ->and($student->total_hutang_jam)->toBe('3.5000');
 
     $import = KompenResponHubImport::query()->latest('id')->firstOrFail();
-    expect($import->uploaded_by_admin_id)->toBe($admin->id)
+    expect($import->periode_semester)->toBe('2026/2027 Gasal')
+        ->and($import->uploaded_by_admin_id)->toBe($admin->id)
         ->and($import->uploader_name)->toBe('Khairul Anwar')
         ->and($import->uploader_email)->toBe($admin->email);
 
@@ -155,10 +159,120 @@ test('an admin must enter their name before importing a workbook', function () {
     ])->assertSessionHasErrors('uploader_name');
 });
 
-function createStudent(): KompenResponHubStudent
+test('an uploaded workbook is queued and its progress remains available outside the upload tab', function () {
+    Storage::fake('local');
+    Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->create('kompen-respon.xlsx', 100),
+    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_QUEUED)
+        ->and($importTask->progress)->toBe(0)
+        ->and($importTask->uploader_name)->toBe('Khairul Anwar');
+
+    Queue::assertPushed(
+        ProcessKompenResponHubImport::class,
+        fn (ProcessKompenResponHubImport $job): bool => $job->importTaskId === $importTask->id,
+    );
+
+    $this->actingAs($admin, 'admin')->get('/admin/kompen-respon?tab=details')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('activeTab', 'details')
+            ->has('activeImportTasks', 1)
+            ->where('activeImportTasks.0.id', $importTask->id)
+            ->where('activeImportTasks.0.status', KompenResponHubImportTask::STATUS_QUEUED),
+        );
+
+    $this->actingAs($admin, 'admin')
+        ->getJson("/admin/kompen-respon/import-tasks/{$importTask->id}")
+        ->assertOk()
+        ->assertJsonPath('data.id', $importTask->id)
+        ->assertJsonPath('data.progress', 0);
+});
+
+test('an admin can download the empty Sikompen import template', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin/kompen-respon/template')
+        ->assertDownload('Template_Impor_Kompen_Respon_Hub.xlsx');
+});
+
+test('an invalid academic year marks the queued import as failed', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents('Gasal', '2026/2028'),
+        ),
+    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Tahun ajaran wajib berformat');
+});
+
+test('an admin can import a legacy workbook with its period in one cell', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents('2026/2027 Ganjil', ''),
+        ),
+    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+
+    expect(KompenResponHubImport::query()->sole()->periode_semester)->toBe('2026/2027 Gasal');
+});
+
+test('an admin import reads the class and level metadata from the workbook', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(classCode: '2AEA1', level: 2),
+        ),
+    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+
+    $student = KompenResponHubStudent::query()->sole();
+    expect($student->kelas)->toBe('2AEA1')
+        ->and($student->tingkat)->toBe(2);
+});
+
+test('a level that differs from its class code marks the queued import as failed', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(classCode: '2AEA1', level: 1),
+        ),
+    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Tingkat harus sama dengan angka awal');
+});
+
+function createStudent(string $period = '2026/2027 Ganjil'): KompenResponHubStudent
 {
     $import = KompenResponHubImport::create([
-        'periode_semester' => '2026/2027 Ganjil',
+        'periode_semester' => $period,
         'original_filename' => 'source.xlsx',
         'stored_path' => 'kompen-respon-hub/imports/source.xlsx',
         'file_hash' => str_repeat('a', 64),
@@ -171,7 +285,7 @@ function createStudent(): KompenResponHubStudent
     return KompenResponHubStudent::create([
         'kompen_respon_hub_import_id' => $import->id,
         'nim' => '123456789',
-        'periode_semester' => '2026/2027 Ganjil',
+        'periode_semester' => $period,
         'nama_mahasiswa' => 'Rina Utami',
         'kelas' => '1AEA1',
         'tingkat' => 1,
@@ -187,23 +301,31 @@ function createStudent(): KompenResponHubStudent
     ]);
 }
 
-function workbookContents(): string
-{
+function workbookContents(
+    string $semester = 'Gasal',
+    string $academicYear = '2026/2027',
+    string $classCode = '1AEA1',
+    int $level = 1,
+): string {
     $workbook = new Spreadsheet;
     $summary = $workbook->getActiveSheet();
     $summary->setTitle('Kompen dan Respon');
-    $summary->setCellValue('A1', 'KOMPEN DAN RESPON — 1AEA1');
-    $summary->setCellValue('B2', '2026/2027 Ganjil');
+    $summary->setCellValue('A1', "KOMPEN DAN RESPON — {$classCode}");
+    $summary->setCellValue('B2', $semester);
+    $summary->setCellValue('C2', $academicYear);
+    $summary->setCellValue('E2', $classCode);
+    $summary->setCellValue('H2', $level);
     $summary->fromArray([
         ['NO.', 'NIM', 'NAMA MAHASISWA', 'T[J]', 'S[J]', 'I[J]', 'B[J]', 'KOMPENSASI[J]', 'RESPONSI[J]', 'TOTAL[J]', 'KOMPENSASI DIKERJAKAN[J]', 'SISA KOMPEN[J]'],
         [1, '123456789', 'Rina Utami', 0.5, 0, 0, 0, 1.5, 2, 3.5, 0, 3.5],
     ], null, 'A3');
+    $summary->setCellValue('A6', 'TEMPLATE BLOK KELAS BARU — SALIN LALU GANTI KODE');
 
     $details = $workbook->createSheet();
     $details->setTitle('Detail Kompen');
     $details->fromArray([
         ['NO.', 'KELAS', 'NIM', 'NAMA MAHASISWA', 'MATA KULIAH', 'NAMA DOSEN', 'TANGGAL', 'JENIS PERTEMUAN', 'PRESENSI', 'MENIT KETERLAMBATAN', 'KETERANGAN', 'JAM KOMPENSASI', 'JAM RESPONSI'],
-        [1, '1AEA1', '123456789', 'Rina Utami', 'Algoritma', 'Ibu Sari', '2026-09-01', 'Luring', 'Terlambat', 15, 'Macet', 1.5, 2],
+        [1, $classCode, '123456789', 'Rina Utami', 'Algoritma', 'Ibu Sari', '2026-09-01', 'Luring', 'Terlambat', 15, 'Macet', 1.5, 2],
     ]);
 
     $writer = new Xlsx($workbook);

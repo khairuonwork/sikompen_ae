@@ -51,7 +51,10 @@ return new class extends Migration
                 $table->timestamps();
 
                 $table->unique(['nim', 'periode_semester', 'kelas']);
-                $table->index(['periode_semester', 'tingkat', 'kelas', 'nama_mahasiswa', 'nim']);
+                $table->index(
+                    ['periode_semester', 'tingkat', 'kelas', 'nama_mahasiswa', 'nim'],
+                    'kompen_hub_students_filter_idx',
+                );
             });
         }
 

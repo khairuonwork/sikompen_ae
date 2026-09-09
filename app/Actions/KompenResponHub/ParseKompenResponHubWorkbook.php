@@ -10,6 +10,8 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class ParseKompenResponHubWorkbook
 {
+    private const NEW_CLASS_TEMPLATE_MARKER = 'TEMPLATE BLOK KELAS BARU';
+
     private const SUMMARY_HEADERS = [
         'NO.', 'NIM', 'NAMA MAHASISWA', 'T[J]', 'S[J]', 'I[J]', 'B[J]',
         'KOMPENSASI[J]', 'RESPONSI[J]', 'TOTAL[J]', 'KOMPENSASI DIKERJAKAN[J]', 'SISA KOMPEN[J]',
@@ -75,8 +77,14 @@ class ParseKompenResponHubWorkbook
         $students = [];
         $studentKeys = [];
         $periods = [];
+        $classes = [];
 
         foreach ($markers as $marker) {
+            $classMetadata = $this->classMetadataForMarker($sheet, $marker, $errors);
+            if ($classMetadata === null) {
+                continue;
+            }
+
             $headerRow = $this->findSummaryHeaderRow(
                 $sheet,
                 $marker['column'],
@@ -92,17 +100,13 @@ class ParseKompenResponHubWorkbook
                 continue;
             }
 
-            $period = $this->value($sheet, $marker['column'] + 1, $marker['row'] + 1);
-            if ($period === '') {
-                $errors[] = [
-                    'location' => "Kompen dan Respon!{$this->coordinate($marker['column'] + 1, $marker['row'] + 1)}",
-                    'message' => 'Periode semester wajib diisi pada setiap blok kelas.',
-                ];
-            } else {
+            $classes[] = $classMetadata['class'];
+            $period = $this->periodForMarker($sheet, $marker, $errors);
+            if ($period !== null) {
                 $periods[] = $period;
             }
 
-            $lastDataRow = $this->lastRowForMarker($markers, $marker, $sheet->getHighestDataRow());
+            $lastDataRow = $this->lastRowForMarker($markers, $marker, $sheet, $sheet->getHighestDataRow());
             $foundStudent = false;
             $foundGap = false;
 
@@ -134,11 +138,11 @@ class ParseKompenResponHubWorkbook
                     ];
                 }
 
-                $studentKey = "{$marker['class']}:{$nim}";
+                $studentKey = "{$classMetadata['class']}:{$nim}";
                 if (isset($studentKeys[$studentKey])) {
                     $errors[] = [
                         'location' => $location,
-                        'message' => "NIM {$nim} duplikat pada kelas {$marker['class']}.",
+                        'message' => "NIM {$nim} duplikat pada kelas {$classMetadata['class']}.",
                     ];
                 }
                 $studentKeys[$studentKey] = true;
@@ -149,8 +153,8 @@ class ParseKompenResponHubWorkbook
                 $students[] = [
                     'nim' => $nim,
                     'nama_mahasiswa' => $name,
-                    'kelas' => $marker['class'],
-                    'tingkat' => (int) $marker['class'][0],
+                    'kelas' => $classMetadata['class'],
+                    'tingkat' => $classMetadata['tingkat'],
                     'total_jam_terlambat' => $this->decimal($sheet, $marker['column'] + 3, $row, $errors),
                     'total_jam_sakit' => $this->decimal($sheet, $marker['column'] + 4, $row, $errors),
                     'total_jam_izin' => $this->decimal($sheet, $marker['column'] + 5, $row, $errors),
@@ -174,9 +178,103 @@ class ParseKompenResponHubWorkbook
 
         return [
             $students,
-            array_column($markers, 'class'),
+            array_values(array_unique($classes)),
             $periods[0] ?? null,
         ];
+    }
+
+    /**
+     * @param  array{class: string, column: int, row: int, location: string}  $marker
+     * @param  list<array{location: string, message: string}>  $errors
+     * @return array{class: string, tingkat: int}|null
+     */
+    private function classMetadataForMarker(Worksheet $sheet, array $marker, array &$errors): ?array
+    {
+        $classColumn = $marker['column'] + 4;
+        $levelColumn = $marker['column'] + 7;
+        $metadataRow = $marker['row'] + 1;
+        $class = $this->value($sheet, $classColumn, $metadataRow);
+        $level = $this->value($sheet, $levelColumn, $metadataRow);
+        $hasValidClassCode = preg_match('/^[1-4]AE[A-Z][1-9][0-9]*$/', $class) === 1;
+        $hasValidLevel = ctype_digit($level) && in_array((int) $level, [1, 2, 3, 4], true);
+        $matchesMarker = $hasValidClassCode && $class === $marker['class'];
+        $matchesClassLevel = $hasValidClassCode && $hasValidLevel && (int) $level === (int) $class[0];
+
+        if (! $hasValidClassCode) {
+            $errors[] = [
+                'location' => "Kompen dan Respon!{$this->coordinate($classColumn, $metadataRow)}",
+                'message' => 'Kode kelas wajib berformat seperti 1AEA1.',
+            ];
+        }
+
+        if (! $hasValidLevel) {
+            $errors[] = [
+                'location' => "Kompen dan Respon!{$this->coordinate($levelColumn, $metadataRow)}",
+                'message' => 'Tingkat wajib diisi dengan angka 1 sampai 4.',
+            ];
+        }
+
+        if ($hasValidClassCode && ! $matchesMarker) {
+            $errors[] = [
+                'location' => "Kompen dan Respon!{$this->coordinate($classColumn, $metadataRow)}",
+                'message' => 'Kode kelas harus sama dengan kode pada judul blok Kompen dan Respon.',
+            ];
+        }
+
+        if ($hasValidLevel && $hasValidClassCode && ! $matchesClassLevel) {
+            $errors[] = [
+                'location' => "Kompen dan Respon!{$this->coordinate($levelColumn, $metadataRow)}",
+                'message' => 'Tingkat harus sama dengan angka awal pada kode kelas.',
+            ];
+        }
+
+        if (! $hasValidClassCode || ! $hasValidLevel || ! $matchesMarker || ! $matchesClassLevel) {
+            return null;
+        }
+
+        return [
+            'class' => $class,
+            'tingkat' => (int) $level,
+        ];
+    }
+
+    /**
+     * @param  array{class: string, column: int, row: int, location: string}  $marker
+     * @param  list<array{location: string, message: string}>  $errors
+     */
+    private function periodForMarker(Worksheet $sheet, array $marker, array &$errors): ?string
+    {
+        $semesterColumn = $marker['column'] + 1;
+        $academicYearColumn = $marker['column'] + 2;
+        $metadataRow = $marker['row'] + 1;
+        $semester = $this->value($sheet, $semesterColumn, $metadataRow);
+        $academicYear = $this->value($sheet, $academicYearColumn, $metadataRow);
+
+        if ($academicYear === '' && preg_match('/^(\d{4}\/\d{4})\s+(GANJIL|GASAL|GENAP)$/iu', $semester, $matches)) {
+            return "{$matches[1]} {$this->normalizedSemester($matches[2])}";
+        }
+
+        $normalizedSemester = $this->normalizedSemester($semester);
+        if ($normalizedSemester === null) {
+            $errors[] = [
+                'location' => "Kompen dan Respon!{$this->coordinate($semesterColumn, $metadataRow)}",
+                'message' => 'Semester wajib diisi dengan Gasal atau Genap.',
+            ];
+        }
+
+        $hasValidAcademicYear = $this->isAcademicYear($academicYear);
+        if (! $hasValidAcademicYear) {
+            $errors[] = [
+                'location' => "Kompen dan Respon!{$this->coordinate($academicYearColumn, $metadataRow)}",
+                'message' => 'Tahun ajaran wajib berformat YYYY/YYYY dengan tahun kedua tepat satu tahun setelah tahun pertama.',
+            ];
+        }
+
+        if ($normalizedSemester === null || ! $hasValidAcademicYear) {
+            return null;
+        }
+
+        return "{$academicYear} {$normalizedSemester}";
     }
 
     /**
@@ -300,17 +398,28 @@ class ParseKompenResponHubWorkbook
         return $markers;
     }
 
-    /** @param list<array{class: string, column: int, row: int, location: string}> $markers */
-    private function lastRowForMarker(array $markers, array $marker, int $highestRow): int
+    /**
+     * @param  list<array{class: string, column: int, row: int, location: string}>  $markers
+     * @param  array{class: string, column: int, row: int, location: string}  $marker
+     */
+    private function lastRowForMarker(array $markers, array $marker, Worksheet $sheet, int $highestRow): int
     {
-        $nextRows = [];
+        $nextRow = $highestRow + 1;
         foreach ($markers as $otherMarker) {
             if ($otherMarker['column'] === $marker['column'] && $otherMarker['row'] > $marker['row']) {
-                $nextRows[] = $otherMarker['row'];
+                $nextRow = min($nextRow, $otherMarker['row']);
             }
         }
 
-        return $nextRows === [] ? $highestRow : min($nextRows) - 1;
+        for ($row = $marker['row'] + 1; $row <= $highestRow; $row++) {
+            $value = $this->normalize($this->value($sheet, $marker['column'], $row));
+
+            if (str_starts_with($value, self::NEW_CLASS_TEMPLATE_MARKER)) {
+                $nextRow = min($nextRow, $row);
+            }
+        }
+
+        return $nextRow - 1;
     }
 
     private function findSummaryHeaderRow(Worksheet $sheet, int $column, int $markerRow): ?int
@@ -409,6 +518,24 @@ class ParseKompenResponHubWorkbook
         if (! preg_match('/^[0-9]{9,20}$/', $nim)) {
             $errors[] = ['location' => $location, 'message' => 'NIM harus terdiri dari 9–20 digit angka.'];
         }
+    }
+
+    private function normalizedSemester(string $semester): ?string
+    {
+        return match (mb_strtolower(trim($semester))) {
+            'ganjil', 'gasal' => 'Gasal',
+            'genap' => 'Genap',
+            default => null,
+        };
+    }
+
+    private function isAcademicYear(string $academicYear): bool
+    {
+        if (preg_match('/^(\d{4})\/(\d{4})$/', $academicYear, $matches) !== 1) {
+            return false;
+        }
+
+        return (int) $matches[2] === (int) $matches[1] + 1;
     }
 
     private function value(Worksheet $sheet, int $column, int $row): string

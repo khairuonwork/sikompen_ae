@@ -7,11 +7,12 @@ import {
     Settings,
     UploadCloud,
 } from 'lucide-react';
-import { useState } from 'react';
+import { type DragEvent, useEffect, useState } from 'react';
 import {
     downloadTemplate,
     store,
 } from '@/actions/App/Http/Controllers/KompenResponHubImportController';
+import { show as importTaskStatus } from '@/actions/App/Http/Controllers/KompenResponHubImportTaskController';
 import { destroy as logout } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
 import { settings as adminSettings } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
 import {
@@ -89,6 +90,17 @@ type ImportLog = {
     imported_at: string | null;
 };
 
+type ImportTask = {
+    id: number;
+    original_filename: string;
+    status: 'queued' | 'processing' | 'completed' | 'failed';
+    progress: number;
+    progress_message: string;
+    error_message: string | null;
+    queued_at: string | null;
+    completed_at: string | null;
+};
+
 type Pagination<T> = {
     data: T[];
     links: { prev: string | null; next: string | null };
@@ -118,6 +130,7 @@ type KompenResponHubPageProps = {
     students: Pagination<Student> | null;
     details: Pagination<Detail> | null;
     imports: Pagination<ImportLog> | null;
+    activeImportTasks: ImportTask[];
 };
 
 const adminTabs = [
@@ -412,7 +425,165 @@ function UploadLogTable({
     );
 }
 
-function UploadPanel(): React.JSX.Element {
+function ProgressBar({ value }: { value: number }): React.JSX.Element {
+    const progress = Math.min(100, Math.max(0, value));
+
+    return (
+        <div
+            className="bg-muted h-2 overflow-hidden rounded-full"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progress}
+            aria-label={`Progres impor ${progress}%`}
+        >
+            <div
+                className="bg-primary h-full rounded-full transition-[width] duration-300"
+                style={{ width: `${progress}%` }}
+            />
+        </div>
+    );
+}
+
+function UploadProgressPanel({ progress }: { progress: number }): React.JSX.Element {
+    return (
+        <div className="bg-muted/50 grid gap-2 rounded-lg border p-3">
+            <div className="flex items-center justify-between gap-3 text-xs">
+                <span className="font-medium">Mengirim workbook ke server</span>
+                <span className="text-muted-foreground tabular-nums">
+                    {progress}%
+                </span>
+            </div>
+            <ProgressBar value={progress} />
+            <p className="text-muted-foreground text-xs">
+                Jangan berpindah menu sampai pengiriman file selesai.
+            </p>
+        </div>
+    );
+}
+
+function ImportProgressPanel({
+    initialImportTasks,
+}: {
+    initialImportTasks: ImportTask[];
+}): React.JSX.Element | null {
+    const [importTasks, setImportTasks] = useState(initialImportTasks);
+    const activeTaskIds = importTasks
+        .filter(
+            (importTask) =>
+                importTask.status === 'queued' ||
+                importTask.status === 'processing',
+        )
+        .map((importTask) => importTask.id);
+    const activeTaskKey = activeTaskIds.join(',');
+
+    useEffect(() => {
+        setImportTasks(initialImportTasks);
+    }, [initialImportTasks]);
+
+    useEffect(() => {
+        if (activeTaskIds.length === 0) {
+            return;
+        }
+
+        let isMounted = true;
+
+        const refreshProgress = async (): Promise<void> => {
+            try {
+                const updatedTasks = await Promise.all(
+                    activeTaskIds.map(async (importTaskId) => {
+                        const response = await fetch(
+                            importTaskStatus.url(importTaskId),
+                            {
+                                credentials: 'same-origin',
+                                headers: {
+                                    Accept: 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                },
+                            },
+                        );
+
+                        if (!response.ok) {
+                            throw new Error('Status impor tidak dapat dimuat.');
+                        }
+
+                        const payload: { data: ImportTask } =
+                            await response.json();
+
+                        return payload.data;
+                    }),
+                );
+
+                if (!isMounted) {
+                    return;
+                }
+
+                setImportTasks((currentTasks) =>
+                    currentTasks.map(
+                        (importTask) =>
+                            updatedTasks.find(
+                                (updatedTask) =>
+                                    updatedTask.id === importTask.id,
+                            ) ?? importTask,
+                    ),
+                );
+            } catch {
+                return;
+            }
+        };
+
+        void refreshProgress();
+        const interval = window.setInterval(() => {
+            void refreshProgress();
+        }, 1500);
+
+        return () => {
+            isMounted = false;
+            window.clearInterval(interval);
+        };
+    }, [activeTaskKey]);
+
+    if (importTasks.length === 0) {
+        return null;
+    }
+
+    return (
+        <section className="grid gap-3" aria-live="polite">
+            {importTasks.map((importTask) => (
+                <div
+                    key={importTask.id}
+                    className="bg-card grid gap-2 rounded-xl border p-4 shadow-sm"
+                >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <p className="text-sm font-medium">
+                                Memproses {importTask.original_filename}
+                            </p>
+                            <p className="text-muted-foreground text-xs">
+                                {importTask.progress_message}
+                            </p>
+                        </div>
+                        <span className="text-muted-foreground text-sm font-medium tabular-nums">
+                            {importTask.progress}%
+                        </span>
+                    </div>
+                    <ProgressBar value={importTask.progress} />
+                    {importTask.error_message ? (
+                        <p className="text-destructive text-sm">
+                            {importTask.error_message}
+                        </p>
+                    ) : null}
+                </div>
+            ))}
+        </section>
+    );
+}
+
+function UploadPanel({
+    onUploadRequestActivityChange,
+}: {
+    onUploadRequestActivityChange: (isActive: boolean) => void;
+}): React.JSX.Element {
     return (
         <Card className="mx-auto w-full max-w-3xl">
             <CardHeader>
@@ -422,7 +593,12 @@ function UploadPanel(): React.JSX.Element {
                     periode dan kelas di workbook akan diperbarui langsung.
                 </CardDescription>
             </CardHeader>
-            <Form {...store.form()} resetOnSuccess>
+            <Form
+                {...store.form()}
+                resetOnSuccess
+                onStart={() => onUploadRequestActivityChange(true)}
+                onFinish={() => onUploadRequestActivityChange(false)}
+            >
                 {({ errors, processing, progress }) => (
                     <>
                         <CardContent className="grid gap-2">
@@ -434,6 +610,8 @@ function UploadPanel(): React.JSX.Element {
                                 name="uploader_name"
                                 autoComplete="name"
                                 maxLength={100}
+                                onDragOver={preventDropIntoUploaderName}
+                                onDrop={preventDropIntoUploaderName}
                                 required
                             />
                             {errors.uploader_name ? (
@@ -460,16 +638,18 @@ function UploadPanel(): React.JSX.Element {
                                     {errors.file}
                                 </p>
                             ) : null}
-                            {progress ? (
-                                <p className="text-muted-foreground text-xs">
-                                    Mengunggah {progress.percentage}%
-                                </p>
+                            {processing ? (
+                                <UploadProgressPanel
+                                    progress={progress?.percentage ?? 0}
+                                />
                             ) : null}
                         </CardContent>
                         <CardFooter className="justify-end border-t pt-6">
                             <Button type="submit" disabled={processing}>
                                 <UploadCloud className="size-4" />
-                                {processing ? 'Mengimpor…' : 'Upload & impor'}
+                                {processing
+                                    ? 'Mengirim workbook…'
+                                    : 'Upload & impor'}
                             </Button>
                         </CardFooter>
                     </>
@@ -477,6 +657,13 @@ function UploadPanel(): React.JSX.Element {
             </Form>
         </Card>
     );
+}
+
+function preventDropIntoUploaderName(
+    event: DragEvent<HTMLInputElement>,
+): void {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'none';
 }
 
 function FilterPanel({
@@ -640,9 +827,11 @@ export default function KompenResponHubIndex({
     students,
     details,
     imports,
+    activeImportTasks,
 }: KompenResponHubPageProps): React.JSX.Element {
     const indexAction = isAdmin ? adminIndex : studentIndex;
     const tabs = isAdmin ? adminTabs : studentTabs;
+    const [isUploadRequestActive, setIsUploadRequestActive] = useState(false);
 
     return (
         <>
@@ -701,9 +890,15 @@ export default function KompenResponHubIndex({
                 {flash.success ? (
                     <Alert>
                         <UploadCloud />
-                        <AlertTitle>Impor selesai</AlertTitle>
+                        <AlertTitle>Impor workbook</AlertTitle>
                         <AlertDescription>{flash.success}</AlertDescription>
                     </Alert>
+                ) : null}
+
+                {isAdmin ? (
+                    <ImportProgressPanel
+                        initialImportTasks={activeImportTasks}
+                    />
                 ) : null}
 
                 <nav
@@ -719,11 +914,19 @@ export default function KompenResponHubIndex({
                                         ? { tab }
                                         : { ...filters, tab },
                             })}
+                            onClick={(event) => {
+                                if (isUploadRequestActive) {
+                                    event.preventDefault();
+                                }
+                            }}
+                            aria-disabled={isUploadRequestActive}
                             className={cn(
                                 'flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium',
                                 activeTab === tab
                                     ? 'border-primary text-primary'
                                     : 'text-muted-foreground hover:text-foreground border-transparent',
+                                isUploadRequestActive &&
+                                    'pointer-events-none cursor-not-allowed opacity-50',
                             )}
                         >
                             {tab !== 'upload' ? (
@@ -734,7 +937,18 @@ export default function KompenResponHubIndex({
                     ))}
                 </nav>
 
-                {activeTab === 'upload' ? <UploadPanel /> : null}
+                {isUploadRequestActive ? (
+                    <p className="text-muted-foreground -mt-3 text-xs">
+                        Tunggu sampai file selesai dikirim sebelum berpindah
+                        menu. Setelah itu impor akan berjalan di latar belakang.
+                    </p>
+                ) : null}
+
+                {activeTab === 'upload' ? (
+                    <UploadPanel
+                        onUploadRequestActivityChange={setIsUploadRequestActive}
+                    />
+                ) : null}
 
                 {activeTab === 'imports' ? (
                     imports?.data.length ? (

@@ -6,7 +6,9 @@ use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Http\Requests\KompenResponHubTableRequest;
 use App\Http\Resources\KompenResponHubDetailResource;
 use App\Http\Resources\KompenResponHubImportResource;
+use App\Http\Resources\KompenResponHubImportTaskResource;
 use App\Http\Resources\KompenResponHubStudentResource;
+use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
@@ -78,6 +80,18 @@ class KompenResponHubController extends Controller
             'isAdmin' => $isAdmin,
             'filters' => $filters,
             'filterOptions' => $this->dataQuery->filterOptions(),
+            'activeImportTasks' => $isAdmin
+                ? KompenResponHubImportTaskResource::collection(
+                    KompenResponHubImportTask::query()
+                        ->whereIn('status', [
+                            KompenResponHubImportTask::STATUS_QUEUED,
+                            KompenResponHubImportTask::STATUS_PROCESSING,
+                        ])
+                        ->latest('id')
+                        ->limit(3)
+                        ->get(),
+                )->resolve()
+                : [],
             'students' => $activeTab === 'students'
                 ? $this->resourcePaginator(
                     $this->dataQuery->students($filters)->paginate($this->perPage($filters))->withQueryString(),

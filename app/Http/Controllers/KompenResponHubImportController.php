@@ -2,15 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\KompenResponHub\ImportKompenResponHubWorkbook;
-use App\Actions\KompenResponHub\ParseKompenResponHubWorkbook;
 use App\Http\Requests\StoreKompenResponHubImportRequest;
+use App\Jobs\ProcessKompenResponHubImport;
 use App\Models\KompenResponHubAdmin;
+use App\Models\KompenResponHubImportTask;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Throwable;
 
 class KompenResponHubImportController extends Controller
 {
@@ -25,46 +24,39 @@ class KompenResponHubImportController extends Controller
 
     public function store(
         StoreKompenResponHubImportRequest $request,
-        ParseKompenResponHubWorkbook $parser,
-        ImportKompenResponHubWorkbook $importer,
     ): RedirectResponse {
         /** @var KompenResponHubAdmin $admin */
         $admin = $request->user('admin');
         $file = $request->file('file');
         $storedPath = $file->store('kompen-respon-hub/imports');
+
+        if ($storedPath === false) {
+            throw ValidationException::withMessages([
+                'file' => 'Workbook tidak dapat disimpan. Coba unggah kembali.',
+            ]);
+        }
+
         $fullPath = Storage::disk('local')->path($storedPath);
 
-        try {
-            $payload = $parser->execute($fullPath);
-        } catch (Throwable) {
-            Storage::disk('local')->delete($storedPath);
+        $importTask = KompenResponHubImportTask::create([
+            'uploaded_by_admin_id' => $admin->id,
+            'uploader_name' => $request->string('uploader_name')->trim()->toString(),
+            'uploader_email' => $admin->email,
+            'original_filename' => $file->getClientOriginalName(),
+            'stored_path' => $storedPath,
+            'file_hash' => hash_file('sha256', $fullPath),
+            'status' => KompenResponHubImportTask::STATUS_QUEUED,
+            'progress' => 0,
+            'progress_message' => 'Workbook diterima dan menunggu diproses.',
+            'queued_at' => now(),
+        ]);
 
-            throw ValidationException::withMessages([
-                'file' => 'Workbook tidak dapat dibaca. Simpan ulang sebagai XLSX dari template lalu unggah kembali.',
-            ]);
-        }
+        ProcessKompenResponHubImport::dispatch($importTask->id);
 
-        if ($payload['errors'] !== []) {
-            Storage::disk('local')->delete($storedPath);
-
-            throw ValidationException::withMessages([
-                'file' => collect($payload['errors'])
-                    ->map(fn (array $error): string => "{$error['location']}: {$error['message']}")
-                    ->all(),
-            ]);
-        }
-
-        $result = $importer->execute(
-            $payload,
-            $file->getClientOriginalName(),
-            $storedPath,
-            hash_file('sha256', $fullPath),
-            $admin->id,
-            $request->string('uploader_name')->trim()->toString(),
-            $admin->email,
-        );
-
-        return to_route('admin.kompen-respon.index')
-            ->with('success', "Impor selesai: {$result['student_count']} mahasiswa dan {$result['detail_count']} detail kompen disimpan.");
+        return to_route('admin.kompen-respon.index', ['tab' => 'upload'])
+            ->with(
+                'success',
+                'Workbook diterima. Proses impor berjalan di latar belakang dan tetap berlanjut saat Anda membuka tabel lain.',
+            );
     }
 }

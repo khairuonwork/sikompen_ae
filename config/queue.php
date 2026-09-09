@@ -37,10 +37,13 @@ return [
 
         'database' => [
             'driver' => 'database',
-            'connection' => env('DB_QUEUE_CONNECTION'),
+            'connection' => env(
+                'DB_QUEUE_CONNECTION',
+                env('KOMPEN_RESPON_HUB_DB_CONNECTION', 'kompen_db'),
+            ),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 660),
             'after_commit' => false,
         ],
 
@@ -103,7 +106,10 @@ return [
     */
 
     'batching' => [
-        'database' => env('DB_CONNECTION', 'sqlite'),
+        'database' => env(
+            'DB_QUEUE_CONNECTION',
+            env('KOMPEN_RESPON_HUB_DB_CONNECTION', 'kompen_db'),
+        ),
         'table' => 'job_batches',
     ],
 
@@ -122,7 +128,10 @@ return [
 
     'failed' => [
         'driver' => env('QUEUE_FAILED_DRIVER', 'database-uuids'),
-        'database' => env('DB_CONNECTION', 'sqlite'),
+        'database' => env(
+            'DB_QUEUE_CONNECTION',
+            env('KOMPEN_RESPON_HUB_DB_CONNECTION', 'kompen_db'),
+        ),
         'table' => 'failed_jobs',
     ],
 
