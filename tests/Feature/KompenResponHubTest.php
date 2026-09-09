@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Jobs\ProcessKompenResponHubImport;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
@@ -8,6 +9,7 @@ use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -161,6 +163,28 @@ test('an admin must enter their name before importing a workbook', function () {
     ])->assertSessionHasErrors('uploader_name');
 });
 
+test('a completed import clears cached filter options', function () {
+    Cache::forget(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_KEY);
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->getJson('/api/kompen-respon/filter-options')
+        ->assertOk()
+        ->assertJsonPath('periode_semester', []);
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(),
+        ),
+    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+
+    $this->getJson('/api/kompen-respon/filter-options')
+        ->assertOk()
+        ->assertJsonPath('periode_semester', ['2026/2027 Gasal']);
+});
+
 test('an admin can delete only the latest upload and its related data is removed', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
@@ -200,6 +224,30 @@ test('an admin can delete only the latest upload and its related data is removed
         ->and($auditLog->actor_email)->toBe($admin->email)
         ->and($auditLog->student_count)->toBe(1)
         ->and($auditLog->detail_count)->toBe(0);
+});
+
+test('a rollback clears cached filter options', function () {
+    Cache::forget(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_KEY);
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    createStudent('2025/2026 Gasal');
+    $latestStudent = createStudent('2026/2027 Gasal');
+    $latestImport = KompenResponHubImport::query()
+        ->findOrFail($latestStudent->kompen_respon_hub_import_id);
+
+    Storage::disk('local')->put($latestImport->stored_path, 'workbook');
+
+    $this->getJson('/api/kompen-respon/filter-options')
+        ->assertOk()
+        ->assertJsonPath('periode_semester', ['2026/2027 Gasal', '2025/2026 Gasal']);
+
+    $this->actingAs($admin, 'admin')
+        ->delete('/admin/kompen-respon/imports/latest')
+        ->assertRedirect('/admin/kompen-respon?tab=imports');
+
+    $this->getJson('/api/kompen-respon/filter-options')
+        ->assertOk()
+        ->assertJsonPath('periode_semester', ['2025/2026 Gasal']);
 });
 
 test('a guest cannot delete the latest upload', function () {

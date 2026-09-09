@@ -11,6 +11,8 @@ class KompenResponHubAdminSetupWindow extends Model
     /** @use HasFactory<KompenResponHubAdminSetupWindowFactory> */
     use HasFactory;
 
+    protected $table = 'sikompen_admin_setup_windows';
+
     protected $fillable = [
         'activation_code_hash',
         'expires_at',

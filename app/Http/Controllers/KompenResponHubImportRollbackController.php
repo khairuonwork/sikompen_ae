@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -67,6 +69,7 @@ class KompenResponHubImportRollbackController extends Controller
                 ->with('error', 'Belum ada unggahan yang dapat dihapus.');
         }
 
+        Cache::forget(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_KEY);
         Storage::disk('local')->delete($rollback['stored_path']);
 
         return to_route('admin.kompen-respon.index', ['tab' => 'imports'])

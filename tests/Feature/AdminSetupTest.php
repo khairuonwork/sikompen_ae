@@ -19,7 +19,7 @@ test('the first admin can be created from the initial setup page', function () {
         'password_confirmation' => 'Password!YangAman123',
     ])->assertRedirect('/admin/login');
 
-    $this->assertDatabaseHas('kompen_respon_hub_admins', [
+    $this->assertDatabaseHas('sikompen_admins', [
         'email' => 'first-admin@example.test',
     ]);
 

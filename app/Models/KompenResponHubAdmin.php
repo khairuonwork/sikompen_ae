@@ -11,6 +11,8 @@ class KompenResponHubAdmin extends Authenticatable
     /** @use HasFactory<KompenResponHubAdminFactory> */
     use HasFactory;
 
+    protected $table = 'sikompen_admins';
+
     protected $fillable = [
         'email',
         'password',

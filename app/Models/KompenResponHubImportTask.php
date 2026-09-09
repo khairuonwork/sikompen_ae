@@ -23,6 +23,8 @@ class KompenResponHubImportTask extends Model
     /** @use HasFactory<KompenResponHubImportTaskFactory> */
     use HasFactory;
 
+    protected $table = 'sikompen_import_tasks';
+
     public const STATUS_QUEUED = 'queued';
 
     public const STATUS_PROCESSING = 'processing';

@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class KompenResponHubDetail extends Model
 {
+    protected $table = 'sikompen_detail_kompen';
+
     protected $fillable = [
         'kompen_respon_hub_student_id',
         'tanggal',

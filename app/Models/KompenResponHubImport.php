@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class KompenResponHubImport extends Model
 {
+    protected $table = 'sikompen_imports';
+
     protected $fillable = [
         'uploaded_by_admin_id',
         'uploader_name',

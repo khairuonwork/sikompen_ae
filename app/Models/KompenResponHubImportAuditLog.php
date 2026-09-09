@@ -25,6 +25,8 @@ class KompenResponHubImportAuditLog extends Model
     /** @use HasFactory<KompenResponHubImportAuditLogFactory> */
     use HasFactory;
 
+    protected $table = 'sikompen_import_audit_logs';
+
     public const EVENT_UPLOAD = 'upload';
 
     public const EVENT_ROLLBACK = 'rollback';

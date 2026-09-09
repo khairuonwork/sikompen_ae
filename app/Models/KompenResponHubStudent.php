@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class KompenResponHubStudent extends Model
 {
+    protected $table = 'sikompen_mahasiswa';
+
     protected $fillable = [
         'kompen_respon_hub_import_id',
         'nim',

@@ -5,6 +5,7 @@ namespace App\Actions\KompenResponHub;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubStudent;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ImportKompenResponHubWorkbook
@@ -29,7 +30,7 @@ class ImportKompenResponHubWorkbook
             throw new \LogicException('Periode semester tidak ditemukan pada workbook.');
         }
 
-        return DB::connection(config('kompen-respon-hub.database_connection'))
+        $result = DB::connection(config('kompen-respon-hub.database_connection'))
             ->transaction(function () use ($payload, $preview, $period, $originalFilename, $storedPath, $fileHash, $uploadedByAdminId, $uploaderName, $uploaderEmail): array {
                 $import = KompenResponHubImport::create([
                     'uploaded_by_admin_id' => $uploadedByAdminId,
@@ -65,7 +66,7 @@ class ImportKompenResponHubWorkbook
                     $studentKey = "{$detailAttributes['kelas']}:{$detailAttributes['nim']}";
 
                     DB::connection(config('kompen-respon-hub.database_connection'))
-                        ->table('kompen_respon_hub_details')
+                        ->table('sikompen_detail_kompen')
                         ->insert([
                             'kompen_respon_hub_student_id' => $studentIds[$studentKey],
                             'tanggal' => $detailAttributes['tanggal'],
@@ -102,5 +103,9 @@ class ImportKompenResponHubWorkbook
                     'detail_count' => $preview['detail_count'],
                 ];
             });
+
+        Cache::forget(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_KEY);
+
+        return $result;
     }
 }
