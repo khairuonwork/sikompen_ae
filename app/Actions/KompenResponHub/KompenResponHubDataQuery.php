@@ -3,17 +3,17 @@
 namespace App\Actions\KompenResponHub;
 
 use App\Models\KompenResponHubDetail;
-use App\Models\KompenResponHubImport;
+use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class KompenResponHubDataQuery
 {
-    public function imports(): Builder
+    public function importAuditLogs(): Builder
     {
-        return KompenResponHubImport::query()
-            ->orderByDesc('imported_at')
+        return KompenResponHubImportAuditLog::query()
+            ->orderByDesc('occurred_at')
             ->orderByDesc('id');
     }
 

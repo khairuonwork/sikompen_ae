@@ -49,7 +49,7 @@ class KompenResponHubStudent extends Model
 
     public function importBatch(): BelongsTo
     {
-        return $this->belongsTo(KompenResponHubImport::class);
+        return $this->belongsTo(KompenResponHubImport::class, 'kompen_respon_hub_import_id');
     }
 
     public function details(): HasMany

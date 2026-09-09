@@ -3,6 +3,7 @@
 namespace App\Actions\KompenResponHub;
 
 use App\Models\KompenResponHubImport;
+use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Support\Facades\DB;
 
@@ -80,6 +81,19 @@ class ImportKompenResponHubWorkbook
                             'updated_at' => now(),
                         ]);
                 }
+
+                KompenResponHubImportAuditLog::create([
+                    'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
+                    'source_import_id' => $import->id,
+                    'actor_name' => $uploaderName,
+                    'actor_email' => $uploaderEmail,
+                    'periode_semester' => $period,
+                    'original_filename' => $originalFilename,
+                    'class_count' => $preview['class_count'],
+                    'student_count' => $preview['student_count'],
+                    'detail_count' => $preview['detail_count'],
+                    'occurred_at' => now(),
+                ]);
 
                 return [
                     'import_id' => $import->id,

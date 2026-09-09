@@ -4,6 +4,7 @@ use App\Jobs\ProcessKompenResponHubImport;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImport;
+use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Http\UploadedFile;
@@ -140,9 +141,10 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('activeTab', 'imports')
-            ->has('imports.data', 2)
-            ->where('imports.data.0.uploader_name', 'Khairul Anwar')
-            ->where('imports.data.0.uploader_email', $admin->email),
+            ->has('imports.data', 1)
+            ->where('imports.data.0.event_type', 'upload')
+            ->where('imports.data.0.actor_name', 'Khairul Anwar')
+            ->where('imports.data.0.actor_email', $admin->email),
         );
 
     $this->getJson('/api/kompen-respon/details?nim=123456789')
@@ -157,6 +159,68 @@ test('an admin must enter their name before importing a workbook', function () {
     $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
         'file' => UploadedFile::fake()->create('kompen-respon.xlsx'),
     ])->assertSessionHasErrors('uploader_name');
+});
+
+test('an admin can delete only the latest upload and its related data is removed', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $olderStudent = createStudent('2025/2026 Gasal');
+    $latestStudent = createStudent('2026/2027 Gasal');
+    $latestImport = KompenResponHubImport::query()
+        ->findOrFail($latestStudent->kompen_respon_hub_import_id);
+
+    Storage::disk('local')->put($latestImport->stored_path, 'workbook');
+
+    KompenResponHubDetail::create([
+        'kompen_respon_hub_student_id' => $latestStudent->id,
+        'tanggal' => '2026-09-01',
+        'mata_kuliah' => 'Algoritma',
+        'nama_dosen' => 'Ibu Sari',
+        'jenis_pertemuan' => 'Luring',
+        'presensi' => 'Terlambat',
+        'menit_keterlambatan' => 15,
+        'jam_kompensasi' => 1.5,
+        'jam_responsi' => 2,
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->delete('/admin/kompen-respon/imports/latest')
+        ->assertRedirect('/admin/kompen-respon?tab=imports');
+
+    expect(KompenResponHubImport::query()->find($latestImport->id))->toBeNull()
+        ->and(KompenResponHubStudent::query()->find($latestStudent->id))->toBeNull()
+        ->and(KompenResponHubDetail::query()->where('kompen_respon_hub_student_id', $latestStudent->id)->exists())->toBeFalse()
+        ->and(KompenResponHubStudent::query()->find($olderStudent->id))->not->toBeNull();
+
+    Storage::disk('local')->assertMissing($latestImport->stored_path);
+
+    $auditLog = KompenResponHubImportAuditLog::query()->latest('id')->firstOrFail();
+    expect($auditLog->event_type)->toBe(KompenResponHubImportAuditLog::EVENT_ROLLBACK)
+        ->and($auditLog->source_import_id)->toBe($latestImport->id)
+        ->and($auditLog->actor_email)->toBe($admin->email)
+        ->and($auditLog->student_count)->toBe(1)
+        ->and($auditLog->detail_count)->toBe(0);
+});
+
+test('a guest cannot delete the latest upload', function () {
+    $this->delete('/admin/kompen-respon/imports/latest')
+        ->assertRedirect('/admin/login');
+});
+
+test('an admin cannot delete an upload while another import is still active', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createStudent();
+
+    KompenResponHubImportTask::factory()->create([
+        'status' => KompenResponHubImportTask::STATUS_PROCESSING,
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->delete('/admin/kompen-respon/imports/latest')
+        ->assertRedirect('/admin/kompen-respon?tab=imports')
+        ->assertSessionHas('error');
+
+    expect(KompenResponHubStudent::query()->find($student->id))->not->toBeNull();
 });
 
 test('an uploaded workbook is queued and its progress remains available outside the upload tab', function () {

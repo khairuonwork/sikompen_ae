@@ -5,6 +5,7 @@ use App\Http\Controllers\KompenResponHubAdminSetupController;
 use App\Http\Controllers\KompenResponHubController;
 use App\Http\Controllers\KompenResponHubDownloadController;
 use App\Http\Controllers\KompenResponHubImportController;
+use App\Http\Controllers\KompenResponHubImportRollbackController;
 use App\Http\Controllers\KompenResponHubImportTaskController;
 use App\Http\Controllers\KompenResponHubLandingController;
 use Illuminate\Support\Facades\Route;
@@ -46,6 +47,9 @@ Route::middleware('auth:admin')->prefix('admin')->name('admin.')->group(function
     Route::post('kompen-respon/imports', [KompenResponHubImportController::class, 'store'])
         ->middleware('throttle:10,15')
         ->name('kompen-respon.imports.store');
+    Route::delete('kompen-respon/imports/latest', [KompenResponHubImportRollbackController::class, 'destroy'])
+        ->middleware('throttle:5,15')
+        ->name('kompen-respon.imports.rollback');
     Route::get('kompen-respon/import-tasks/{importTask}', [KompenResponHubImportTaskController::class, 'show'])
         ->name('kompen-respon.import-tasks.show');
     Route::post('logout', [AdminAuthenticationController::class, 'destroy'])->name('logout');

@@ -12,6 +12,7 @@ import {
     downloadTemplate,
     store,
 } from '@/actions/App/Http/Controllers/KompenResponHubImportController';
+import { destroy as rollbackLatestImport } from '@/actions/App/Http/Controllers/KompenResponHubImportRollbackController';
 import { show as importTaskStatus } from '@/actions/App/Http/Controllers/KompenResponHubImportTaskController';
 import { destroy as logout } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
 import { settings as adminSettings } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
@@ -78,16 +79,18 @@ type Detail = {
     jam_responsi: string;
 };
 
-type ImportLog = {
+type ImportAuditLog = {
     id: number;
-    uploader_name: string | null;
-    uploader_email: string | null;
+    event_type: 'upload' | 'rollback';
+    source_import_id: number | null;
+    actor_name: string | null;
+    actor_email: string | null;
     periode_semester: string;
     original_filename: string;
     class_count: number;
     student_count: number;
     detail_count: number;
-    imported_at: string | null;
+    occurred_at: string;
 };
 
 type ImportTask = {
@@ -126,11 +129,12 @@ type KompenResponHubPageProps = {
     isAdmin: boolean;
     filters: Filters;
     filterOptions: FilterOptions;
-    flash: { success: string | null };
+    flash: { success: string | null; error: string | null };
     students: Pagination<Student> | null;
     details: Pagination<Detail> | null;
-    imports: Pagination<ImportLog> | null;
+    imports: Pagination<ImportAuditLog> | null;
     activeImportTasks: ImportTask[];
+    canRollbackLatestImport: boolean;
 };
 
 const adminTabs = [
@@ -346,15 +350,15 @@ function DetailTable({
     );
 }
 
-function UploadLogTable({
+function ImportAuditLogTable({
     data,
 }: {
-    data: Pagination<ImportLog>;
+    data: Pagination<ImportAuditLog>;
 }): React.JSX.Element {
     const headings = [
-        'Waktu upload',
-        'Nama admin',
-        'Email admin',
+        'Aksi',
+        'Waktu',
+        'Admin pelaksana',
         'Periode',
         'Nama file',
         'Kelas',
@@ -379,41 +383,44 @@ function UploadLogTable({
                         </tr>
                     </thead>
                     <tbody className="divide-y">
-                        {data.data.map((importLog) => (
+                        {data.data.map((auditLog) => (
                             <tr
-                                key={importLog.id}
+                                key={auditLog.id}
                                 className="hover:bg-muted/40"
                             >
                                 <td className="px-3 py-3 whitespace-nowrap">
-                                    {importLog.imported_at
-                                        ? new Intl.DateTimeFormat('id-ID', {
-                                              dateStyle: 'medium',
-                                              timeStyle: 'short',
-                                          }).format(
-                                              new Date(importLog.imported_at),
-                                          )
-                                        : '—'}
+                                    {auditLog.event_type === 'upload'
+                                        ? 'Upload'
+                                        : 'Rollback · dihapus'}
                                 </td>
-                                <td className="px-3 py-3 font-medium">
-                                    {importLog.uploader_name ?? 'Data lama'}
+                                <td className="px-3 py-3 whitespace-nowrap">
+                                    {new Intl.DateTimeFormat('id-ID', {
+                                        dateStyle: 'medium',
+                                        timeStyle: 'short',
+                                    }).format(new Date(auditLog.occurred_at))}
                                 </td>
                                 <td className="px-3 py-3">
-                                    {importLog.uploader_email ?? '—'}
+                                    <p className="font-medium">
+                                        {auditLog.actor_name ?? '—'}
+                                    </p>
+                                    <p className="text-muted-foreground text-xs">
+                                        {auditLog.actor_email ?? '—'}
+                                    </p>
                                 </td>
                                 <td className="px-3 py-3">
-                                    {importLog.periode_semester}
+                                    {auditLog.periode_semester}
                                 </td>
                                 <td className="max-w-64 truncate px-3 py-3">
-                                    {importLog.original_filename}
+                                    {auditLog.original_filename}
                                 </td>
                                 <td className="px-3 py-3 text-right tabular-nums">
-                                    {importLog.class_count}
+                                    {auditLog.class_count}
                                 </td>
                                 <td className="px-3 py-3 text-right tabular-nums">
-                                    {importLog.student_count}
+                                    {auditLog.student_count}
                                 </td>
                                 <td className="px-3 py-3 text-right tabular-nums">
-                                    {importLog.detail_count}
+                                    {auditLog.detail_count}
                                 </td>
                             </tr>
                         ))}
@@ -422,6 +429,35 @@ function UploadLogTable({
             </div>
             <Pager data={data} />
         </section>
+    );
+}
+
+function RollbackLatestImportButton({
+    canRollbackLatestImport,
+}: {
+    canRollbackLatestImport: boolean;
+}): React.JSX.Element {
+    return (
+        <Form
+            {...rollbackLatestImport.form()}
+            onBefore={() =>
+                window.confirm(
+                    'Hapus data dari unggahan terakhir? Data mahasiswa dan detail terkait tidak dapat dipulihkan.',
+                )
+            }
+        >
+            {({ processing }) => (
+                <Button
+                    type="submit"
+                    variant="destructive"
+                    disabled={!canRollbackLatestImport || processing}
+                >
+                    {processing
+                        ? 'Menghapus unggahan…'
+                        : 'Hapus unggahan terakhir'}
+                </Button>
+            )}
+        </Form>
     );
 }
 
@@ -828,6 +864,7 @@ export default function KompenResponHubIndex({
     details,
     imports,
     activeImportTasks,
+    canRollbackLatestImport,
 }: KompenResponHubPageProps): React.JSX.Element {
     const indexAction = isAdmin ? adminIndex : studentIndex;
     const tabs = isAdmin ? adminTabs : studentTabs;
@@ -895,6 +932,13 @@ export default function KompenResponHubIndex({
                     </Alert>
                 ) : null}
 
+                {flash.error ? (
+                    <Alert variant="destructive">
+                        <AlertTitle>Tindakan tidak dapat dijalankan</AlertTitle>
+                        <AlertDescription>{flash.error}</AlertDescription>
+                    </Alert>
+                ) : null}
+
                 {isAdmin ? (
                     <ImportProgressPanel
                         initialImportTasks={activeImportTasks}
@@ -951,13 +995,28 @@ export default function KompenResponHubIndex({
                 ) : null}
 
                 {activeTab === 'imports' ? (
-                    imports?.data.length ? (
-                        <UploadLogTable data={imports} />
-                    ) : (
-                        <div className="text-muted-foreground rounded-xl border border-dashed p-10 text-center text-sm">
-                            Belum ada riwayat upload.
+                    <section className="grid gap-4">
+                        <div className="flex flex-col justify-between gap-3 rounded-xl border p-4 sm:flex-row sm:items-center">
+                            <div>
+                                <h2 className="font-semibold">Audit impor</h2>
+                                <p className="text-muted-foreground text-sm">
+                                    Riwayat upload dan penghapusan unggahan terakhir.
+                                </p>
+                            </div>
+                            <RollbackLatestImportButton
+                                canRollbackLatestImport={
+                                    canRollbackLatestImport
+                                }
+                            />
                         </div>
-                    )
+                        {imports?.data.length ? (
+                            <ImportAuditLogTable data={imports} />
+                        ) : (
+                            <div className="text-muted-foreground rounded-xl border border-dashed p-10 text-center text-sm">
+                                Belum ada riwayat upload atau rollback.
+                            </div>
+                        )}
+                    </section>
                 ) : null}
 
                 {activeTab === 'students' || activeTab === 'details' ? (
