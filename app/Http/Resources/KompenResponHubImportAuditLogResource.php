@@ -20,6 +20,9 @@ class KompenResponHubImportAuditLogResource extends JsonResource
             'id' => $this->id,
             'event_type' => $this->event_type,
             'source_import_id' => $this->source_import_id,
+            'can_download_file' => $this->event_type === KompenResponHubImportAuditLog::EVENT_UPLOAD
+                && $this->relationLoaded('sourceImport')
+                && $this->sourceImport !== null,
             'actor_name' => $this->actor_name,
             'actor_email' => $this->actor_email,
             'periode_semester' => $this->periode_semester,

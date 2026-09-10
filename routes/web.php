@@ -47,6 +47,8 @@ Route::middleware('auth:admin')->prefix('admin')->name('admin.')->group(function
     Route::post('kompen-respon/imports', [KompenResponHubImportController::class, 'store'])
         ->middleware('throttle:10,15')
         ->name('kompen-respon.imports.store');
+    Route::get('kompen-respon/imports/{import}/download', [KompenResponHubImportController::class, 'downloadUploadedWorkbook'])
+        ->name('kompen-respon.imports.download');
     Route::delete('kompen-respon/imports/latest', [KompenResponHubImportRollbackController::class, 'destroy'])
         ->middleware('throttle:5,15')
         ->name('kompen-respon.imports.rollback');

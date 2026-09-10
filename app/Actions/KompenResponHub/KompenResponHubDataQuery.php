@@ -6,42 +6,51 @@ use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 class KompenResponHubDataQuery
 {
-    public const FILTER_OPTIONS_CACHE_KEY = 'sikompen:filter-options:v1';
+    public const FILTER_OPTIONS_CACHE_KEY = 'sikompen:filter-options:v2';
 
     /** @return Builder<KompenResponHubImportAuditLog> */
     public function importAuditLogs(): Builder
     {
         return KompenResponHubImportAuditLog::query()
+            ->with('sourceImport:id')
             ->orderByDesc('occurred_at')
             ->orderByDesc('id');
     }
 
-    /** @return array{tingkat: Collection<int, int>, kelas: Collection<int, string>, periode_semester: Collection<int, string>} */
+    /** @return array{tingkat: list<int>, kelas: list<string>, periode_semester: list<string>} */
     public function filterOptions(): array
     {
-        return Cache::remember(self::FILTER_OPTIONS_CACHE_KEY, now()->addMinutes(30), fn (): array => [
-            'tingkat' => KompenResponHubStudent::query()
-                ->distinct()
-                ->orderBy('tingkat')
-                ->pluck('tingkat')
-                ->map(fn (int $tingkat): int => $tingkat)
-                ->values(),
-            'kelas' => KompenResponHubStudent::query()
-                ->distinct()
-                ->orderBy('kelas')
-                ->pluck('kelas')
-                ->values(),
-            'periode_semester' => KompenResponHubStudent::query()
-                ->distinct()
-                ->orderByDesc('periode_semester')
-                ->pluck('periode_semester')
-                ->values(),
-        ]);
+        $filterOptions = Cache::remember(
+            self::FILTER_OPTIONS_CACHE_KEY,
+            now()->addMinutes(30),
+            fn (): array => [
+                'tingkat' => KompenResponHubStudent::query()
+                    ->distinct()
+                    ->orderBy('tingkat')
+                    ->pluck('tingkat')
+                    ->map(fn (int $tingkat): int => $tingkat)
+                    ->values()
+                    ->all(),
+                'kelas' => KompenResponHubStudent::query()
+                    ->distinct()
+                    ->orderBy('kelas')
+                    ->pluck('kelas')
+                    ->values()
+                    ->all(),
+                'periode_semester' => KompenResponHubStudent::query()
+                    ->distinct()
+                    ->orderByDesc('periode_semester')
+                    ->pluck('periode_semester')
+                    ->values()
+                    ->all(),
+            ],
+        );
+
+        return $filterOptions;
     }
 
     /**

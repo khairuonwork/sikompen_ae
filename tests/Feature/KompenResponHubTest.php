@@ -24,6 +24,7 @@ test('the public page and data API do not require a login', function () {
             ->component('kompen-respon-hub/index')
             ->where('activeTab', 'students')
             ->where('isAdmin', false)
+            ->where('filterOptions.tingkat', [1])
             ->has('filterOptions.periode_semester', 1),
         );
 
@@ -153,6 +154,41 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
         ->assertOk()
         ->assertJsonPath('data.0.nama_dosen', 'Ibu Sari')
         ->assertJsonPath('data.0.jam_kompensasi', '1.5000');
+});
+
+test('an admin can download an available workbook from its upload log', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createStudent();
+    $import = KompenResponHubImport::query()->findOrFail($student->kompen_respon_hub_import_id);
+
+    Storage::disk('local')->put($import->stored_path, 'workbook contents');
+    KompenResponHubImportAuditLog::create([
+        'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
+        'source_import_id' => $import->id,
+        'periode_semester' => $import->periode_semester,
+        'original_filename' => $import->original_filename,
+        'class_count' => $import->class_count,
+        'student_count' => $import->student_count,
+        'detail_count' => $import->detail_count,
+        'occurred_at' => $import->imported_at,
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->get("/admin/kompen-respon/imports/{$import->id}/download")
+        ->assertDownload("sikompen-import-{$import->id}.xlsx");
+
+    $this->actingAs($admin, 'admin')->get('/admin/kompen-respon?tab=imports')
+        ->assertInertia(fn ($page) => $page
+            ->where('imports.data.0.can_download_file', true),
+        );
+});
+
+test('a guest cannot download an uploaded workbook', function () {
+    $student = createStudent();
+
+    $this->get("/admin/kompen-respon/imports/{$student->kompen_respon_hub_import_id}/download")
+        ->assertRedirect('/admin/login');
 });
 
 test('an admin must enter their name before importing a workbook', function () {

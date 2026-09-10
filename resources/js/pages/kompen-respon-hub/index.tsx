@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { type DragEvent, useEffect, useState } from 'react';
 import {
+    downloadUploadedWorkbook,
     downloadTemplate,
     store,
 } from '@/actions/App/Http/Controllers/KompenResponHubImportController';
@@ -83,6 +84,7 @@ type ImportAuditLog = {
     id: number;
     event_type: 'upload' | 'rollback';
     source_import_id: number | null;
+    can_download_file: boolean;
     actor_name: string | null;
     actor_email: string | null;
     periode_semester: string;
@@ -361,6 +363,7 @@ function ImportAuditLogTable({
         'Admin pelaksana',
         'Periode',
         'Nama file',
+        'File',
         'Kelas',
         'Mahasiswa',
         'Detail',
@@ -369,7 +372,7 @@ function ImportAuditLogTable({
     return (
         <section className="bg-card overflow-hidden rounded-xl border shadow-sm">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1050px] text-sm">
+                <table className="w-full min-w-[1130px] text-sm">
                     <thead className="bg-muted/60 text-muted-foreground text-left text-xs tracking-wide uppercase">
                         <tr>
                             {headings.map((heading) => (
@@ -412,6 +415,25 @@ function ImportAuditLogTable({
                                 </td>
                                 <td className="max-w-64 truncate px-3 py-3">
                                     {auditLog.original_filename}
+                                </td>
+                                <td className="px-3 py-3">
+                                    {auditLog.can_download_file &&
+                                    auditLog.source_import_id !== null ? (
+                                        <Button asChild size="sm" variant="outline">
+                                            <a
+                                                href={downloadUploadedWorkbook.url(
+                                                    auditLog.source_import_id,
+                                                )}
+                                            >
+                                                <Download className="size-4" />
+                                                Unduh
+                                            </a>
+                                        </Button>
+                                    ) : (
+                                        <span className="text-muted-foreground text-xs">
+                                            Tidak tersedia
+                                        </span>
+                                    )}
                                 </td>
                                 <td className="px-3 py-3 text-right tabular-nums">
                                     {auditLog.class_count}

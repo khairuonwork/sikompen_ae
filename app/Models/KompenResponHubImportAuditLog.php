@@ -6,6 +6,7 @@ use Carbon\CarbonInterface;
 use Database\Factories\KompenResponHubImportAuditLogFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
@@ -58,5 +59,11 @@ class KompenResponHubImportAuditLog extends Model
     public function getConnectionName(): ?string
     {
         return config('kompen-respon-hub.database_connection');
+    }
+
+    /** @return BelongsTo<KompenResponHubImport, $this> */
+    public function sourceImport(): BelongsTo
+    {
+        return $this->belongsTo(KompenResponHubImport::class, 'source_import_id');
     }
 }

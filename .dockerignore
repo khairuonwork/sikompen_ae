@@ -1,0 +1,17 @@
+.agents
+.git
+.github
+.zed
+.env
+.env.*
+AGENTS.md
+bootstrap/cache/*.php
+node_modules
+public/build
+public/hot
+storage/*
+!storage/app/
+!storage/app/private/
+!storage/app/private/kompen-respon-hub/
+!storage/app/private/kompen-respon-hub/Template_Impor_Kompen_Respon_Hub.xlsx
+vendor

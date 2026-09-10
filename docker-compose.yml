@@ -1,10 +1,83 @@
 services:
+  app:
+    build:
+      context: .
+      target: app
+    image: sikompen-app:local
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: "${DOCKER_APP_URL:-http://localhost:8080}"
+      LOG_LEVEL: warning
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_DATABASE: "${KOMPEN_DB_DATABASE:-kompen_database}"
+      DB_USERNAME: "${KOMPEN_DB_USERNAME:-kompen_user}"
+      DB_PASSWORD: "${KOMPEN_DB_PASSWORD:-kompen_local_password}"
+      KOMPEN_DB_HOST: database
+      KOMPEN_DB_PORT: 3306
+      KOMPEN_DB_DATABASE: "${KOMPEN_DB_DATABASE:-kompen_database}"
+      KOMPEN_DB_USERNAME: "${KOMPEN_DB_USERNAME:-kompen_user}"
+      KOMPEN_DB_PASSWORD: "${KOMPEN_DB_PASSWORD:-kompen_local_password}"
+    depends_on:
+      database:
+        condition: service_healthy
+    expose:
+      - "9000"
+    volumes:
+      - sikompen_import_storage:/var/www/html/storage/app/private/kompen-respon-hub/imports
+
+  web:
+    build:
+      context: .
+      target: web
+    image: sikompen-web:local
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    ports:
+      - "${APP_PORT:-8080}:80"
+
+  queue:
+    build:
+      context: .
+      target: app
+    image: sikompen-app:local
+    restart: unless-stopped
+    init: true
+    command: php artisan queue:work database --sleep=3 --tries=1 --timeout=600
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: "${DOCKER_APP_URL:-http://localhost:8080}"
+      LOG_LEVEL: warning
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_DATABASE: "${KOMPEN_DB_DATABASE:-kompen_database}"
+      DB_USERNAME: "${KOMPEN_DB_USERNAME:-kompen_user}"
+      DB_PASSWORD: "${KOMPEN_DB_PASSWORD:-kompen_local_password}"
+      KOMPEN_DB_HOST: database
+      KOMPEN_DB_PORT: 3306
+      KOMPEN_DB_DATABASE: "${KOMPEN_DB_DATABASE:-kompen_database}"
+      KOMPEN_DB_USERNAME: "${KOMPEN_DB_USERNAME:-kompen_user}"
+      KOMPEN_DB_PASSWORD: "${KOMPEN_DB_PASSWORD:-kompen_local_password}"
+    depends_on:
+      database:
+        condition: service_healthy
+    volumes:
+      - sikompen_import_storage:/var/www/html/storage/app/private/kompen-respon-hub/imports
+
   database:
     image: mariadb:11.4
-    container_name: kompen-respon-hub-db
     restart: unless-stopped
     ports:
-      - "${KOMPEN_DB_PORT:-3307}:3306"
+      - "127.0.0.1:${KOMPEN_DB_PORT:-3307}:3306"
     environment:
       MARIADB_DATABASE: "${KOMPEN_DB_DATABASE:-kompen_database}"
       MARIADB_USER: "${KOMPEN_DB_USERNAME:-kompen_user}"
@@ -14,7 +87,7 @@ services:
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
     volumes:
-      - kompen_respon_hub_db_data:/var/lib/mysql
+      - sikompen_database_data:/var/lib/mysql
     healthcheck:
       test:
         [
@@ -26,4 +99,6 @@ services:
       retries: 10
 
 volumes:
-  kompen_respon_hub_db_data:
+  sikompen_database_data:
+  sikompen_import_storage:
+    name: sikompen_import_storage

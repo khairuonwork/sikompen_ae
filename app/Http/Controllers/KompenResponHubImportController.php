@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreKompenResponHubImportRequest;
 use App\Jobs\ProcessKompenResponHubImport;
 use App\Models\KompenResponHubAdmin;
+use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportTask;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class KompenResponHubImportController extends Controller
 {
@@ -20,6 +22,25 @@ class KompenResponHubImportController extends Controller
         abort_unless(file_exists($path), 404, 'Template impor tidak ditemukan.');
 
         return response()->download($path, 'Template_Impor_Kompen_Respon_Hub.xlsx');
+    }
+
+    public function downloadUploadedWorkbook(KompenResponHubImport $import): StreamedResponse
+    {
+        abort_unless(
+            str_starts_with($import->stored_path, 'kompen-respon-hub/imports/')
+                && Storage::disk('local')->exists($import->stored_path),
+            404,
+            'File unggahan tidak tersedia.',
+        );
+
+        return Storage::disk('local')->download(
+            $import->stored_path,
+            "sikompen-import-{$import->id}.xlsx",
+            [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'X-Content-Type-Options' => 'nosniff',
+            ],
+        );
     }
 
     public function store(
