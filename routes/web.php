@@ -19,7 +19,9 @@ Route::get('kompen-respon', [KompenResponHubController::class, 'studentIndex'])
 
 Route::prefix('mahasiswa/downloads')->name('student.kompen-respon.downloads.')->group(function (): void {
     Route::get('students', [KompenResponHubDownloadController::class, 'students'])->name('students');
+    Route::get('students/pdf', [KompenResponHubDownloadController::class, 'studentsPdf'])->name('students.pdf');
     Route::get('details', [KompenResponHubDownloadController::class, 'details'])->name('details');
+    Route::get('details/pdf', [KompenResponHubDownloadController::class, 'detailsPdf'])->name('details.pdf');
 });
 
 Route::middleware('guest:admin')->group(function (): void {

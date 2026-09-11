@@ -1,6 +1,7 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import {
     Download,
+    FileText,
     FileSpreadsheet,
     ListFilter,
     Search,
@@ -19,7 +20,9 @@ import { destroy as logout } from '@/actions/App/Http/Controllers/AdminAuthentic
 import { settings as adminSettings } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
 import {
     details as downloadDetails,
+    detailsPdf as downloadDetailsPdf,
     students as downloadStudents,
+    studentsPdf as downloadStudentsPdf,
 } from '@/actions/App/Http/Controllers/KompenResponHubDownloadController';
 import { student as studentApi } from '@/actions/App/Http/Controllers/KompenResponHubController';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -742,15 +745,27 @@ function FilterPanel({
         filters.per_page?.toString() ?? '15',
     );
     const indexAction = isAdmin ? adminIndex : studentIndex;
-    const downloadAction =
+    const spreadsheetDownloadAction =
         activeTab === 'students' ? downloadStudents : downloadDetails;
-    const downloadUrl = periode
-        ? downloadAction.url({
+    const pdfDownloadAction =
+        activeTab === 'students' ? downloadStudentsPdf : downloadDetailsPdf;
+    const downloadQuery = {
+        search: filters.search,
+        tingkat: tingkat || undefined,
+        kelas: kelas || undefined,
+        periode_semester: periode,
+    };
+    const spreadsheetDownloadUrl = periode
+        ? spreadsheetDownloadAction.url({
               query: {
-                  search: filters.search,
-                  tingkat: tingkat || undefined,
-                  kelas: kelas || undefined,
-                  periode_semester: periode,
+                  ...downloadQuery,
+              },
+          })
+        : null;
+    const pdfDownloadUrl = periode
+        ? pdfDownloadAction.url({
+              query: {
+                  ...downloadQuery,
               },
           })
         : null;
@@ -849,13 +864,21 @@ function FilterPanel({
                 >
                     Reset filter
                 </Link>
-                {downloadUrl ? (
-                    <Button asChild size="sm" variant="outline">
-                        <a href={downloadUrl}>
-                            <Download className="size-4" />
-                            Download XLSX
-                        </a>
-                    </Button>
+                {spreadsheetDownloadUrl && pdfDownloadUrl ? (
+                    <div className="flex flex-wrap gap-2">
+                        <Button asChild size="sm" variant="outline">
+                            <a href={spreadsheetDownloadUrl}>
+                                <FileSpreadsheet className="size-4" />
+                                Download XLSX
+                            </a>
+                        </Button>
+                        <Button asChild size="sm" variant="outline">
+                            <a href={pdfDownloadUrl}>
+                                <FileText className="size-4" />
+                                Download PDF
+                            </a>
+                        </Button>
+                    </div>
                 ) : (
                     <span className="text-muted-foreground text-xs">
                         Pilih periode untuk mengunduh data.
