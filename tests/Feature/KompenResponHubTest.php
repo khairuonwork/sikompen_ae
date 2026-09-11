@@ -12,7 +12,9 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 test('the public page and data API do not require a login', function () {
@@ -103,16 +105,63 @@ test('the student API returns the complete kompen and respon payload for one stu
         ->assertJsonPath('data.details.0.jam_responsi', '2.0000');
 });
 
-test('students can download an XLSX limited to the selected uploaded period', function () {
+test('students can download a landscape XLSX limited to the selected uploaded period', function () {
     createStudent();
 
     $this->get('/mahasiswa/downloads/students')
         ->assertRedirect()
         ->assertSessionHasErrors('periode_semester');
 
-    $this->get('/mahasiswa/downloads/students?periode_semester=2026%2F2027%20Ganjil')
+    $response = $this->get('/mahasiswa/downloads/students?periode_semester=2026%2F2027%20Ganjil');
+
+    $response
         ->assertOk()
-        ->assertDownload('kompen-dan-respon-2026-2027-ganjil.xlsx');
+        ->assertDownload('kompen-dan-respon-2026-2027-ganjil.xlsx')
+        ->assertHeaderContains(
+            'Content-Type',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        );
+
+    $temporaryFile = tempnam(sys_get_temp_dir(), 'sikompen-export-');
+    file_put_contents($temporaryFile, $response->streamedContent());
+
+    try {
+        $worksheet = IOFactory::load($temporaryFile)->getActiveSheet();
+
+        expect($worksheet->getPageSetup()->getOrientation())
+            ->toBe(PageSetup::ORIENTATION_LANDSCAPE)
+            ->and($worksheet->getCell('A1')->getValue())->toBe('Kompen dan Respon')
+            ->and($worksheet->getCell('B2')->getValue())->toBe('2026/2027 Ganjil')
+            ->and($worksheet->getCell('B5')->getValue())->toBe('123456789')
+            ->and($worksheet->getStyle('A5')->getNumberFormat()->getFormatCode())->toBe('#,##0')
+            ->and($worksheet->getStyle('F5')->getNumberFormat()->getFormatCode())->toBe('#,##0.00');
+    } finally {
+        unlink($temporaryFile);
+    }
+});
+
+test('students can download a landscape PDF for detail kompen', function () {
+    $student = createStudent();
+    KompenResponHubDetail::create([
+        'kompen_respon_hub_student_id' => $student->id,
+        'tanggal' => '2026-09-01',
+        'mata_kuliah' => 'Algoritma',
+        'nama_dosen' => 'Ibu Sari',
+        'jenis_pertemuan' => 'Luring',
+        'presensi' => 'Terlambat',
+        'menit_keterlambatan' => 15,
+        'jam_kompensasi' => 1.5,
+        'jam_responsi' => 2,
+    ]);
+
+    $response = $this->get('/mahasiswa/downloads/details/pdf?periode_semester=2026%2F2027%20Ganjil');
+
+    $response
+        ->assertOk()
+        ->assertDownload('detail-kompen-2026-2027-ganjil.pdf')
+        ->assertHeaderContains('Content-Type', 'application/pdf');
+
+    expect($response->getContent())->toStartWith('%PDF-');
 });
 
 test('an authenticated admin can upload a valid workbook that replaces matching class data', function () {
