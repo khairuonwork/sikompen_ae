@@ -57,6 +57,91 @@ DB_QUEUE_RETRY_AFTER=660
 
 Di Compose, `KOMPEN_DB_HOST` dan `KOMPEN_DB_PORT` untuk container sudah dioverride menjadi `database:3306`. Jangan arahkan container ke `127.0.0.1`.
 
+## Menjalankan web untuk development
+
+Pilih **satu** cara di bawah. Jangan menjalankan web Docker dan `php artisan serve` pada port yang sama secara bersamaan.
+
+### Pilihan A — seluruh aplikasi dengan Docker Compose
+
+Ini cara paling dekat dengan kondisi production. Cukup satu terminal karena semua service berjalan di background.
+
+Terminal 1:
+
+```bash
+docker compose up -d --build
+docker compose exec app php artisan migrate
+docker compose ps
+```
+
+Buka `http://localhost:8080`. Queue worker sudah berjalan sebagai service `queue`; tidak perlu terminal tambahan.
+
+Untuk melihat proses impor atau error sambil memakai web, buka terminal kedua bila diperlukan:
+
+```bash
+docker compose logs -f queue web app
+```
+
+Hentikan tanpa menghapus database/file upload:
+
+```bash
+docker compose down
+```
+
+### Pilihan B — MariaDB Docker, Laravel dan React di komputer lokal
+
+Pilihan ini nyaman ketika mengembangkan kode karena Vite memiliki hot reload. Gunakan tiga terminal yang dibiarkan tetap berjalan.
+
+Terminal 1 — nyalakan database saja:
+
+```bash
+docker compose up -d database
+```
+
+Salin `.env.example` menjadi `.env` bila belum ada, lalu pastikan `KOMPEN_DB_HOST=127.0.0.1`, `KOMPEN_DB_PORT=3307`, dan nilai koneksi lainnya sama dengan database Compose. Setelah dependensi pertama kali terpasang, jalankan migration sekali:
+
+```bash
+composer install
+npm install
+php artisan key:generate
+php artisan migrate
+```
+
+Terminal 2 — server Laravel:
+
+```bash
+php artisan serve
+```
+
+Terminal 3 — Vite untuk React/Tailwind:
+
+```bash
+npm run dev
+```
+
+Terminal 4 — queue worker untuk impor XLSX:
+
+```bash
+php artisan queue:work database --sleep=3 --tries=1 --timeout=600
+```
+
+Buka `http://127.0.0.1:8000`. Terminal 4 wajib aktif jika akan mencoba fitur upload & impor; halaman tabel dan API tetap dapat dibuka tanpanya.
+
+Tekan `Ctrl+C` pada terminal 2–4 untuk menghentikan proses lokal. Database container dapat dihentikan dengan:
+
+```bash
+docker compose stop database
+```
+
+### Pilihan C — satu perintah untuk development lokal
+
+Laravel menyediakan runner yang mengumpulkan server aplikasi, Vite, queue, dan log. Jalankan dari satu terminal:
+
+```bash
+composer run dev
+```
+
+Gunakan opsi ini bila tidak membutuhkan terminal terpisah. Database tetap harus sudah hidup, misalnya melalui `docker compose up -d database` atau MariaDB lokal dengan konfigurasi `.env` yang sesuai.
+
 ## First start
 
 ```bash
