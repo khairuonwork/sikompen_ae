@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\StoreKompenResponHubImportRequest;
 use App\Jobs\ProcessKompenResponHubImport;
-use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportTask;
 use Illuminate\Http\RedirectResponse;
@@ -45,9 +45,9 @@ class KompenResponHubImportController extends Controller
 
     public function store(
         StoreKompenResponHubImportRequest $request,
+        SiAdminProxyAccess $access,
     ): RedirectResponse {
-        /** @var KompenResponHubAdmin $admin */
-        $admin = $request->user('admin');
+        $actor = $access->actor($request);
         $file = $request->file('file');
         $storedPath = $file->store('kompen-respon-hub/imports');
 
@@ -60,9 +60,9 @@ class KompenResponHubImportController extends Controller
         $fullPath = Storage::disk('local')->path($storedPath);
 
         $importTask = KompenResponHubImportTask::create([
-            'uploaded_by_admin_id' => $admin->id,
+            'uploaded_by_admin_id' => $actor['id'],
             'uploader_name' => $request->string('uploader_name')->trim()->toString(),
-            'uploader_email' => $admin->email,
+            'uploader_email' => $actor['email'],
             'original_filename' => $file->getClientOriginalName(),
             'stored_path' => $storedPath,
             'file_hash' => hash_file('sha256', $fullPath),

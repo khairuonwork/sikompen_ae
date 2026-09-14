@@ -9,6 +9,8 @@ Dokumen ini mencakup file aplikasi yang ditulis atau dipakai langsung oleh fitur
 | `app/Actions/KompenResponHub/ParseKompenResponHubWorkbook.php` | Membaca XLSX memakai PhpSpreadsheet, menemukan blok kelas, membaca sel metadata template, memvalidasi ringkasan serta detail, lalu menghasilkan payload terstruktur dan daftar error. Tidak menulis database. |
 | `app/Actions/KompenResponHub/ImportKompenResponHubWorkbook.php` | Menyimpan payload parser dalam satu transaksi: membuat import batch, mengganti mahasiswa pada periode + kelas terkait, memasukkan detail, membuat audit log upload, lalu mengosongkan cache filter. |
 | `app/Actions/KompenResponHub/KompenResponHubDataQuery.php` | Builder bersama untuk filter opsi, tabel mahasiswa, tabel detail, dan audit log. Menentukan eager loading, urutan, pencarian, dan cache opsi filter. |
+| `app/Actions/SiAdminProxy/SiAdminProxySignature.php` | Membentuk canonical request dan HMAC SHA-256 menggunakan secret gateway. |
+| `app/Actions/SiAdminProxy/SiAdminProxyAccess.php` | Menggabungkan konteks admin lokal dan session hasil gateway agar aksi admin tetap memiliki actor audit. |
 
 ## Controllers: HTTP boundary
 
@@ -22,6 +24,7 @@ Dokumen ini mencakup file aplikasi yang ditulis atau dipakai langsung oleh fitur
 | `app/Http/Controllers/KompenResponHubDownloadController.php` | Membangun XLSX dan PDF landscape dari builder yang sudah difilter. Mengatur judul, header, orientasi cetak, tipe angka, serta batas jumlah baris. |
 | `app/Http/Controllers/AdminAuthenticationController.php` | Form login/logout guard admin, pembatasan percobaan, dan rotasi session setelah login. |
 | `app/Http/Controllers/KompenResponHubAdminSetupController.php` | Halaman setup admin pertama, pendaftaran admin tambahan dengan kode sekali pakai, serta halaman pengaturan pembukaan/penutupan setup. |
+| `app/Http/Controllers/SiAdminProxyAccessController.php` | Membuat session Sikompen dari identity yang sudah diverifikasi middleware lalu memilih tujuan admin atau mahasiswa berdasarkan role. |
 
 ## Requests: validasi input
 
@@ -58,6 +61,8 @@ Setiap model domain mengembalikan koneksi dari `config('kompen-respon-hub.databa
 | `app/Http/Resources/KompenResponHubImportAuditLogResource.php` | Data log upload/rollback, termasuk izin menampilkan tombol unduh file. |
 | `app/Jobs/ProcessKompenResponHubImport.php` | Worker queue 10 menit: parse file, merespons error validasi, memanggil importer, dan memperbarui progres. |
 | `app/Console/Commands/CreateKompenResponHubAdmin.php` | Alternatif CLI untuk membuat admin dengan password interaktif. UI `/admin/setup` adalah jalur yang lebih nyaman untuk penggunaan normal. |
+| `app/Http/Middleware/ValidateSiAdminProxyRequest.php` | Menolak header gateway yang tidak valid, signature kadaluwarsa/tidak cocok, role tidak dikenal, atau signature yang dipakai ulang. |
+| `app/Http/Middleware/EnsureSikompenAdminAccess.php` | Melindungi semua route admin untuk admin lokal atau session role `admin`/`superuser` hasil gateway. |
 
 ## Views Blade
 

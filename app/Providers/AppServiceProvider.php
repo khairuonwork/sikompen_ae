@@ -64,5 +64,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('admin-setup', function (Request $request): Limit {
             return Limit::perMinute(5)->by(Str::transliterate("admin-setup|{$request->ip()}"));
         });
+
+        RateLimiter::for('si-admin-proxy', function (Request $request): Limit {
+            return Limit::perMinute(120)->by($request->ip());
+        });
     }
 }
