@@ -1,7 +1,9 @@
 <?php
 
 use App\Actions\SiAdminProxy\SiAdminProxySignature;
-use App\Models\KompenResponHubAdminSetupWindow;
+use App\Models\KompenResponHubAdmin;
+use App\Providers\AppServiceProvider;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
 beforeEach(function (): void {
@@ -9,7 +11,15 @@ beforeEach(function (): void {
         'si-admin-proxy.enabled' => true,
         'si-admin-proxy.shared_secret' => str_repeat('a', 64),
         'si-admin-proxy.signature_ttl_seconds' => 60,
+        'si-admin-proxy.session_max_age_seconds' => 7200,
     ]);
+});
+
+afterEach(function (): void {
+    config()->set('si-admin-proxy.enabled', false);
+    URL::useOrigin(null);
+    URL::useAssetOrigin(null);
+    URL::forceScheme(null);
 });
 
 test('the Si-Admin gateway sends admin to the admin panel', function (): void {
@@ -18,7 +28,13 @@ test('the Si-Admin gateway sends admin to the admin panel', function (): void {
         ->assertRedirect(route('admin.kompen-respon.index'))
         ->assertSessionHas('si_admin_proxy.role', 'admin');
 
-    $this->get('/admin/kompen-respon')
+    $this->assertDatabaseHas('sikompen_proxy_access_logs', [
+        'email' => 'superuser@si-admin.test',
+        'role' => 'admin',
+        'si_admin_user_id' => 'si-admin-123',
+    ]);
+
+    $this->get(route('admin.kompen-respon.index'))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('kompen-respon-hub/index')
@@ -39,7 +55,7 @@ test('the Si-Admin gateway sends superuser to the access selection page', functi
             ->where('isAdminAuthenticated', true),
         );
 
-    $this->get('/admin/kompen-respon')->assertOk();
+    $this->get(route('admin.kompen-respon.index'))->assertOk();
     $this->get('/mahasiswa')->assertOk();
 });
 
@@ -50,21 +66,58 @@ test('the Si-Admin gateway sends mahasiswa to the student page', function (): vo
         ->assertSessionHas('si_admin_proxy.role', 'mahasiswa');
 });
 
-test('a proxy superuser can use an admin action without a local admin record', function (): void {
+test('a proxy superuser cannot open a local admin setup window', function (): void {
     $this->withHeaders(siAdminProxyHeaders('superuser'))
         ->get('/si-admin/access')
         ->assertRedirect(route('home'));
 
     $this->post('/admin/settings/admin-setup')
-        ->assertRedirect(route('admin.settings'));
-
-    expect(KompenResponHubAdminSetupWindow::query()->findOrFail(1)->opened_by_admin_id)
-        ->toBeNull();
+        ->assertNotFound();
 });
 
-test('a direct request cannot enter the admin panel through the proxy access rules', function (): void {
-    $this->get('/admin/kompen-respon')
-        ->assertRedirect(route('login'));
+test('proxy mode returns 403 for direct web and API requests without a proxy session', function (): void {
+    $this->get(route('admin.kompen-respon.index'))
+        ->assertForbidden();
+
+    $this->get('/mahasiswa')->assertForbidden();
+    $this->getJson('/api/kompen-respon/students')->assertForbidden();
+});
+
+test('proxy mode returns 404 for standalone authentication routes', function (): void {
+    $this->get('/admin/login')->assertNotFound();
+    $this->get('/admin/setup')->assertNotFound();
+});
+
+test('a local admin session cannot elevate a proxy mahasiswa session', function (): void {
+    $localAdmin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($localAdmin, 'admin')
+        ->withHeaders(siAdminProxyHeaders('mahasiswa'))
+        ->get('/si-admin/access')
+        ->assertRedirect(route('student.kompen-respon.index'));
+
+    $this->get(route('admin.kompen-respon.index'))->assertForbidden();
+});
+
+test('proxy mode returns 403 for an expired proxy session', function (): void {
+    $this->withSession([
+        'si_admin_proxy.authenticated_at' => now()->subSeconds(7201)->getTimestamp(),
+        'si_admin_proxy.email' => 'superuser@si-admin.test',
+        'si_admin_proxy.role' => 'admin',
+        'si_admin_proxy.user_id' => 'si-admin-123',
+    ])->get('/mahasiswa')->assertForbidden();
+});
+
+test('proxy mode generates public URLs with the Sikompen path prefix', function (): void {
+    config()->set([
+        'app.url' => 'https://si-admin.test/sikompen',
+        'si-admin-proxy.enabled' => true,
+    ]);
+
+    (new AppServiceProvider(app()))->boot();
+
+    expect(route('admin.kompen-respon.index'))->toBe('https://si-admin.test/sikompen/admin');
+
 });
 
 test('the proxy access endpoint rejects a tampered role', function (): void {
@@ -88,6 +141,18 @@ test('the proxy access endpoint rejects a replayed signature', function (): void
         ->assertForbidden();
 });
 
+test('the proxy access endpoint rejects a nonce reused with a different valid timestamp', function (): void {
+    $nonce = Str::lower(Str::random(32));
+
+    $this->withHeaders(siAdminProxyHeaders('admin', now()->subSeconds(10)->getTimestamp(), $nonce))
+        ->get('/si-admin/access')
+        ->assertRedirect(route('admin.kompen-respon.index'));
+
+    $this->withHeaders(siAdminProxyHeaders('admin', now()->getTimestamp(), $nonce))
+        ->get('/si-admin/access')
+        ->assertForbidden();
+});
+
 test('the proxy access endpoint rejects an expired signature', function (): void {
     $this->withHeaders(siAdminProxyHeaders('admin', now()->subSeconds(61)->getTimestamp()))
         ->get('/si-admin/access')
@@ -103,12 +168,12 @@ test('the proxy access endpoint is hidden until the integration is enabled', fun
 });
 
 /** @return array<string, string> */
-function siAdminProxyHeaders(string $role, ?int $timestamp = null): array
+function siAdminProxyHeaders(string $role, ?int $timestamp = null, ?string $nonce = null): array
 {
     $attributes = [
         'email' => 'superuser@si-admin.test',
         'method' => 'GET',
-        'nonce' => Str::lower(Str::random(32)),
+        'nonce' => $nonce ?? Str::lower(Str::random(32)),
         'path' => '/si-admin/access',
         'role' => $role,
         'timestamp' => $timestamp ?? now()->getTimestamp(),

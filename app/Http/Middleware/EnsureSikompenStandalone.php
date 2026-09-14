@@ -2,15 +2,12 @@
 
 namespace App\Http\Middleware;
 
-use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class EnsureSikompenAdminAccess
+class EnsureSikompenStandalone
 {
-    public function __construct(private SiAdminProxyAccess $access) {}
-
     /**
      * Handle an incoming request.
      *
@@ -18,11 +15,7 @@ class EnsureSikompenAdminAccess
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $this->access->hasAdminAccess($request)) {
-            abort_if(config('si-admin-proxy.enabled'), 403);
-
-            return to_route('login');
-        }
+        abort_if(config('si-admin-proxy.enabled'), 404);
 
         return $next($request);
     }

@@ -3,6 +3,7 @@ import { Eye, EyeOff, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { store } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
 import { Button } from '@/components/ui/button';
+import { sikompenForm, sikompenUrl } from '@/lib/sikompen-url';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
     Card,
@@ -41,7 +42,7 @@ export default function AdminLogin({ flash }: AdminLoginProps): React.JSX.Elemen
                             memperbarui dokumen Kompen/Respon.
                         </CardDescription>
                     </CardHeader>
-                    <Form {...store.form()} resetOnError>
+                <Form {...sikompenForm(store.form())} resetOnError>
                         {({ errors, processing }) => (
                             <>
                                 <CardContent className="grid gap-4">
@@ -130,7 +131,7 @@ export default function AdminLogin({ flash }: AdminLoginProps): React.JSX.Elemen
                                             : 'Masuk ke panel admin'}
                                     </Button>
                                     <Link
-                                        href={home.url()}
+                                        href={sikompenUrl(home.url())}
                                         className="text-muted-foreground hover:text-foreground text-sm"
                                     >
                                         Kembali ke pilihan akses

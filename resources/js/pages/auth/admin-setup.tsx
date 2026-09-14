@@ -3,6 +3,7 @@ import { Eye, EyeOff, KeyRound, ShieldCheck, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { store } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
 import { Button } from '@/components/ui/button';
+import { sikompenForm, sikompenUrl } from '@/lib/sikompen-url';
 import {
     Card,
     CardContent,
@@ -57,7 +58,7 @@ export default function AdminSetup({
                     </CardHeader>
 
                     {setupOpen ? (
-                        <Form {...store.form()} resetOnError>
+                        <Form {...sikompenForm(store.form())} resetOnError>
                             {({ errors, processing }) => (
                                 <>
                                     <CardContent className="grid gap-4">
@@ -208,7 +209,7 @@ export default function AdminSetup({
                                                 : 'Buat akun admin'}
                                         </Button>
                                         <Link
-                                            href={home.url()}
+                                            href={sikompenUrl(home.url())}
                                             className="text-muted-foreground hover:text-foreground text-sm"
                                         >
                                             Kembali ke pilihan akses
@@ -220,7 +221,7 @@ export default function AdminSetup({
                     ) : (
                         <CardFooter className="border-t pt-6">
                             <Button asChild className="w-full" variant="outline">
-                                <Link href={home.url()}>
+                                <Link href={sikompenUrl(home.url())}>
                                     Kembali ke pilihan akses
                                 </Link>
                             </Button>

@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Middleware\EnsureSiAdminProxySession;
 use App\Http\Middleware\EnsureSikompenAdminAccess;
+use App\Http\Middleware\EnsureSikompenStandalone;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ValidateSiAdminProxyRequest;
@@ -28,7 +30,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'si-admin.proxy' => ValidateSiAdminProxyRequest::class,
+            'sikompen.proxy-session' => EnsureSiAdminProxySession::class,
             'sikompen.admin' => EnsureSikompenAdminAccess::class,
+            'sikompen.standalone' => EnsureSikompenStandalone::class,
         ]);
 
         $middleware->redirectGuestsTo(fn (): string => route('login'));

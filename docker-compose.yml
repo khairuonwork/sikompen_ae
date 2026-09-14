@@ -22,6 +22,10 @@ services:
       KOMPEN_DB_DATABASE: "${KOMPEN_DB_DATABASE:-kompen_database}"
       KOMPEN_DB_USERNAME: "${KOMPEN_DB_USERNAME:-kompen_user}"
       KOMPEN_DB_PASSWORD: "${KOMPEN_DB_PASSWORD:-kompen_local_password}"
+      DB_CACHE_CONNECTION: kompen_db
+      DB_CACHE_TABLE: sikompen_cache
+      DB_CACHE_LOCK_CONNECTION: kompen_db
+      DB_CACHE_LOCK_TABLE: sikompen_cache_locks
     depends_on:
       database:
         condition: service_healthy
@@ -67,6 +71,10 @@ services:
       KOMPEN_DB_DATABASE: "${KOMPEN_DB_DATABASE:-kompen_database}"
       KOMPEN_DB_USERNAME: "${KOMPEN_DB_USERNAME:-kompen_user}"
       KOMPEN_DB_PASSWORD: "${KOMPEN_DB_PASSWORD:-kompen_local_password}"
+      DB_CACHE_CONNECTION: kompen_db
+      DB_CACHE_TABLE: sikompen_cache
+      DB_CACHE_LOCK_CONNECTION: kompen_db
+      DB_CACHE_LOCK_TABLE: sikompen_cache_locks
     depends_on:
       database:
         condition: service_healthy

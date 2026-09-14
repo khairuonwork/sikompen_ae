@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
+use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
 use App\Http\Resources\KompenResponHubDetailResource;
 use App\Http\Resources\KompenResponHubImportAuditLogResource;
 use App\Http\Resources\KompenResponHubImportTaskResource;
 use App\Http\Resources\KompenResponHubStudentResource;
+use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImport;
+use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -18,7 +21,10 @@ use Inertia\Response;
 
 class KompenResponHubController extends Controller
 {
-    public function __construct(private KompenResponHubDataQuery $dataQuery) {}
+    public function __construct(
+        private KompenResponHubDataQuery $dataQuery,
+        private SiAdminProxyAccess $proxyAccess,
+    ) {}
 
     public function studentIndex(KompenResponHubTableRequest $request): Response
     {
@@ -85,6 +91,7 @@ class KompenResponHubController extends Controller
         return Inertia::render('kompen-respon-hub/index', [
             'activeTab' => $activeTab,
             'isAdmin' => $isAdmin,
+            'isProxySession' => $this->proxyAccess->hasValidProxySession($request),
             'filters' => $filters,
             'filterOptions' => $this->dataQuery->filterOptions(),
             'activeImportTasks' => $isAdmin
@@ -130,6 +137,9 @@ class KompenResponHubController extends Controller
     }
 
     /**
+     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog
+     *
+     * @param  LengthAwarePaginator<int, TModel>  $paginator
      * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource>  $resource
      * @return array<string, mixed>
      */
