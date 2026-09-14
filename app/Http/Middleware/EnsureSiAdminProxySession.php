@@ -7,7 +7,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class EnsureSikompenAdminAccess
+class EnsureSiAdminProxySession
 {
     public function __construct(private SiAdminProxyAccess $access) {}
 
@@ -18,10 +18,14 @@ class EnsureSikompenAdminAccess
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $this->access->hasAdminAccess($request)) {
-            abort_if(config('si-admin-proxy.enabled'), 403);
+        if (! config('si-admin-proxy.enabled')) {
+            return $next($request);
+        }
 
-            return to_route('login');
+        if (! $this->access->hasValidProxySession($request)) {
+            $request->session()->invalidate();
+
+            abort(403);
         }
 
         return $next($request);

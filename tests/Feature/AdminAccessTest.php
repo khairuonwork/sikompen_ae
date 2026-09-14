@@ -41,7 +41,7 @@ test('the landing page offers setup when an admin opens registration', function 
 });
 
 test('guests cannot access admin imports or templates', function () {
-    $this->get('/admin/kompen-respon')
+    $this->get('/admin')
         ->assertRedirect('/admin/login');
 
     $this->post('/admin/kompen-respon/imports')
@@ -61,7 +61,7 @@ test('an admin can log in and receives an authenticated session', function () {
         'email' => $admin->email,
         'password' => 'sangat-aman-untuk-admin',
     ])
-        ->assertRedirect('/admin/kompen-respon');
+        ->assertRedirect('/admin');
 
     $this->assertAuthenticatedAs($admin, 'admin');
 });

@@ -224,6 +224,6 @@ Dalam rancangan ini:
 - Si-Admin meneruskan identitas/role yang telah diverifikasi lewat header internal dan Si-Kompen wajib menolak request yang tidak datang dari gateway tepercaya.
 - Jangan berbagi `APP_KEY`, session database, atau cookie antara dua aplikasi.
 
-Code handler Sikompen untuk gateway tersebut sudah tersedia, tetapi Compose repository ini masih menjalankan Sikompen mandiri dan belum memiliki service Si-Admin/prefix proxy. Implementasi Compose gabungan harus dilakukan bersama tim Si-Admin agar header tepercaya, path prefix, URL asset, TLS, dan error handling memiliki kontrak yang sama.
+Code handler Sikompen untuk gateway tersebut sudah tersedia, tetapi Compose repository ini masih menjalankan Sikompen mandiri dan belum memiliki service Si-Admin/prefix proxy. Implementasi Compose gabungan harus dilakukan bersama tim Si-Admin agar header tepercaya, path prefix, URL asset, TLS, dan error handling memiliki kontrak yang sama. Gunakan `nginx.si-admin-gateway.conf` sebagai konfigurasi Nginx publik awal; ia meneruskan `/sikompen/*` ke gateway Si-Admin, bukan langsung ke service Sikompen.
 
 Kontrak header HMAC, role, pengujian `superuser`, dan tanggung jawab gateway Si-Admin tersedia di [si-admin-proxy-contract.md](si-admin-proxy-contract.md).

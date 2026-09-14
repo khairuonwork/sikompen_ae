@@ -3,6 +3,7 @@ import { GraduationCap, ShieldCheck } from 'lucide-react';
 import { create as adminLogin } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
 import { create as adminSetup } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
 import { Button } from '@/components/ui/button';
+import { sikompenUrl } from '@/lib/sikompen-url';
 import {
     Card,
     CardContent,
@@ -60,8 +61,8 @@ export default function Welcome({
                                     <Link
                                         href={
                                             isAdminAuthenticated
-                                                ? adminIndex.url()
-                                                : adminLogin.url()
+                                                ? sikompenUrl(adminIndex.url())
+                                                : sikompenUrl(adminLogin.url())
                                         }
                                     >
                                         {isAdminAuthenticated
@@ -76,7 +77,7 @@ export default function Welcome({
                                         className="mt-3 w-full"
                                         variant="outline"
                                     >
-                                        <Link href={adminSetup.url()}>
+                                        <Link href={sikompenUrl(adminSetup.url())}>
                                             {isInitialAdminSetupAvailable
                                                 ? 'Buat akun admin pertama'
                                                 : 'Daftar sebagai admin'}
@@ -106,7 +107,7 @@ export default function Welcome({
                                     className="w-full"
                                     variant="outline"
                                 >
-                                    <Link href={studentIndex.url()}>
+                                    <Link href={sikompenUrl(studentIndex.url())}>
                                         Lihat data mahasiswa
                                     </Link>
                                 </Button>

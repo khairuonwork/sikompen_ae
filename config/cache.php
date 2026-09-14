@@ -41,10 +41,10 @@ return [
 
         'database' => [
             'driver' => 'database',
-            'connection' => env('DB_CACHE_CONNECTION'),
-            'table' => env('DB_CACHE_TABLE', 'cache'),
-            'lock_connection' => env('DB_CACHE_LOCK_CONNECTION'),
-            'lock_table' => env('DB_CACHE_LOCK_TABLE'),
+            'connection' => env('DB_CACHE_CONNECTION', env('KOMPEN_RESPON_HUB_DB_CONNECTION', 'kompen_db')),
+            'table' => env('DB_CACHE_TABLE', 'sikompen_cache'),
+            'lock_connection' => env('DB_CACHE_LOCK_CONNECTION', env('KOMPEN_RESPON_HUB_DB_CONNECTION', 'kompen_db')),
+            'lock_table' => env('DB_CACHE_LOCK_TABLE', 'sikompen_cache_locks'),
         ],
 
         'file' => [

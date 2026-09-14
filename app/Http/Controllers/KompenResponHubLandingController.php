@@ -13,8 +13,10 @@ class KompenResponHubLandingController extends Controller
 {
     public function __invoke(Request $request, SiAdminProxyAccess $access): Response
     {
-        $isInitialAdminSetupAvailable = ! KompenResponHubAdmin::query()->exists();
+        $isStandaloneMode = ! config('si-admin-proxy.enabled');
+        $isInitialAdminSetupAvailable = $isStandaloneMode && ! KompenResponHubAdmin::query()->exists();
         $isAdminSetupOpen = ! $isInitialAdminSetupAvailable
+            && $isStandaloneMode
             && KompenResponHubAdminSetupWindow::query()->find(1)?->isOpen();
 
         return Inertia::render('welcome', [

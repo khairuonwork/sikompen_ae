@@ -6,6 +6,7 @@ import {
 } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { sikompenForm, sikompenUrl } from '@/lib/sikompen-url';
 import {
     Card,
     CardContent,
@@ -59,7 +60,7 @@ export default function AdminSettings({
                             </div>
                         </div>
                         <Button asChild variant="outline">
-                            <Link href={adminIndex.url()}>
+                            <Link href={sikompenUrl(adminIndex.url())}>
                                 Kembali ke panel
                             </Link>
                         </Button>
@@ -124,7 +125,7 @@ export default function AdminSettings({
                         </CardContent>
                         <CardFooter className="flex flex-wrap justify-end gap-3 border-t pt-6">
                             {setupWindow.isOpen ? (
-                                <Form {...disable.form()}>
+                                <Form {...sikompenForm(disable.form())}>
                                     {({ processing }) => (
                                         <Button
                                             type="submit"
@@ -137,7 +138,7 @@ export default function AdminSettings({
                                     )}
                                 </Form>
                             ) : null}
-                            <Form {...enable.form()}>
+                            <Form {...sikompenForm(enable.form())}>
                                 {({ processing }) => (
                                     <Button type="submit" disabled={processing}>
                                         <UserPlus className="size-4" />

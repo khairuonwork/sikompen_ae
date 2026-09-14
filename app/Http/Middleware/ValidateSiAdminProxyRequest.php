@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Actions\SiAdminProxy\RecordSiAdminProxyAccess;
 use App\Actions\SiAdminProxy\SiAdminProxySignature;
 use Closure;
 use Illuminate\Http\Request;
@@ -10,7 +11,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ValidateSiAdminProxyRequest
 {
-    public function __construct(private SiAdminProxySignature $signature) {}
+    public function __construct(
+        private SiAdminProxySignature $signature,
+        private RecordSiAdminProxyAccess $accessRecorder,
+    ) {}
 
     /**
      * Handle an incoming request.
@@ -48,6 +52,8 @@ class ValidateSiAdminProxyRequest
             ),
             403,
         );
+
+        $this->accessRecorder->record($request, $attributes);
 
         $request->attributes->set('si_admin_proxy', $attributes);
 

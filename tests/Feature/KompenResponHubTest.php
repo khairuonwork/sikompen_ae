@@ -175,7 +175,7 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
             'kompen-respon.xlsx',
             workbookContents(),
         ),
-    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+    ])->assertRedirect('/admin?tab=upload');
 
     expect(KompenResponHubStudent::query()->find($oldStudent->id))->toBeNull();
 
@@ -189,7 +189,7 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
         ->and($import->uploader_name)->toBe('Khairul Anwar')
         ->and($import->uploader_email)->toBe($admin->email);
 
-    $this->actingAs($admin, 'admin')->get('/admin/kompen-respon?tab=imports')
+    $this->actingAs($admin, 'admin')->get('/admin?tab=imports')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('activeTab', 'imports')
@@ -227,7 +227,7 @@ test('an admin can download an available workbook from its upload log', function
         ->get("/admin/kompen-respon/imports/{$import->id}/download")
         ->assertDownload("sikompen-import-{$import->id}.xlsx");
 
-    $this->actingAs($admin, 'admin')->get('/admin/kompen-respon?tab=imports')
+    $this->actingAs($admin, 'admin')->get('/admin?tab=imports')
         ->assertInertia(fn ($page) => $page
             ->where('imports.data.0.can_download_file', true),
         );
@@ -263,7 +263,7 @@ test('a completed import clears cached filter options', function () {
             'kompen-respon.xlsx',
             workbookContents(),
         ),
-    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+    ])->assertRedirect('/admin?tab=upload');
 
     $this->getJson('/api/kompen-respon/filter-options')
         ->assertOk()
@@ -294,7 +294,7 @@ test('an admin can delete only the latest upload and its related data is removed
 
     $this->actingAs($admin, 'admin')
         ->delete('/admin/kompen-respon/imports/latest')
-        ->assertRedirect('/admin/kompen-respon?tab=imports');
+        ->assertRedirect('/admin?tab=imports');
 
     expect(KompenResponHubImport::query()->find($latestImport->id))->toBeNull()
         ->and(KompenResponHubStudent::query()->find($latestStudent->id))->toBeNull()
@@ -328,7 +328,7 @@ test('a rollback clears cached filter options', function () {
 
     $this->actingAs($admin, 'admin')
         ->delete('/admin/kompen-respon/imports/latest')
-        ->assertRedirect('/admin/kompen-respon?tab=imports');
+        ->assertRedirect('/admin?tab=imports');
 
     $this->getJson('/api/kompen-respon/filter-options')
         ->assertOk()
@@ -350,7 +350,7 @@ test('an admin cannot delete an upload while another import is still active', fu
 
     $this->actingAs($admin, 'admin')
         ->delete('/admin/kompen-respon/imports/latest')
-        ->assertRedirect('/admin/kompen-respon?tab=imports')
+        ->assertRedirect('/admin?tab=imports')
         ->assertSessionHas('error');
 
     expect(KompenResponHubStudent::query()->find($student->id))->not->toBeNull();
@@ -364,7 +364,7 @@ test('an uploaded workbook is queued and its progress remains available outside 
     $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
         'uploader_name' => 'Khairul Anwar',
         'file' => UploadedFile::fake()->create('kompen-respon.xlsx', 100),
-    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+    ])->assertRedirect('/admin?tab=upload');
 
     $importTask = KompenResponHubImportTask::query()->sole();
     expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_QUEUED)
@@ -376,7 +376,7 @@ test('an uploaded workbook is queued and its progress remains available outside 
         fn (ProcessKompenResponHubImport $job): bool => $job->importTaskId === $importTask->id,
     );
 
-    $this->actingAs($admin, 'admin')->get('/admin/kompen-respon?tab=details')
+    $this->actingAs($admin, 'admin')->get('/admin?tab=details')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('activeTab', 'details')
@@ -410,7 +410,7 @@ test('an invalid academic year marks the queued import as failed', function () {
             'kompen-respon.xlsx',
             workbookContents('Gasal', '2026/2028'),
         ),
-    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+    ])->assertRedirect('/admin?tab=upload');
 
     $importTask = KompenResponHubImportTask::query()->sole();
     expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
@@ -427,7 +427,7 @@ test('an admin can import a legacy workbook with its period in one cell', functi
             'kompen-respon.xlsx',
             workbookContents('2026/2027 Ganjil', ''),
         ),
-    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+    ])->assertRedirect('/admin?tab=upload');
 
     expect(KompenResponHubImport::query()->sole()->periode_semester)->toBe('2026/2027 Gasal');
 });
@@ -442,7 +442,7 @@ test('an admin import reads the class and level metadata from the workbook', fun
             'kompen-respon.xlsx',
             workbookContents(classCode: '2AEA1', level: 2),
         ),
-    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+    ])->assertRedirect('/admin?tab=upload');
 
     $student = KompenResponHubStudent::query()->sole();
     expect($student->kelas)->toBe('2AEA1')
@@ -459,7 +459,7 @@ test('a level that differs from its class code marks the queued import as failed
             'kompen-respon.xlsx',
             workbookContents(classCode: '2AEA1', level: 1),
         ),
-    ])->assertRedirect('/admin/kompen-respon?tab=upload');
+    ])->assertRedirect('/admin?tab=upload');
 
     $importTask = KompenResponHubImportTask::query()->sole();
     expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)

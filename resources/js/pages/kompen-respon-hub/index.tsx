@@ -45,6 +45,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { sikompenForm, sikompenUrl } from '@/lib/sikompen-url';
 import { index as adminIndex } from '@/routes/admin/kompen-respon';
 import { index as studentIndex } from '@/routes/student/kompen-respon';
 
@@ -140,6 +141,7 @@ type KompenResponHubPageProps = {
     imports: Pagination<ImportAuditLog> | null;
     activeImportTasks: ImportTask[];
     canRollbackLatestImport: boolean;
+    isProxySession: boolean;
 };
 
 const adminTabs = [
@@ -257,7 +259,7 @@ function StudentTable({
                                 <td className="px-3 py-3">
                                     <a
                                         className="text-primary hover:underline"
-                                        href={studentApi.url(student.id)}
+                                        href={sikompenUrl(studentApi.url(student.id))}
                                         target="_blank"
                                         rel="noreferrer"
                                     >
@@ -424,8 +426,10 @@ function ImportAuditLogTable({
                                     auditLog.source_import_id !== null ? (
                                         <Button asChild size="sm" variant="outline">
                                             <a
-                                                href={downloadUploadedWorkbook.url(
-                                                    auditLog.source_import_id,
+                                                href={sikompenUrl(
+                                                    downloadUploadedWorkbook.url(
+                                                        auditLog.source_import_id,
+                                                    ),
                                                 )}
                                             >
                                                 <Download className="size-4" />
@@ -464,7 +468,7 @@ function RollbackLatestImportButton({
 }): React.JSX.Element {
     return (
         <Form
-            {...rollbackLatestImport.form()}
+            {...sikompenForm(rollbackLatestImport.form())}
             onBefore={() =>
                 window.confirm(
                     'Hapus data dari unggahan terakhir? Data mahasiswa dan detail terkait tidak dapat dipulihkan.',
@@ -554,7 +558,7 @@ function ImportProgressPanel({
                 const updatedTasks = await Promise.all(
                     activeTaskIds.map(async (importTaskId) => {
                         const response = await fetch(
-                            importTaskStatus.url(importTaskId),
+                            sikompenUrl(importTaskStatus.url(importTaskId)),
                             {
                                 credentials: 'same-origin',
                                 headers: {
@@ -655,7 +659,7 @@ function UploadPanel({
                 </CardDescription>
             </CardHeader>
             <Form
-                {...store.form()}
+                {...sikompenForm(store.form())}
                 resetOnSuccess
                 onStart={() => onUploadRequestActivityChange(true)}
                 onFinish={() => onUploadRequestActivityChange(false)}
@@ -756,23 +760,23 @@ function FilterPanel({
         periode_semester: periode,
     };
     const spreadsheetDownloadUrl = periode
-        ? spreadsheetDownloadAction.url({
+        ? sikompenUrl(spreadsheetDownloadAction.url({
               query: {
                   ...downloadQuery,
               },
-          })
+          }))
         : null;
     const pdfDownloadUrl = periode
-        ? pdfDownloadAction.url({
+        ? sikompenUrl(pdfDownloadAction.url({
               query: {
                   ...downloadQuery,
               },
-          })
+          }))
         : null;
 
     return (
         <Form
-            {...indexAction.form()}
+            {...sikompenForm(indexAction.form())}
             className="bg-card grid gap-3 rounded-xl border p-4 lg:grid-cols-[minmax(220px,1fr)_repeat(4,minmax(140px,auto))]"
         >
             <input name="tab" type="hidden" value={activeTab} />
@@ -859,7 +863,7 @@ function FilterPanel({
             </div>
             <div className="col-span-full flex flex-wrap items-center justify-between gap-3">
                 <Link
-                    href={indexAction.url({ query: { tab: activeTab } })}
+                    href={sikompenUrl(indexAction.url({ query: { tab: activeTab } }))}
                     className="text-muted-foreground hover:text-foreground text-sm"
                 >
                     Reset filter
@@ -910,6 +914,7 @@ export default function KompenResponHubIndex({
     imports,
     activeImportTasks,
     canRollbackLatestImport,
+    isProxySession,
 }: KompenResponHubPageProps): React.JSX.Element {
     const indexAction = isAdmin ? adminIndex : studentIndex;
     const tabs = isAdmin ? adminTabs : studentTabs;
@@ -943,28 +948,32 @@ export default function KompenResponHubIndex({
                     </div>
                     {isAdmin ? (
                         <div className="flex flex-wrap gap-2">
-                            <Button asChild variant="outline">
-                                <Link href={adminSettings.url()}>
-                                    <Settings className="size-4" />
-                                    Pengaturan
-                                </Link>
-                            </Button>
+                            {!isProxySession ? (
+                                <Button asChild variant="outline">
+                                    <Link href={sikompenUrl(adminSettings.url())}>
+                                        <Settings className="size-4" />
+                                        Pengaturan
+                                    </Link>
+                                </Button>
+                            ) : null}
                             <a
                                 className="bg-background hover:bg-accent inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium shadow-xs"
-                                href={downloadTemplate.url()}
+                                href={sikompenUrl(downloadTemplate.url())}
                             >
                                 <Download className="size-4" />
                                 Download template
                             </a>
-                            <Button asChild variant="outline">
-                                <Link
-                                    href={logout.url()}
-                                    method="post"
-                                    as="button"
-                                >
-                                    Keluar
-                                </Link>
-                            </Button>
+                            {!isProxySession ? (
+                                <Button asChild variant="outline">
+                                    <Link
+                                        href={sikompenUrl(logout.url())}
+                                        method="post"
+                                        as="button"
+                                    >
+                                        Keluar
+                                    </Link>
+                                </Button>
+                            ) : null}
                         </div>
                     ) : null}
                 </header>
@@ -997,12 +1006,14 @@ export default function KompenResponHubIndex({
                     {tabs.map(([tab, label]) => (
                         <Link
                             key={tab}
-                            href={indexAction.url({
-                                query:
-                                    tab === 'upload' || tab === 'imports'
-                                        ? { tab }
-                                        : { ...filters, tab },
-                            })}
+                            href={sikompenUrl(
+                                indexAction.url({
+                                    query:
+                                        tab === 'upload' || tab === 'imports'
+                                            ? { tab }
+                                            : { ...filters, tab },
+                                }),
+                            )}
                             onClick={(event) => {
                                 if (isUploadRequestActive) {
                                     event.preventDefault();
