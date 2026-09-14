@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\StoreKompenResponHubAdminSetupRequest;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubAdminSetupWindow;
@@ -74,14 +75,15 @@ class KompenResponHubAdminSetupController extends Controller
         ]);
     }
 
-    public function enable(Request $request): RedirectResponse
+    public function enable(Request $request, SiAdminProxyAccess $access): RedirectResponse
     {
         $activationCode = Str::upper(Str::random(20));
+        $actor = $access->actor($request);
 
         $this->setupWindow()->forceFill([
             'activation_code_hash' => Hash::make($activationCode),
             'expires_at' => now()->addMinutes(30),
-            'opened_by_admin_id' => $request->user('admin')->getAuthIdentifier(),
+            'opened_by_admin_id' => $actor['id'],
         ])->save();
 
         return to_route('admin.settings')->with('admin_setup_code', $activationCode);

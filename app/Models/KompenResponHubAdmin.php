@@ -6,6 +6,10 @@ use Database\Factories\KompenResponHubAdminFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
+/**
+ * @property int $id
+ * @property string $email
+ */
 class KompenResponHubAdmin extends Authenticatable
 {
     /** @use HasFactory<KompenResponHubAdminFactory> */

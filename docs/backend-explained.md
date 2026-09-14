@@ -74,6 +74,16 @@ Pekerjaan impor berjalan di queue, jadi tetap berlangsung ketika admin berpindah
 - Admin yang sudah masuk dapat membuka pendaftaran tambahan dari Pengaturan. Sistem membuat kode aktivasi acak, menyimpan **hash** saja, dan membuatnya berlaku 30 menit atau sampai satu akun berhasil dibuat.
 - Login, setup, upload, dan rollback memakai rate limit. Password admin diproses melalui hashing Laravel dan kebijakan minimal 12 karakter yang kuat untuk produksi.
 
+## Gateway Si-Admin
+
+Untuk deployment gabungan, Sikompen menerima entry internal `GET /si-admin/access`. Gateway Si-Admin mengirim identitas pengguna, role, timestamp, nonce, dan signature HMAC. Sikompen memverifikasi signature, menolak replay, membuat session Sikompen, lalu mengarahkan:
+
+- `admin` ke panel admin;
+- `superuser` ke halaman pemilih akses, dengan hak memilih panel admin atau halaman mahasiswa;
+- `mahasiswa` ke halaman mahasiswa.
+
+Role `superuser` tersedia secara default untuk uji integrasi dan memiliki akses setara admin saat memilih panel Admin. Ia bukan akun lokal di database Sikompen. Login admin lokal tetap tersedia hanya untuk deployment standalone. Kontrak teknis lengkap berada di `docs/si-admin-proxy-contract.md`.
+
 ## Data API publik
 
 Semua endpoint berada pada prefix `/api/kompen-respon` dan dibatasi 60 request per menit.

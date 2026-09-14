@@ -5,14 +5,15 @@ Berikut file framework/konfigurasi yang memiliki peran langsung terhadap Sikompe
 | File | Perubahan atau fungsi untuk Sikompen |
 | --- | --- |
 | `config/kompen-respon-hub.php` | Menentukan nama koneksi domain, default `kompen_db`. Semua model domain membacanya. |
+| `config/si-admin-proxy.php` | Konfigurasi opt-in gateway Si-Admin: status aktif, shared secret, TTL signature, role yang diterima, dan role yang boleh mengakses panel admin. |
 | `config/database.php` | Menambahkan koneksi MySQL `kompen_db` dengan variabel `KOMPEN_DB_*`; strict mode dan UTF-8 MB4 aktif. |
 | `config/auth.php` | Mengganti default guard menjadi `admin`, lalu membuat guard session `admin` dengan provider model `KompenResponHubAdmin`. Tidak memakai `users` default. |
 | `config/session.php` | Session Laravel diarahkan ke database pada koneksi domain; gunakan `sikompen_sessions` melalui environment saat deployment. |
 | `config/queue.php` | Default queue database dan koneksi queue/batches/failed jobs diarahkan ke `kompen_db`; retry window disetel untuk job hingga 10 menit. |
 | `config/filesystems.php` | Disk `local` menunjuk `storage/app/private`. Import XLSX berada di sini, bukan di public atau database. |
 | `app/Providers/AppServiceProvider.php` | Password kuat untuk produksi, Carbon immutable, larangan destructive command produksi, serta rate limiter login/setup. |
-| `bootstrap/app.php` | Memuat route web/API, middleware Inertia/appearance, redirect guest ke login admin, dan JSON error untuk API. |
-| `routes/web.php` | Route landing, mahasiswa, login/setup/admin, impor, download template/file, rollback, task status, serta ekspor XLSX/PDF. |
+| `bootstrap/app.php` | Memuat route web/API, middleware Inertia/appearance, alias middleware gateway/admin, redirect guest ke login admin, dan JSON error untuk API. |
+| `routes/web.php` | Route landing, gateway Si-Admin, mahasiswa, login/setup/admin, impor, download template/file, rollback, task status, serta ekspor XLSX/PDF. |
 | `routes/api.php` | Empat API data publik dengan throttle 60 request per menit. |
 | `resources/views/app.blade.php` | Shell Blade untuk Inertia dan asset Vite. |
 | `resources/views/exports/kompen-respon-hub.blade.php` | Blade server-side untuk ekspor PDF, terpisah dari halaman Inertia. |
@@ -38,6 +39,7 @@ Jangan menyimpan secret di Git. Isi nilai sebenarnya pada `.env` di server.
 | `KOMPEN_DB_HOST`, `KOMPEN_DB_PORT`, `KOMPEN_DB_DATABASE`, `KOMPEN_DB_USERNAME`, `KOMPEN_DB_PASSWORD` | Koneksi data Sikompen. Di Compose host harus `database`. |
 | `SESSION_DRIVER=database`, `SESSION_CONNECTION=kompen_db`, `SESSION_TABLE=sikompen_sessions` | Menyimpan session admin pada MariaDB. |
 | `QUEUE_CONNECTION=database`, `DB_QUEUE_CONNECTION=kompen_db`, `DB_QUEUE_RETRY_AFTER=660` | Menjalankan task impor pada database queue. |
+| `SI_ADMIN_PROXY_ENABLED`, `SI_ADMIN_PROXY_SHARED_SECRET`, `SI_ADMIN_PROXY_SIGNATURE_TTL_SECONDS` | Mengaktifkan gateway internal Si-Admin dan mengatur validitas HMAC. |
 | `APP_PORT=8080` | Port HTTP host untuk Compose saat ini. |
 
 ## Route dan file generate

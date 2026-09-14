@@ -8,9 +8,14 @@ use App\Http\Controllers\KompenResponHubImportController;
 use App\Http\Controllers\KompenResponHubImportRollbackController;
 use App\Http\Controllers\KompenResponHubImportTaskController;
 use App\Http\Controllers\KompenResponHubLandingController;
+use App\Http\Controllers\SiAdminProxyAccessController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', KompenResponHubLandingController::class)->name('home');
+
+Route::get('si-admin/access', SiAdminProxyAccessController::class)
+    ->middleware(['throttle:si-admin-proxy', 'si-admin.proxy'])
+    ->name('si-admin.access');
 
 Route::get('mahasiswa', [KompenResponHubController::class, 'studentIndex'])
     ->name('student.kompen-respon.index');
@@ -36,7 +41,7 @@ Route::post('admin/setup', [KompenResponHubAdminSetupController::class, 'store']
     ->middleware('throttle:admin-setup')
     ->name('admin.setup.store');
 
-Route::middleware('auth:admin')->prefix('admin')->name('admin.')->group(function (): void {
+Route::middleware('sikompen.admin')->prefix('admin')->name('admin.')->group(function (): void {
     Route::get('settings', [KompenResponHubAdminSetupController::class, 'settings'])->name('settings');
     Route::post('settings/admin-setup', [KompenResponHubAdminSetupController::class, 'enable'])
         ->name('settings.admin-setup.enable');
