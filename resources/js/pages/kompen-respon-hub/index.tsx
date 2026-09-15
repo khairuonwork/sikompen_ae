@@ -10,6 +10,7 @@ import {
     LogOut,
     CheckCircle2,
     AlertCircle,
+    ArrowLeft,
     ChevronLeft,
     ChevronRight,
     RotateCcw,
@@ -1041,18 +1042,19 @@ function FilterPanel({
     );
 }
 
-function EmptyTableState(): React.JSX.Element {
+function EmptyTableState({ isAdmin }: { isAdmin: boolean }): React.JSX.Element {
     return (
         <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-12 text-center text-sm backdrop-blur-xl transition-all duration-300">
             <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-[#8AAEE0]/50 bg-[#B1C9EF]/40 text-[#395886] shadow-inner">
                 <FileSpreadsheet className="size-7" />
             </div>
             <p className="text-base font-extrabold text-[#395886]">
-                Belum Ada Data yang Cocok
+                {isAdmin ? 'Belum Ada Data yang Cocok' : 'Belum Ada Data'}
             </p>
             <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed font-medium text-[#395886]/70">
-                Upload workbook XLSX untuk mengisi daftar ini atau sesuaikan
-                kata kunci pencarian Anda.
+                {isAdmin
+                    ? 'Unggah workbook XLSX melalui tab Upload dokumen atau sesuaikan filter yang digunakan.'
+                    : 'Belum ada data yang sesuai dengan filter yang dipilih. Coba pilih periode lain atau atur ulang filter.'}
             </p>
         </div>
     );
@@ -1109,45 +1111,56 @@ export default function KompenResponHubIndex({
                                 </p>
                             </div>
                         </div>
-                        {isAdmin ? (
-                            <div className="flex flex-wrap gap-2">
-                                <Button
-                                    asChild
-                                    variant="outline"
-                                    className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white active:scale-95"
-                                >
-                                    <Link
-                                        href={adminSettings.url()}
-                                        className="flex items-center gap-1.5"
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                disabled
+                                className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 disabled:opacity-100"
+                            >
+                                <ArrowLeft className="size-4" />
+                                Kembali
+                            </Button>
+                            {isAdmin ? (
+                                <>
+                                    <Button
+                                        asChild
+                                        variant="outline"
+                                        className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white active:scale-95"
                                     >
-                                        <Settings className="size-4" />
-                                        Pengaturan
-                                    </Link>
-                                </Button>
-                                <a
-                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-2xl border border-[#8AAEE0] bg-white/80 px-4 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:bg-[#395886] hover:text-white active:scale-95"
-                                    href={downloadTemplate.url()}
-                                >
-                                    <Download className="size-4" />
-                                    Download Template
-                                </a>
-                                <Button
-                                    asChild
-                                    variant="outline"
-                                    className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-rose-600 hover:bg-rose-600 hover:text-white active:scale-95"
-                                >
-                                    <Link
-                                        href={logout.url()}
-                                        method="post"
-                                        as="button"
-                                        className="flex items-center gap-1.5"
+                                        <Link
+                                            href={adminSettings.url()}
+                                            className="flex items-center gap-1.5"
+                                        >
+                                            <Settings className="size-4" />
+                                            Pengaturan
+                                        </Link>
+                                    </Button>
+                                    <a
+                                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-2xl border border-[#8AAEE0] bg-white/80 px-4 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:bg-[#395886] hover:text-white active:scale-95"
+                                        href={downloadTemplate.url()}
                                     >
-                                        <LogOut className="size-4" />
-                                        Keluar
-                                    </Link>
-                                </Button>
-                            </div>
-                        ) : null}
+                                        <Download className="size-4" />
+                                        Download Template
+                                    </a>
+                                    <Button
+                                        asChild
+                                        variant="outline"
+                                        className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-rose-600 hover:bg-rose-600 hover:text-white active:scale-95"
+                                    >
+                                        <Link
+                                            href={logout.url()}
+                                            method="post"
+                                            as="button"
+                                            className="flex items-center gap-1.5"
+                                        >
+                                            <LogOut className="size-4" />
+                                            Keluar
+                                        </Link>
+                                    </Button>
+                                </>
+                            ) : null}
+                        </div>
                     </header>
 
                     {/* Alerts */}
@@ -1284,7 +1297,7 @@ export default function KompenResponHubIndex({
                                     <DetailTable data={details} />
                                 ) : null
                             ) : (
-                                <EmptyTableState />
+                                <EmptyTableState isAdmin={isAdmin} />
                             )}
                         </section>
                     ) : null}
