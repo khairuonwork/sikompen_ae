@@ -12,7 +12,7 @@ import {
     AlertCircle,
     ChevronLeft,
     ChevronRight,
-    RotateCcw
+    RotateCcw,
 } from 'lucide-react';
 import { type DragEvent, useEffect, useState } from 'react';
 import {
@@ -168,24 +168,50 @@ function number(value: string): string {
 
 function Pager<T>({ data }: { data: Pagination<T> }): React.JSX.Element {
     return (
-        <div className="text-[#395886]/80 flex flex-wrap items-center justify-between gap-3 border-t border-[#F0F3FA] bg-white/40 px-5 py-3.5 text-xs md:text-sm font-medium">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#F0F3FA] bg-white/40 px-5 py-3.5 text-xs font-medium text-[#395886]/80 md:text-sm">
             <span>
-                Halaman <span className="font-extrabold text-[#395886]">{data.meta.current_page}</span> dari{' '}
-                <span className="font-extrabold text-[#395886]">{data.meta.last_page}</span> ·{' '}
-                <span className="font-extrabold text-[#395886]">{data.meta.total}</span> total data
+                Halaman{' '}
+                <span className="font-extrabold text-[#395886]">
+                    {data.meta.current_page}
+                </span>{' '}
+                dari{' '}
+                <span className="font-extrabold text-[#395886]">
+                    {data.meta.last_page}
+                </span>{' '}
+                ·{' '}
+                <span className="font-extrabold text-[#395886]">
+                    {data.meta.total}
+                </span>{' '}
+                total data
             </span>
             <div className="flex gap-2">
                 {data.links.prev ? (
-                    <Button asChild size="sm" variant="outline" className="border-[#8AAEE0] text-[#395886] bg-white hover:bg-[#395886] hover:text-white hover:border-[#395886] rounded-xl font-bold transition-all duration-300 shadow-2xs">
-                        <Link href={data.links.prev} className="flex items-center gap-1">
+                    <Button
+                        asChild
+                        size="sm"
+                        variant="outline"
+                        className="rounded-xl border-[#8AAEE0] bg-white font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white"
+                    >
+                        <Link
+                            href={data.links.prev}
+                            className="flex items-center gap-1"
+                        >
                             <ChevronLeft className="size-4" />
                             Sebelumnya
                         </Link>
                     </Button>
                 ) : null}
                 {data.links.next ? (
-                    <Button asChild size="sm" variant="outline" className="border-[#8AAEE0] text-[#395886] bg-white hover:bg-[#395886] hover:text-white hover:border-[#395886] rounded-xl font-bold transition-all duration-300 shadow-2xs">
-                        <Link href={data.links.next} className="flex items-center gap-1">
+                    <Button
+                        asChild
+                        size="sm"
+                        variant="outline"
+                        className="rounded-xl border-[#8AAEE0] bg-white font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white"
+                    >
+                        <Link
+                            href={data.links.next}
+                            className="flex items-center gap-1"
+                        >
                             Berikutnya
                             <ChevronRight className="size-4" />
                         </Link>
@@ -220,16 +246,13 @@ function StudentTable({
     ];
 
     return (
-        <section className="bg-white/80 border border-white/80 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden backdrop-blur-xl transition-all duration-300">
+        <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-all duration-300">
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[1150px] text-sm">
-                    <thead className="bg-[#B1C9EF]/20 text-[#395886] text-left text-[10px] font-black tracking-[0.15em] uppercase border-b border-[#F0F3FA]">
+                    <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
                             {headings.map((heading) => (
-                                <th
-                                    key={heading}
-                                    className="px-4 py-3.5"
-                                >
+                                <th key={heading} className="px-4 py-3.5">
                                     {heading}
                                 </th>
                             ))}
@@ -237,15 +260,22 @@ function StudentTable({
                     </thead>
                     <tbody className="divide-y divide-[#F0F3FA]">
                         {data.data.map((student) => (
-                            <tr key={student.id} className="hover:bg-[#B1C9EF]/10 transition-colors duration-150">
-                                <td className="px-4 py-3.5 font-semibold text-[#395886]">{student.tingkat}</td>
+                            <tr
+                                key={student.id}
+                                className="transition-colors duration-150 hover:bg-[#B1C9EF]/10"
+                            >
+                                <td className="px-4 py-3.5 font-semibold text-[#395886]">
+                                    {student.tingkat}
+                                </td>
                                 <td className="px-4 py-3.5 font-mono text-xs font-bold text-[#395886]">
                                     {student.nim}
                                 </td>
                                 <td className="px-4 py-3.5 font-bold text-[#395886]">
                                     {student.nama_mahasiswa}
                                 </td>
-                                <td className="px-4 py-3.5 font-medium text-[#395886]/80">{student.kelas}</td>
+                                <td className="px-4 py-3.5 font-medium text-[#395886]/80">
+                                    {student.kelas}
+                                </td>
                                 <td className="px-4 py-3.5 text-xs font-semibold text-[#628ECB]">
                                     {student.periode_semester}
                                 </td>
@@ -262,14 +292,14 @@ function StudentTable({
                                 ].map((value, valueIndex) => (
                                     <td
                                         key={`${student.id}-${valueIndex}`}
-                                        className="px-4 py-3.5 text-right tabular-nums font-mono text-xs text-[#395886]"
+                                        className="px-4 py-3.5 text-right font-mono text-xs text-[#395886] tabular-nums"
                                     >
                                         {number(value)}
                                     </td>
                                 ))}
                                 <td className="px-4 py-3.5">
                                     <a
-                                        className="text-[#628ECB] hover:text-[#395886] font-bold text-xs underline decoration-[#8AAEE0] underline-offset-4 transition-colors"
+                                        className="text-xs font-bold text-[#628ECB] underline decoration-[#8AAEE0] underline-offset-4 transition-colors hover:text-[#395886]"
                                         href={studentApi.url(student.id)}
                                         target="_blank"
                                         rel="noreferrer"
@@ -308,16 +338,13 @@ function DetailTable({
     ];
 
     return (
-        <section className="bg-white/80 border border-white/80 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden backdrop-blur-xl transition-all duration-300">
+        <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-all duration-300">
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[1100px] text-sm">
-                    <thead className="bg-[#B1C9EF]/20 text-[#395886] text-left text-[10px] font-black tracking-[0.15em] uppercase border-b border-[#F0F3FA]">
+                    <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
                             {headings.map((heading) => (
-                                <th
-                                    key={heading}
-                                    className="px-4 py-3.5"
-                                >
+                                <th key={heading} className="px-4 py-3.5">
                                     {heading}
                                 </th>
                             ))}
@@ -325,8 +352,11 @@ function DetailTable({
                     </thead>
                     <tbody className="divide-y divide-[#F0F3FA]">
                         {data.data.map((detail) => (
-                            <tr key={detail.id} className="hover:bg-[#B1C9EF]/10 transition-colors duration-150">
-                                <td className="px-4 py-3.5 whitespace-nowrap text-xs font-semibold text-[#395886]">
+                            <tr
+                                key={detail.id}
+                                className="transition-colors duration-150 hover:bg-[#B1C9EF]/10"
+                            >
+                                <td className="px-4 py-3.5 text-xs font-semibold whitespace-nowrap text-[#395886]">
                                     {detail.tanggal}
                                 </td>
                                 <td className="px-4 py-3.5 font-mono text-xs font-bold text-[#395886]">
@@ -335,7 +365,9 @@ function DetailTable({
                                 <td className="px-4 py-3.5 font-bold text-[#395886]">
                                     {detail.nama_mahasiswa}
                                 </td>
-                                <td className="px-4 py-3.5 font-medium text-[#395886]/80">{detail.kelas}</td>
+                                <td className="px-4 py-3.5 font-medium text-[#395886]/80">
+                                    {detail.kelas}
+                                </td>
                                 <td className="px-4 py-3.5 font-medium text-[#395886]">
                                     {detail.mata_kuliah}
                                 </td>
@@ -345,17 +377,19 @@ function DetailTable({
                                 <td className="px-4 py-3.5 text-xs font-medium text-[#628ECB]">
                                     {detail.jenis_pertemuan}
                                 </td>
-                                <td className="px-4 py-3.5 text-xs font-semibold text-[#395886]">{detail.presensi}</td>
-                                <td className="px-4 py-3.5 text-right tabular-nums font-mono text-xs text-[#395886]">
+                                <td className="px-4 py-3.5 text-xs font-semibold text-[#395886]">
+                                    {detail.presensi}
+                                </td>
+                                <td className="px-4 py-3.5 text-right font-mono text-xs text-[#395886] tabular-nums">
                                     {detail.menit_keterlambatan}
                                 </td>
-                                <td className="px-4 py-3.5 text-right tabular-nums font-mono text-xs text-[#395886]">
+                                <td className="px-4 py-3.5 text-right font-mono text-xs text-[#395886] tabular-nums">
                                     {number(detail.jam_kompensasi)}
                                 </td>
-                                <td className="px-4 py-3.5 text-right tabular-nums font-mono text-xs text-[#395886]">
+                                <td className="px-4 py-3.5 text-right font-mono text-xs text-[#395886] tabular-nums">
                                     {number(detail.jam_responsi)}
                                 </td>
-                                <td className="max-w-60 px-4 py-3.5 text-xs text-[#395886]/70 truncate">
+                                <td className="max-w-60 truncate px-4 py-3.5 text-xs text-[#395886]/70">
                                     {detail.keterangan ?? '—'}
                                 </td>
                             </tr>
@@ -386,16 +420,13 @@ function ImportAuditLogTable({
     ];
 
     return (
-        <section className="bg-white/80 border border-white/80 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden backdrop-blur-xl transition-all duration-300">
+        <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-all duration-300">
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[1130px] text-sm">
-                    <thead className="bg-[#B1C9EF]/20 text-[#395886] text-left text-[10px] font-black tracking-[0.15em] uppercase border-b border-[#F0F3FA]">
+                    <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
                             {headings.map((heading) => (
-                                <th
-                                    key={heading}
-                                    className="px-4 py-3.5"
-                                >
+                                <th key={heading} className="px-4 py-3.5">
                                     {heading}
                                 </th>
                             ))}
@@ -405,29 +436,33 @@ function ImportAuditLogTable({
                         {data.data.map((auditLog) => (
                             <tr
                                 key={auditLog.id}
-                                className="hover:bg-[#B1C9EF]/10 transition-colors duration-150"
+                                className="transition-colors duration-150 hover:bg-[#B1C9EF]/10"
                             >
                                 <td className="px-4 py-3.5 whitespace-nowrap">
-                                    <span className={cn(
-                                        "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
-                                        auditLog.event_type === 'upload' 
-                                            ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                            : "bg-rose-100 text-rose-800 border border-rose-200"
-                                    )}>
-                                        {auditLog.event_type === 'upload' ? 'Upload' : 'Rollback · Dihapus'}
+                                    <span
+                                        className={cn(
+                                            'rounded-full px-2.5 py-1 text-[10px] font-black tracking-wider uppercase',
+                                            auditLog.event_type === 'upload'
+                                                ? 'border border-emerald-200 bg-emerald-100 text-emerald-800'
+                                                : 'border border-rose-200 bg-rose-100 text-rose-800',
+                                        )}
+                                    >
+                                        {auditLog.event_type === 'upload'
+                                            ? 'Upload'
+                                            : 'Rollback · Dihapus'}
                                     </span>
                                 </td>
-                                <td className="px-4 py-3.5 whitespace-nowrap text-xs text-[#395886]">
+                                <td className="px-4 py-3.5 text-xs whitespace-nowrap text-[#395886]">
                                     {new Intl.DateTimeFormat('id-ID', {
                                         dateStyle: 'medium',
                                         timeStyle: 'short',
                                     }).format(new Date(auditLog.occurred_at))}
                                 </td>
                                 <td className="px-4 py-3.5">
-                                    <p className="font-bold text-xs text-[#395886]">
+                                    <p className="text-xs font-bold text-[#395886]">
                                         {auditLog.actor_name ?? '—'}
                                     </p>
-                                    <p className="text-[#395886]/60 text-[11px]">
+                                    <p className="text-[11px] text-[#395886]/60">
                                         {auditLog.actor_email ?? '—'}
                                     </p>
                                 </td>
@@ -440,7 +475,12 @@ function ImportAuditLogTable({
                                 <td className="px-4 py-3.5">
                                     {auditLog.can_download_file &&
                                     auditLog.source_import_id !== null ? (
-                                        <Button asChild size="sm" variant="outline" className="border-[#8AAEE0] text-[#395886] bg-white hover:bg-[#395886] hover:text-white hover:border-[#395886] rounded-xl font-bold text-xs transition-all duration-300 shadow-2xs">
+                                        <Button
+                                            asChild
+                                            size="sm"
+                                            variant="outline"
+                                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white"
+                                        >
                                             <a
                                                 href={downloadUploadedWorkbook.url(
                                                     auditLog.source_import_id,
@@ -452,18 +492,18 @@ function ImportAuditLogTable({
                                             </a>
                                         </Button>
                                     ) : (
-                                        <span className="text-[#395886]/40 text-xs italic">
+                                        <span className="text-xs text-[#395886]/40 italic">
                                             Tidak tersedia
                                         </span>
                                     )}
                                 </td>
-                                <td className="px-4 py-3.5 text-right tabular-nums font-mono text-xs font-bold text-[#395886]">
+                                <td className="px-4 py-3.5 text-right font-mono text-xs font-bold text-[#395886] tabular-nums">
                                     {auditLog.class_count}
                                 </td>
-                                <td className="px-4 py-3.5 text-right tabular-nums font-mono text-xs font-bold text-[#395886]">
+                                <td className="px-4 py-3.5 text-right font-mono text-xs font-bold text-[#395886] tabular-nums">
                                     {auditLog.student_count}
                                 </td>
-                                <td className="px-4 py-3.5 text-right tabular-nums font-mono text-xs font-bold text-[#395886]">
+                                <td className="px-4 py-3.5 text-right font-mono text-xs font-bold text-[#395886] tabular-nums">
                                     {auditLog.detail_count}
                                 </td>
                             </tr>
@@ -495,9 +535,9 @@ function RollbackLatestImportButton({
                     type="submit"
                     variant="destructive"
                     disabled={!canRollbackLatestImport || processing}
-                    className="border-rose-300 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-bold text-xs px-5 py-2.5 transition-all duration-300 shadow-sm active:scale-95 disabled:opacity-50"
+                    className="rounded-2xl border-rose-300 bg-rose-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-300 hover:bg-rose-700 active:scale-95 disabled:opacity-50"
                 >
-                    <RotateCcw className="size-4 mr-2" />
+                    <RotateCcw className="mr-2 size-4" />
                     {processing
                         ? 'Menghapus unggahan…'
                         : 'Hapus unggahan terakhir'}
@@ -512,7 +552,7 @@ function ProgressBar({ value }: { value: number }): React.JSX.Element {
 
     return (
         <div
-            className="bg-[#D5DEEF]/60 h-2.5 overflow-hidden rounded-full shadow-inner"
+            className="h-2.5 overflow-hidden rounded-full bg-[#D5DEEF]/60 shadow-inner"
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={100}
@@ -520,24 +560,30 @@ function ProgressBar({ value }: { value: number }): React.JSX.Element {
             aria-label={`Progres impor ${progress}%`}
         >
             <div
-                className="bg-gradient-to-r from-[#395886] to-[#628ECB] h-full rounded-full transition-[width] duration-300"
+                className="h-full rounded-full bg-gradient-to-r from-[#395886] to-[#628ECB] transition-[width] duration-300"
                 style={{ width: `${progress}%` }}
             />
         </div>
     );
 }
 
-function UploadProgressPanel({ progress }: { progress: number }): React.JSX.Element {
+function UploadProgressPanel({
+    progress,
+}: {
+    progress: number;
+}): React.JSX.Element {
     return (
-        <div className="bg-[#B1C9EF]/20 border border-[#8AAEE0]/50 grid gap-2.5 rounded-2xl p-4 backdrop-blur-md">
+        <div className="grid gap-2.5 rounded-2xl border border-[#8AAEE0]/50 bg-[#B1C9EF]/20 p-4 backdrop-blur-md">
             <div className="flex items-center justify-between gap-3 text-xs">
-                <span className="font-extrabold text-[#395886]">Mengirim workbook ke server</span>
-                <span className="text-[#395886] font-mono font-bold tabular-nums">
+                <span className="font-extrabold text-[#395886]">
+                    Mengirim workbook ke server
+                </span>
+                <span className="font-mono font-bold text-[#395886] tabular-nums">
                     {progress}%
                 </span>
             </div>
             <ProgressBar value={progress} />
-            <p className="text-[#395886]/70 text-[11px] font-medium">
+            <p className="text-[11px] font-medium text-[#395886]/70">
                 Jangan berpindah menu sampai pengiriman file selesai.
             </p>
         </div>
@@ -634,24 +680,24 @@ function ImportProgressPanel({
             {importTasks.map((importTask) => (
                 <div
                     key={importTask.id}
-                    className="bg-white/80 border border-white/80 grid gap-3 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl animate-in fade-in duration-300"
+                    className="animate-in fade-in grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl duration-300"
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                             <p className="text-sm font-extrabold text-[#395886]">
                                 Memproses {importTask.original_filename}
                             </p>
-                            <p className="text-[#395886]/70 text-xs mt-0.5 font-medium">
+                            <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
                                 {importTask.progress_message}
                             </p>
                         </div>
-                        <span className="text-[#395886] text-sm font-mono font-bold tabular-nums bg-[#B1C9EF]/30 px-3 py-1 rounded-full border border-[#8AAEE0]/40">
+                        <span className="rounded-full border border-[#8AAEE0]/40 bg-[#B1C9EF]/30 px-3 py-1 font-mono text-sm font-bold text-[#395886] tabular-nums">
                             {importTask.progress}%
                         </span>
                     </div>
                     <ProgressBar value={importTask.progress} />
                     {importTask.error_message ? (
-                        <p className="text-rose-600 text-xs font-bold mt-1">
+                        <p className="mt-1 text-xs font-bold text-rose-600">
                             {importTask.error_message}
                         </p>
                     ) : null}
@@ -667,13 +713,14 @@ function UploadPanel({
     onUploadRequestActivityChange: (isActive: boolean) => void;
 }): React.JSX.Element {
     return (
-        <Card className="group mx-auto w-full max-w-3xl bg-white/80 border border-white/80 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(57,88,134,0.15)] transition-all duration-500 overflow-hidden backdrop-blur-xl">
+        <Card className="group mx-auto w-full max-w-3xl overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-all duration-500 hover:shadow-[0_15px_35px_rgba(57,88,134,0.15)]">
             <CardHeader className="border-b border-[#F0F3FA] pb-6">
-                <CardTitle className="text-xl md:text-2xl font-black text-[#395886] tracking-tight">
+                <CardTitle className="text-xl font-black tracking-tight text-[#395886] md:text-2xl">
                     Upload Workbook
                 </CardTitle>
-                <CardDescription className="text-[#395886]/70 text-xs md:text-sm leading-relaxed mt-1 font-normal">
-                    Gunakan template yang sama dengan Sikompen. Data pada periode dan kelas di workbook akan diperbarui langsung.
+                <CardDescription className="mt-1 text-xs leading-relaxed font-normal text-[#395886]/70 md:text-sm">
+                    Gunakan template yang sama dengan Sikompen. Data pada
+                    periode dan kelas di workbook akan diperbarui langsung.
                 </CardDescription>
             </CardHeader>
             <Form
@@ -687,7 +734,10 @@ function UploadPanel({
                         <CardContent className="grid gap-5 pt-6">
                             {/* Input Uploader Name */}
                             <div className="grid gap-2">
-                                <Label htmlFor="uploader-name" className="text-[10px] font-black uppercase tracking-[0.15em] text-[#395886]">
+                                <Label
+                                    htmlFor="uploader-name"
+                                    className="text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase"
+                                >
                                     Nama Admin yang Mengunggah
                                 </Label>
                                 <Input
@@ -698,11 +748,11 @@ function UploadPanel({
                                     onDragOver={preventDropIntoUploaderName}
                                     onDrop={preventDropIntoUploaderName}
                                     required
-                                    className="bg-white/90 border-[#8AAEE0] text-[#395886] rounded-2xl focus-visible:ring-2 focus-visible:ring-[#395886] focus-visible:border-transparent transition-all duration-300 placeholder:text-[#395886]/40 text-sm py-2.5 shadow-2xs"
+                                    className="rounded-2xl border-[#8AAEE0] bg-white/90 py-2.5 text-sm text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886]"
                                     placeholder="Masukkan nama admin"
                                 />
                                 {errors.uploader_name ? (
-                                    <p className="text-rose-600 text-xs font-bold mt-0.5">
+                                    <p className="mt-0.5 text-xs font-bold text-rose-600">
                                         {errors.uploader_name}
                                     </p>
                                 ) : null}
@@ -710,7 +760,10 @@ function UploadPanel({
 
                             {/* Input File */}
                             <div className="grid gap-2">
-                                <Label htmlFor="kompen-respon-workbook" className="text-[10px] font-black uppercase tracking-[0.15em] text-[#395886]">
+                                <Label
+                                    htmlFor="kompen-respon-workbook"
+                                    className="text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase"
+                                >
                                     Workbook XLSX
                                 </Label>
                                 <Input
@@ -719,13 +772,15 @@ function UploadPanel({
                                     type="file"
                                     accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                     required
-                                    className="bg-white/90 border-[#8AAEE0] text-[#395886] rounded-2xl file:mr-4 file:py-1 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#395886] file:text-white hover:file:bg-[#1E293B] cursor-pointer text-sm py-2 shadow-2xs transition-all duration-300"
+                                    className="cursor-pointer rounded-2xl border-[#8AAEE0] bg-white/90 py-2 text-sm text-[#395886] shadow-2xs transition-all duration-300 file:mr-4 file:rounded-xl file:border-0 file:bg-[#395886] file:px-3 file:py-1 file:text-xs file:font-bold file:text-white hover:file:bg-[#1E293B]"
                                 />
-                                <p className="text-[#395886]/60 text-[11px] font-medium leading-tight">
-                                    Maksimum 20 MB. Periode pada filter akan muncul otomatis setelah data berhasil diimpor.
+                                <p className="text-[11px] leading-tight font-medium text-[#395886]/60">
+                                    Maksimum 20 MB. Periode pada filter akan
+                                    muncul otomatis setelah data berhasil
+                                    diimpor.
                                 </p>
                                 {errors.file ? (
-                                    <p className="text-rose-600 text-xs font-bold mt-0.5">
+                                    <p className="mt-0.5 text-xs font-bold text-rose-600">
                                         {errors.file}
                                     </p>
                                 ) : null}
@@ -737,13 +792,13 @@ function UploadPanel({
                                 />
                             ) : null}
                         </CardContent>
-                        <CardFooter className="justify-end border-t border-[#F0F3FA] pt-6 pb-6 px-6 bg-[#F0F3FA]/40">
-                            <Button 
-                                type="submit" 
+                        <CardFooter className="justify-end border-t border-[#F0F3FA] bg-[#F0F3FA]/40 px-6 pt-6 pb-6">
+                            <Button
+                                type="submit"
                                 disabled={processing}
-                                className="bg-[#395886] hover:bg-[#1E293B] text-white rounded-2xl shadow-md hover:shadow-xl active:scale-95 transition-all duration-300 font-bold text-xs px-6 py-2.5"
+                                className="rounded-2xl bg-[#395886] px-6 py-2.5 text-xs font-bold text-white shadow-md transition-all duration-300 hover:bg-[#1E293B] hover:shadow-xl active:scale-95"
                             >
-                                <UploadCloud className="size-4 mr-2" />
+                                <UploadCloud className="mr-2 size-4" />
                                 {processing
                                     ? 'Mengirim workbook…'
                                     : 'Upload & impor'}
@@ -756,9 +811,7 @@ function UploadPanel({
     );
 }
 
-function preventDropIntoUploaderName(
-    event: DragEvent<HTMLInputElement>,
-): void {
+function preventDropIntoUploaderName(event: DragEvent<HTMLInputElement>): void {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'none';
 }
@@ -809,20 +862,20 @@ function FilterPanel({
     return (
         <Form
             {...indexAction.form()}
-            className="bg-white/80 border border-white/80 grid gap-3.5 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl lg:grid-cols-[minmax(220px,1fr)_repeat(4,minmax(140px,auto))]"
+            className="grid gap-3.5 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl lg:grid-cols-[minmax(220px,1fr)_repeat(4,minmax(140px,auto))]"
         >
             <input name="tab" type="hidden" value={activeTab} />
             <input name="tingkat" type="hidden" value={tingkat} />
             <input name="kelas" type="hidden" value={kelas} />
             <input name="periode_semester" type="hidden" value={periode} />
             <input name="per_page" type="hidden" value={perPage} />
-            
+
             {/* Search Input */}
             <Input
                 name="search"
                 placeholder="Cari nama atau NIM..."
                 defaultValue={filters.search}
-                className="bg-white/90 border-[#8AAEE0] text-[#395886] rounded-2xl focus-visible:ring-2 focus-visible:ring-[#395886] focus-visible:border-transparent transition-all duration-300 placeholder:text-[#395886]/40 text-xs py-2.5 shadow-2xs"
+                className="rounded-2xl border-[#8AAEE0] bg-white/90 py-2.5 text-xs text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886]"
             />
 
             {/* Select Tingkat */}
@@ -832,13 +885,22 @@ function FilterPanel({
                     setTingkat(value === 'all' ? '' : value)
                 }
             >
-                <SelectTrigger className="w-full bg-white/90 border-[#8AAEE0] text-[#395886] hover:bg-[#628ECB] hover:text-white hover:border-[#628ECB] rounded-2xl text-xs py-2.5 shadow-2xs font-bold transition-all duration-300">
+                <SelectTrigger className="w-full rounded-2xl border-[#8AAEE0] bg-white py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
                     <SelectValue placeholder="Semua tingkat" />
                 </SelectTrigger>
-                <SelectContent className="bg-white border-[#8AAEE0] rounded-2xl text-xs font-semibold text-[#395886]">
-                    <SelectItem value="all" className="hover:bg-[#B1C9EF]/20 cursor-pointer">Semua tingkat</SelectItem>
+                <SelectContent className="rounded-2xl text-xs font-semibold">
+                    <SelectItem
+                        value="all"
+                        className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                    >
+                        Semua tingkat
+                    </SelectItem>
                     {filterOptions.tingkat.map((option) => (
-                        <SelectItem key={option} value={option.toString()} className="hover:bg-[#B1C9EF]/20 cursor-pointer">
+                        <SelectItem
+                            key={option}
+                            value={option.toString()}
+                            className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                        >
                             Tingkat {option}
                         </SelectItem>
                     ))}
@@ -852,13 +914,22 @@ function FilterPanel({
                     setKelas(value === 'all' ? '' : value)
                 }
             >
-                <SelectTrigger className="w-full bg-white/90 border-[#8AAEE0] text-[#395886] hover:bg-[#628ECB] hover:text-white hover:border-[#628ECB] rounded-2xl text-xs py-2.5 shadow-2xs font-bold transition-all duration-300">
+                <SelectTrigger className="w-full rounded-2xl border-[#8AAEE0] bg-white py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
                     <SelectValue placeholder="Semua kelas" />
                 </SelectTrigger>
-                <SelectContent className="bg-white border-[#8AAEE0] rounded-2xl text-xs font-semibold text-[#395886]">
-                    <SelectItem value="all" className="hover:bg-[#B1C9EF]/20 cursor-pointer">Semua kelas</SelectItem>
+                <SelectContent className="rounded-2xl text-xs font-semibold">
+                    <SelectItem
+                        value="all"
+                        className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                    >
+                        Semua kelas
+                    </SelectItem>
                     {filterOptions.kelas.map((option) => (
-                        <SelectItem key={option} value={option} className="hover:bg-[#B1C9EF]/20 cursor-pointer">
+                        <SelectItem
+                            key={option}
+                            value={option}
+                            className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                        >
                             {option}
                         </SelectItem>
                     ))}
@@ -872,13 +943,22 @@ function FilterPanel({
                     setPeriode(value === 'all' ? '' : value)
                 }
             >
-                <SelectTrigger className="w-full bg-white/90 border-[#8AAEE0] text-[#395886] hover:bg-[#628ECB] hover:text-white hover:border-[#628ECB] rounded-2xl text-xs py-2.5 shadow-2xs font-bold transition-all duration-300">
+                <SelectTrigger className="w-full rounded-2xl border-[#8AAEE0] bg-white py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
                     <SelectValue placeholder="Semua periode upload" />
                 </SelectTrigger>
-                <SelectContent className="bg-white border-[#8AAEE0] rounded-2xl text-xs font-semibold text-[#395886]">
-                    <SelectItem value="all" className="hover:bg-[#B1C9EF]/20 cursor-pointer">Semua periode upload</SelectItem>
+                <SelectContent className="rounded-2xl text-xs font-semibold">
+                    <SelectItem
+                        value="all"
+                        className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                    >
+                        Semua periode upload
+                    </SelectItem>
                     {filterOptions.periode_semester.map((option) => (
-                        <SelectItem key={option} value={option} className="hover:bg-[#B1C9EF]/20 cursor-pointer">
+                        <SelectItem
+                            key={option}
+                            value={option}
+                            className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                        >
                             {option}
                         </SelectItem>
                     ))}
@@ -888,48 +968,71 @@ function FilterPanel({
             {/* Controls Row */}
             <div className="flex gap-2">
                 <Select value={perPage} onValueChange={setPerPage}>
-                    <SelectTrigger className="w-24 bg-white/90 border-[#8AAEE0] text-[#395886] hover:bg-[#628ECB] hover:text-white hover:border-[#628ECB] rounded-2xl text-xs py-2.5 shadow-2xs font-bold transition-all duration-300">
+                    <SelectTrigger className="w-24 rounded-2xl border-[#8AAEE0] bg-white py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
                         <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border-[#8AAEE0] rounded-2xl text-xs font-semibold text-[#395886]">
+                    <SelectContent className="rounded-2xl text-xs font-semibold">
                         {[15, 30, 50, 100].map((option) => (
-                            <SelectItem key={option} value={option.toString()} className="hover:bg-[#B1C9EF]/20 cursor-pointer">
+                            <SelectItem
+                                key={option}
+                                value={option.toString()}
+                                className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                            >
                                 {option} data
                             </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
-                <Button type="submit" className="grow bg-[#395886] hover:bg-[#1E293B] text-white rounded-2xl font-bold text-xs shadow-md transition-all duration-300 active:scale-95">
-                    <Search className="size-4 mr-1.5" />
+                <Button
+                    type="submit"
+                    className="grow rounded-2xl bg-[#395886] text-xs font-bold text-white shadow-md transition-all duration-300 hover:bg-[#1E293B] active:scale-95"
+                >
+                    <Search className="mr-1.5 size-4" />
                     Terapkan
                 </Button>
             </div>
 
             {/* Footer Row Actions */}
-            <div className="col-span-full flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#F0F3FA]">
+            <div className="col-span-full flex flex-wrap items-center justify-between gap-3 border-t border-[#F0F3FA] pt-2">
                 <Link
                     href={indexAction.url({ query: { tab: activeTab } })}
-                    className="text-[#395886] hover:text-[#628ECB] text-xs font-bold underline decoration-[#8AAEE0] underline-offset-4 transition-colors"
+                    className="text-xs font-bold text-[#395886] underline decoration-[#8AAEE0] underline-offset-4 transition-colors hover:text-[#628ECB]"
                 >
                     Reset filter
                 </Link>
                 {spreadsheetDownloadUrl && pdfDownloadUrl ? (
                     <div className="flex flex-wrap gap-2">
-                        <Button asChild size="sm" variant="outline" className="border-[#8AAEE0] text-[#395886] bg-white hover:bg-[#395886] hover:text-white hover:border-[#395886] rounded-xl font-bold text-xs transition-all duration-300 shadow-2xs">
-                            <a href={spreadsheetDownloadUrl} className="flex items-center gap-1.5">
+                        <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white"
+                        >
+                            <a
+                                href={spreadsheetDownloadUrl}
+                                className="flex items-center gap-1.5"
+                            >
                                 <FileSpreadsheet className="size-3.5" />
                                 Download XLSX
                             </a>
                         </Button>
-                        <Button asChild size="sm" variant="outline" className="border-[#8AAEE0] text-[#395886] bg-white hover:bg-[#395886] hover:text-white hover:border-[#395886] rounded-xl font-bold text-xs transition-all duration-300 shadow-2xs">
-                            <a href={pdfDownloadUrl} className="flex items-center gap-1.5">
+                        <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white"
+                        >
+                            <a
+                                href={pdfDownloadUrl}
+                                className="flex items-center gap-1.5"
+                            >
                                 <FileText className="size-3.5" />
                                 Download PDF
                             </a>
                         </Button>
                     </div>
                 ) : (
-                    <span className="text-[#395886]/70 text-xs italic font-semibold">
+                    <span className="text-xs font-semibold text-[#395886]/70 italic">
                         Pilih periode untuk mengunduh data.
                     </span>
                 )}
@@ -940,13 +1043,16 @@ function FilterPanel({
 
 function EmptyTableState(): React.JSX.Element {
     return (
-        <div className="bg-white/80 border-2 border-dashed border-[#8AAEE0] rounded-3xl p-12 text-center text-sm backdrop-blur-xl transition-all duration-300">
-            <div className="mx-auto bg-[#B1C9EF]/40 text-[#395886] size-14 flex items-center justify-center rounded-2xl mb-4 border border-[#8AAEE0]/50 shadow-inner">
+        <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-12 text-center text-sm backdrop-blur-xl transition-all duration-300">
+            <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-[#8AAEE0]/50 bg-[#B1C9EF]/40 text-[#395886] shadow-inner">
                 <FileSpreadsheet className="size-7" />
             </div>
-            <p className="font-extrabold text-[#395886] text-base">Belum Ada Data yang Cocok</p>
-            <p className="text-[#395886]/70 text-xs mt-1 max-w-sm mx-auto font-medium leading-relaxed">
-                Upload workbook XLSX untuk mengisi daftar ini atau sesuaikan kata kunci pencarian Anda.
+            <p className="text-base font-extrabold text-[#395886]">
+                Belum Ada Data yang Cocok
+            </p>
+            <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed font-medium text-[#395886]/70">
+                Upload workbook XLSX untuk mengisi daftar ini atau sesuaikan
+                kata kunci pencarian Anda.
             </p>
         </div>
     );
@@ -973,30 +1079,30 @@ export default function KompenResponHubIndex({
             <Head title="Kompen Respon Hub" />
 
             {/* Main Wrapper Full Width (Tanpa batas hitam di tepi kiri/kanan) */}
-            <main className="relative min-h-screen w-full bg-[#F0F3FA] text-[#395886] p-4 md:p-8 selection:bg-[#B1C9EF] selection:text-[#395886] overflow-x-hidden">
+            <main className="relative min-h-screen w-full overflow-x-hidden bg-[#F0F3FA] p-4 text-[#395886] selection:bg-[#B1C9EF] selection:text-[#395886] md:p-8">
                 {/* Visual Ambient Background Orbs */}
                 <div className="pointer-events-none absolute -top-40 -left-40 size-[36rem] rounded-full bg-[#8AAEE0]/30 blur-3xl" />
                 <div className="pointer-events-none absolute top-1/3 -right-40 size-[36rem] rounded-full bg-[#B1C9EF]/40 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-20 left-1/4 size-[32rem] rounded-full bg-[#628ECB]/20 blur-3xl" />
 
                 {/* Inner Content Container */}
-                <div className="relative z-10 mx-auto w-full max-w-[1600px] flex flex-col gap-6">
+                <div className="relative z-10 mx-auto flex w-full max-w-[1600px] flex-col gap-6">
                     {/* Page Header */}
                     <header className="flex flex-col justify-between gap-4 border-b border-[#D5DEEF] pb-6 md:flex-row md:items-end">
                         <div className="flex items-start gap-4">
-                            <div className="bg-gradient-to-br from-[#395886] to-[#628ECB] text-white flex size-14 shrink-0 items-center justify-center rounded-2xl shadow-md">
+                            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#395886] to-[#628ECB] text-white shadow-md">
                                 <FileSpreadsheet className="size-7" />
                             </div>
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#628ECB]">
+                                <p className="text-[10px] font-black tracking-[0.2em] text-[#628ECB] uppercase">
                                     {isAdmin
                                         ? 'System Administration Portal'
                                         : 'Akses Mahasiswa • Read Only'}
                                 </p>
-                                <h1 className="mt-1 text-3xl md:text-4xl font-black tracking-tight text-[#395886]">
+                                <h1 className="mt-1 text-3xl font-black tracking-tight text-[#395886] md:text-4xl">
                                     Kompen Respon Hub
                                 </h1>
-                                <p className="text-[#395886]/70 mt-1 max-w-2xl text-xs md:text-sm font-medium leading-relaxed">
+                                <p className="mt-1 max-w-2xl text-xs leading-relaxed font-medium text-[#395886]/70 md:text-sm">
                                     {isAdmin
                                         ? 'Impor workbook Sikompen dan kelola ringkasan Kompen/Respon maupun detail kehadiran.'
                                         : 'Lihat data Kompen/Respon dan Detail Kompen, lalu unduh hasil sesuai periode yang dipilih.'}
@@ -1005,20 +1111,31 @@ export default function KompenResponHubIndex({
                         </div>
                         {isAdmin ? (
                             <div className="flex flex-wrap gap-2">
-                                <Button asChild variant="outline" className="border-[#8AAEE0] text-[#395886] bg-white/80 hover:bg-[#395886] hover:text-white hover:border-[#395886] transition-all duration-300 rounded-2xl font-bold text-xs px-4 py-2.5 shadow-2xs active:scale-95">
-                                    <Link href={adminSettings.url()} className="flex items-center gap-1.5">
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white active:scale-95"
+                                >
+                                    <Link
+                                        href={adminSettings.url()}
+                                        className="flex items-center gap-1.5"
+                                    >
                                         <Settings className="size-4" />
                                         Pengaturan
                                     </Link>
                                 </Button>
                                 <a
-                                    className="bg-white/80 hover:bg-[#395886] hover:text-white border border-[#8AAEE0] text-[#395886] inline-flex h-9 items-center justify-center gap-1.5 rounded-2xl px-4 text-xs font-bold transition-all duration-300 shadow-2xs active:scale-95"
+                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-2xl border border-[#8AAEE0] bg-white/80 px-4 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:bg-[#395886] hover:text-white active:scale-95"
                                     href={downloadTemplate.url()}
                                 >
                                     <Download className="size-4" />
                                     Download Template
                                 </a>
-                                <Button asChild variant="outline" className="border-[#8AAEE0] text-[#395886] bg-white/80 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all duration-300 rounded-2xl font-bold text-xs px-4 py-2.5 shadow-2xs active:scale-95">
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-rose-600 hover:bg-rose-600 hover:text-white active:scale-95"
+                                >
                                     <Link
                                         href={logout.url()}
                                         method="post"
@@ -1035,18 +1152,29 @@ export default function KompenResponHubIndex({
 
                     {/* Alerts */}
                     {flash.success && (
-                        <Alert className="bg-emerald-50/90 border border-emerald-200 text-emerald-900 rounded-2xl backdrop-blur-md shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-                            <CheckCircle2 className="size-5 text-emerald-600 animate-bounce" />
-                            <AlertTitle className="font-bold text-emerald-950 text-base">Impor Workbook Berhasil</AlertTitle>
-                            <AlertDescription className="text-emerald-700 text-xs mt-0.5">{flash.success}</AlertDescription>
+                        <Alert className="animate-in fade-in slide-in-from-top-2 rounded-2xl border border-emerald-200 bg-emerald-50/90 text-emerald-900 shadow-sm backdrop-blur-md duration-300">
+                            <CheckCircle2 className="size-5 animate-bounce text-emerald-600" />
+                            <AlertTitle className="text-base font-bold text-emerald-950">
+                                Impor Workbook Berhasil
+                            </AlertTitle>
+                            <AlertDescription className="mt-0.5 text-xs text-emerald-700">
+                                {flash.success}
+                            </AlertDescription>
                         </Alert>
                     )}
 
                     {flash.error && (
-                        <Alert variant="destructive" className="bg-rose-50/90 border border-rose-200 text-rose-900 rounded-2xl backdrop-blur-md shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-                            <AlertCircle className="size-5 text-rose-600 animate-pulse" />
-                            <AlertTitle className="font-bold text-rose-950 text-base">Tindakan Tidak Dapat Dijalankan</AlertTitle>
-                            <AlertDescription className="text-rose-700 text-xs mt-0.5">{flash.error}</AlertDescription>
+                        <Alert
+                            variant="destructive"
+                            className="animate-in fade-in slide-in-from-top-2 rounded-2xl border border-rose-200 bg-rose-50/90 text-rose-900 shadow-sm backdrop-blur-md duration-300"
+                        >
+                            <AlertCircle className="size-5 animate-pulse text-rose-600" />
+                            <AlertTitle className="text-base font-bold text-rose-950">
+                                Tindakan Tidak Dapat Dijalankan
+                            </AlertTitle>
+                            <AlertDescription className="mt-0.5 text-xs text-rose-700">
+                                {flash.error}
+                            </AlertDescription>
                         </Alert>
                     )}
 
@@ -1078,10 +1206,10 @@ export default function KompenResponHubIndex({
                                 }}
                                 aria-disabled={isUploadRequestActive}
                                 className={cn(
-                                    'flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition-all duration-300 rounded-t-xl',
+                                    'flex items-center gap-2 rounded-t-xl border-b-2 px-4 py-2.5 text-xs font-bold transition-all duration-300',
                                     activeTab === tab
-                                        ? 'border-[#395886] text-[#395886] bg-white/70 shadow-2xs'
-                                        : 'text-[#395886]/60 hover:text-[#395886] border-transparent hover:bg-white/40',
+                                        ? 'border-[#395886] bg-white/70 text-[#395886] shadow-2xs'
+                                        : 'border-transparent text-[#395886]/60 hover:bg-white/40 hover:text-[#395886]',
                                     isUploadRequestActive &&
                                         'pointer-events-none cursor-not-allowed opacity-50',
                                 )}
@@ -1095,25 +1223,32 @@ export default function KompenResponHubIndex({
                     </nav>
 
                     {isUploadRequestActive ? (
-                        <p className="text-[#395886]/70 -mt-3 text-xs font-medium">
-                            Tunggu sampai file selesai dikirim sebelum berpindah menu. Setelah itu impor akan berjalan di latar belakang.
+                        <p className="-mt-3 text-xs font-medium text-[#395886]/70">
+                            Tunggu sampai file selesai dikirim sebelum berpindah
+                            menu. Setelah itu impor akan berjalan di latar
+                            belakang.
                         </p>
                     ) : null}
 
                     {/* Main Views */}
                     {activeTab === 'upload' ? (
                         <UploadPanel
-                            onUploadRequestActivityChange={setIsUploadRequestActive}
+                            onUploadRequestActivityChange={
+                                setIsUploadRequestActive
+                            }
                         />
                     ) : null}
 
                     {activeTab === 'imports' ? (
                         <section className="grid gap-4">
-                            <div className="bg-white/80 border border-white/80 flex flex-col justify-between gap-3 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl sm:flex-row sm:items-center">
+                            <div className="flex flex-col justify-between gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl sm:flex-row sm:items-center">
                                 <div>
-                                    <h2 className="font-extrabold text-[#395886] text-lg">Audit Impor</h2>
-                                    <p className="text-[#395886]/70 text-xs mt-0.5 font-medium">
-                                        Riwayat upload dan penghapusan unggahan terakhir.
+                                    <h2 className="text-lg font-extrabold text-[#395886]">
+                                        Audit Impor
+                                    </h2>
+                                    <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
+                                        Riwayat upload dan penghapusan unggahan
+                                        terakhir.
                                     </p>
                                 </div>
                                 <RollbackLatestImportButton
@@ -1125,7 +1260,7 @@ export default function KompenResponHubIndex({
                             {imports?.data.length ? (
                                 <ImportAuditLogTable data={imports} />
                             ) : (
-                                <div className="bg-white/80 border-2 border-dashed border-[#8AAEE0] rounded-3xl p-10 text-center text-xs text-[#395886]/70 font-bold backdrop-blur-xl">
+                                <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-10 text-center text-xs font-bold text-[#395886]/70 backdrop-blur-xl">
                                     Belum ada riwayat upload atau rollback.
                                 </div>
                             )}
@@ -1141,8 +1276,8 @@ export default function KompenResponHubIndex({
                                 filters={filters}
                                 filterOptions={filterOptions}
                             />
-                            {(activeTab === 'students' ? students : details)?.data
-                                .length ? (
+                            {(activeTab === 'students' ? students : details)
+                                ?.data.length ? (
                                 activeTab === 'students' && students ? (
                                     <StudentTable data={students} />
                                 ) : details ? (

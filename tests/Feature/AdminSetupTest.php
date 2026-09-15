@@ -29,6 +29,14 @@ test('the first admin can be created from the initial setup page', function () {
             ->where('setupOpen', false)
             ->where('requiresActivationCode', true),
         );
+
+    $this->post('/admin/login', [
+        'email' => 'first-admin@example.test',
+        'password' => 'Password!YangAman123',
+    ])
+        ->assertRedirect('/admin');
+
+    $this->get('/admin')->assertOk();
 });
 
 test('a guest cannot create an admin after the initial setup has closed', function () {
