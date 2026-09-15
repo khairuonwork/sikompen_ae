@@ -862,7 +862,7 @@ function FilterPanel({
     return (
         <Form
             {...indexAction.form()}
-            className="grid gap-3.5 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl lg:grid-cols-[minmax(220px,1fr)_repeat(4,minmax(140px,auto))]"
+            className="grid grid-cols-2 gap-3.5 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl lg:grid-cols-[minmax(220px,1fr)_repeat(4,minmax(140px,auto))]"
         >
             <input name="tab" type="hidden" value={activeTab} />
             <input name="tingkat" type="hidden" value={tingkat} />
@@ -875,7 +875,7 @@ function FilterPanel({
                 name="search"
                 placeholder="Cari nama atau NIM..."
                 defaultValue={filters.search}
-                className="rounded-2xl border-[#8AAEE0] bg-white/90 py-2.5 text-xs text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886]"
+                className="col-span-2 rounded-2xl border-[#8AAEE0] bg-white/90 py-2.5 text-xs text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886] lg:col-span-1"
             />
 
             {/* Select Tingkat */}
@@ -943,7 +943,7 @@ function FilterPanel({
                     setPeriode(value === 'all' ? '' : value)
                 }
             >
-                <SelectTrigger className="w-full rounded-2xl border-[#8AAEE0] bg-white py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
+                <SelectTrigger className="col-span-2 w-full rounded-2xl border-[#8AAEE0] bg-white py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white lg:col-span-1">
                     <SelectValue placeholder="Semua periode upload" />
                 </SelectTrigger>
                 <SelectContent className="rounded-2xl text-xs font-semibold">
@@ -966,7 +966,7 @@ function FilterPanel({
             </Select>
 
             {/* Controls Row */}
-            <div className="flex gap-2">
+            <div className="col-span-2 flex gap-2 lg:col-span-1">
                 <Select value={perPage} onValueChange={setPerPage}>
                     <SelectTrigger className="w-24 rounded-2xl border-[#8AAEE0] bg-white py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
                         <SelectValue />
