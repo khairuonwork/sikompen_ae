@@ -14,6 +14,10 @@ import {
     ChevronLeft,
     ChevronRight,
     RotateCcw,
+    PencilLine,
+    ShieldAlert,
+    Clock3,
+    Save,
 } from 'lucide-react';
 import { type DragEvent, useEffect, useState } from 'react';
 import {
@@ -30,8 +34,17 @@ import {
     detailsPdf as downloadDetailsPdf,
     students as downloadStudents,
     studentsPdf as downloadStudentsPdf,
+    warnings as downloadWarnings,
+    warningsPdf as downloadWarningsPdf,
 } from '@/actions/App/Http/Controllers/KompenResponHubDownloadController';
-import { student as studentApi } from '@/actions/App/Http/Controllers/KompenResponHubController';
+import {
+    storeCutoff,
+    storeDetailOverride,
+    storeProgress,
+    storeSummaryOverride,
+    storeWarning,
+    updateWarning,
+} from '@/actions/App/Http/Controllers/KompenResponHubLifecycleController';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -71,6 +84,15 @@ type Student = {
     total_hutang_jam: string;
     kompensasi_dikerjakan_jam: string;
     sisa_hutang_jam: string;
+    effective_total_kompensasi_jam: string;
+    effective_total_responsi_jam: string;
+    effective_total_hutang_jam: string;
+    effective_kompensasi_dikerjakan_jam: string;
+    effective_responsi_dikerjakan_jam: string;
+    effective_sisa_hutang_jam: string;
+    last_worked_at: string | null;
+    has_summary_override: boolean;
+    warning: Warning | null;
 };
 
 type Detail = {
@@ -88,6 +110,43 @@ type Detail = {
     keterangan: string | null;
     jam_kompensasi: string;
     jam_responsi: string;
+    has_override: boolean;
+};
+
+type Warning = {
+    id: number;
+    student_id: number | null;
+    nim: string;
+    nama_mahasiswa: string;
+    kelas: string;
+    periode_semester: string;
+    classification: 'temporary' | 'fixed';
+    letter_status: 'not_created' | 'draft' | 'issued' | 'cancelled';
+    resolution: 'outstanding' | 'completed' | 'needs_review';
+    snapshot: { sisa_hutang_jam: number };
+    reason: string | null;
+    issued_at: string | null;
+    cancelled_at: string | null;
+};
+
+type ActivityLog = {
+    id: number;
+    event_type: string;
+    subject_type: string;
+    nim: string | null;
+    periode_semester: string | null;
+    kelas: string | null;
+    actor_type: string;
+    actor_name: string | null;
+    reason: string | null;
+    occurred_at: string;
+};
+
+type Cutoff = {
+    id: number;
+    periode_semester: string;
+    deadline_at: string;
+    timezone: string;
 };
 
 type ImportAuditLog = {
@@ -137,7 +196,8 @@ type FilterOptions = {
 };
 
 type KompenResponHubPageProps = {
-    activeTab: 'upload' | 'students' | 'details' | 'imports';
+    activeTab:
+        'upload' | 'students' | 'details' | 'imports' | 'warnings' | 'activity';
     isAdmin: boolean;
     filters: Filters;
     filterOptions: FilterOptions;
@@ -145,6 +205,10 @@ type KompenResponHubPageProps = {
     students: Pagination<Student> | null;
     details: Pagination<Detail> | null;
     imports: Pagination<ImportAuditLog> | null;
+    warnings: Pagination<Warning> | null;
+    temporaryCandidates: Pagination<Student> | null;
+    activityLogs: Pagination<ActivityLog> | null;
+    cutoffs: Cutoff[];
     activeImportTasks: ImportTask[];
     canRollbackLatestImport: boolean;
 };
@@ -154,6 +218,8 @@ const adminTabs = [
     ['students', 'Kompen dan Respon'],
     ['details', 'Detail Kompen'],
     ['imports', 'Log upload'],
+    ['warnings', 'Surat peringatan'],
+    ['activity', 'Riwayat aktivitas'],
 ] as const;
 
 const studentTabs = [
@@ -225,8 +291,12 @@ function Pager<T>({ data }: { data: Pagination<T> }): React.JSX.Element {
 
 function StudentTable({
     data,
+    isEditMode = false,
+    onSelect,
 }: {
     data: Pagination<Student>;
+    isEditMode?: boolean;
+    onSelect?: (student: Student) => void;
 }): React.JSX.Element {
     const headings = [
         'Tingkat',
@@ -241,9 +311,9 @@ function StudentTable({
         'Kompen[j]',
         'Responsi[j]',
         'Total[j]',
-        'Dikerjakan[j]',
+        'Komp. selesai[j]',
+        'Resp. selesai[j]',
         'Sisa[j]',
-        'API',
     ];
 
     return (
@@ -263,7 +333,14 @@ function StudentTable({
                         {data.data.map((student) => (
                             <tr
                                 key={student.id}
-                                className="transition-colors duration-150 hover:bg-[#B1C9EF]/10"
+                                className={cn(
+                                    'transition-colors duration-150 hover:bg-[#B1C9EF]/10',
+                                    isEditMode &&
+                                        'cursor-pointer ring-inset hover:ring-1 hover:ring-[#628ECB]',
+                                )}
+                                onClick={() =>
+                                    isEditMode && onSelect?.(student)
+                                }
                             >
                                 <td className="px-4 py-3.5 font-semibold text-[#395886]">
                                     {student.tingkat}
@@ -285,11 +362,12 @@ function StudentTable({
                                     student.total_jam_sakit,
                                     student.total_jam_izin,
                                     student.total_jam_bolos,
-                                    student.total_kompensasi_jam,
-                                    student.total_responsi_jam,
-                                    student.total_hutang_jam,
-                                    student.kompensasi_dikerjakan_jam,
-                                    student.sisa_hutang_jam,
+                                    student.effective_total_kompensasi_jam,
+                                    student.effective_total_responsi_jam,
+                                    student.effective_total_hutang_jam,
+                                    student.effective_kompensasi_dikerjakan_jam,
+                                    student.effective_responsi_dikerjakan_jam,
+                                    student.effective_sisa_hutang_jam,
                                 ].map((value, valueIndex) => (
                                     <td
                                         key={`${student.id}-${valueIndex}`}
@@ -298,16 +376,6 @@ function StudentTable({
                                         {number(value)}
                                     </td>
                                 ))}
-                                <td className="px-4 py-3.5">
-                                    <a
-                                        className="text-xs font-bold text-[#628ECB] underline decoration-[#8AAEE0] underline-offset-4 transition-colors hover:text-[#395886]"
-                                        href={studentApi.url(student.id)}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                    >
-                                        Lengkap
-                                    </a>
-                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -320,8 +388,12 @@ function StudentTable({
 
 function DetailTable({
     data,
+    isEditMode = false,
+    onSelect,
 }: {
     data: Pagination<Detail>;
+    isEditMode?: boolean;
+    onSelect?: (detail: Detail) => void;
 }): React.JSX.Element {
     const headings = [
         'Tanggal',
@@ -355,7 +427,12 @@ function DetailTable({
                         {data.data.map((detail) => (
                             <tr
                                 key={detail.id}
-                                className="transition-colors duration-150 hover:bg-[#B1C9EF]/10"
+                                className={cn(
+                                    'transition-colors duration-150 hover:bg-[#B1C9EF]/10',
+                                    isEditMode &&
+                                        'cursor-pointer ring-inset hover:ring-1 hover:ring-[#628ECB]',
+                                )}
+                                onClick={() => isEditMode && onSelect?.(detail)}
                             >
                                 <td className="px-4 py-3.5 text-xs font-semibold whitespace-nowrap text-[#395886]">
                                     {detail.tanggal}
@@ -1042,6 +1119,822 @@ function FilterPanel({
     );
 }
 
+function EditModeControl({
+    enabled,
+    onChange,
+}: {
+    enabled: boolean;
+    onChange: (enabled: boolean) => void;
+}): React.JSX.Element {
+    return (
+        <Button
+            type="button"
+            variant="outline"
+            onClick={() => onChange(!enabled)}
+            className={cn(
+                'rounded-2xl border-[#8AAEE0] bg-white px-4 text-xs font-bold text-[#395886]',
+                enabled &&
+                    'border-[#395886] bg-[#395886] text-white hover:bg-[#1E293B] hover:text-white',
+            )}
+        >
+            <PencilLine className="mr-2 size-4" />
+            {enabled ? 'Mode perbaikan aktif' : 'Mode perbaikan data'}
+        </Button>
+    );
+}
+
+function StudentCorrectionPanel({
+    student,
+}: {
+    student: Student;
+}): React.JSX.Element {
+    return (
+        <section className="grid gap-4 rounded-3xl border border-[#8AAEE0]/60 bg-white/90 p-5 shadow-sm">
+            <div>
+                <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
+                    Mahasiswa dipilih
+                </p>
+                <h3 className="mt-1 text-base font-extrabold text-[#395886]">
+                    {student.nama_mahasiswa} · {student.nim}
+                </h3>
+                <p className="mt-1 text-xs text-[#395886]/70">
+                    Simpan setiap koreksi dengan alasan agar jejak audit tetap
+                    lengkap.
+                </p>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+                <Form
+                    {...storeProgress.form(student.id)}
+                    className="grid gap-3 rounded-2xl border border-[#D5DEEF] p-4"
+                >
+                    {({ errors, processing }) => (
+                        <>
+                            <p className="text-sm font-bold text-[#395886]">
+                                Progres pengerjaan
+                            </p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Input
+                                    name="kompensasi_dikerjakan_jam"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    defaultValue={
+                                        student.effective_kompensasi_dikerjakan_jam
+                                    }
+                                    placeholder="Jam Kompen"
+                                />
+                                <Input
+                                    name="responsi_dikerjakan_jam"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    defaultValue={
+                                        student.effective_responsi_dikerjakan_jam
+                                    }
+                                    placeholder="Jam Responsi"
+                                />
+                            </div>
+                            <Input
+                                name="last_worked_at"
+                                type="datetime-local"
+                                required
+                                defaultValue={
+                                    student.last_worked_at?.slice(0, 16) ?? ''
+                                }
+                            />
+                            <Input
+                                name="reason"
+                                required
+                                minLength={5}
+                                maxLength={1000}
+                                placeholder="Alasan perubahan"
+                            />
+                            {errors.kompensasi_dikerjakan_jam ||
+                            errors.last_worked_at ? (
+                                <p className="text-xs font-bold text-rose-600">
+                                    {errors.kompensasi_dikerjakan_jam ??
+                                        errors.last_worked_at}
+                                </p>
+                            ) : null}
+                            <Button
+                                disabled={processing}
+                                type="submit"
+                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                            >
+                                <Save className="mr-2 size-4" />
+                                Simpan progres
+                            </Button>
+                        </>
+                    )}
+                </Form>
+                <Form
+                    {...storeSummaryOverride.form(student.id)}
+                    className="grid gap-3 rounded-2xl border border-[#D5DEEF] p-4"
+                >
+                    {({ errors, processing }) => (
+                        <>
+                            <p className="text-sm font-bold text-[#395886]">
+                                Koreksi total Kompen / Responsi
+                            </p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Input
+                                    name="total_kompensasi_jam"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    defaultValue={
+                                        student.effective_total_kompensasi_jam
+                                    }
+                                    placeholder="Total Kompen"
+                                />
+                                <Input
+                                    name="total_responsi_jam"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    defaultValue={
+                                        student.effective_total_responsi_jam
+                                    }
+                                    placeholder="Total Responsi"
+                                />
+                            </div>
+                            <Input
+                                name="reason"
+                                required
+                                minLength={5}
+                                maxLength={1000}
+                                placeholder="Alasan koreksi"
+                            />
+                            {errors.total_kompensasi_jam ? (
+                                <p className="text-xs font-bold text-rose-600">
+                                    {errors.total_kompensasi_jam}
+                                </p>
+                            ) : null}
+                            <Button
+                                disabled={processing}
+                                type="submit"
+                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                            >
+                                <Save className="mr-2 size-4" />
+                                Simpan koreksi
+                            </Button>
+                        </>
+                    )}
+                </Form>
+            </div>
+        </section>
+    );
+}
+
+function DetailCorrectionPanel({
+    detail,
+}: {
+    detail: Detail;
+}): React.JSX.Element {
+    return (
+        <Form
+            {...storeDetailOverride.form(detail.id)}
+            className="grid gap-3 rounded-3xl border border-[#8AAEE0]/60 bg-white/90 p-5 shadow-sm md:grid-cols-2"
+        >
+            {({ errors, processing }) => (
+                <>
+                    <div className="md:col-span-2">
+                        <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
+                            Detail dipilih
+                        </p>
+                        <h3 className="mt-1 text-base font-extrabold text-[#395886]">
+                            {detail.nama_mahasiswa} · {detail.mata_kuliah}
+                        </h3>
+                    </div>
+                    <Input
+                        name="tanggal"
+                        type="date"
+                        required
+                        defaultValue={detail.tanggal}
+                    />
+                    <Input
+                        name="mata_kuliah"
+                        required
+                        maxLength={100}
+                        defaultValue={detail.mata_kuliah}
+                    />
+                    <Input
+                        name="nama_dosen"
+                        required
+                        maxLength={100}
+                        defaultValue={detail.nama_dosen}
+                    />
+                    <Input
+                        name="jenis_pertemuan"
+                        required
+                        maxLength={20}
+                        defaultValue={detail.jenis_pertemuan}
+                    />
+                    <Input
+                        name="presensi"
+                        required
+                        maxLength={20}
+                        defaultValue={detail.presensi}
+                    />
+                    <Input
+                        name="menit_keterlambatan"
+                        type="number"
+                        min="0"
+                        defaultValue={detail.menit_keterlambatan}
+                    />
+                    <Input
+                        name="jam_kompensasi"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        defaultValue={detail.jam_kompensasi}
+                    />
+                    <Input
+                        name="jam_responsi"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        defaultValue={detail.jam_responsi}
+                    />
+                    <Input
+                        name="keterangan"
+                        className="md:col-span-2"
+                        maxLength={2000}
+                        defaultValue={detail.keterangan ?? ''}
+                        placeholder="Keterangan"
+                    />
+                    <Input
+                        name="reason"
+                        className="md:col-span-2"
+                        required
+                        minLength={5}
+                        maxLength={1000}
+                        placeholder="Alasan koreksi"
+                    />
+                    {errors.tanggal ? (
+                        <p className="text-xs font-bold text-rose-600">
+                            {errors.tanggal}
+                        </p>
+                    ) : null}
+                    <Button
+                        disabled={processing}
+                        type="submit"
+                        className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                    >
+                        <Save className="mr-2 size-4" />
+                        Simpan koreksi detail
+                    </Button>
+                </>
+            )}
+        </Form>
+    );
+}
+
+function WarningStatusBadge({
+    warning,
+}: {
+    warning: Warning;
+}): React.JSX.Element {
+    const label =
+        warning.resolution === 'completed' &&
+        warning.letter_status === 'not_created'
+            ? 'Kompen selesai · SP tidak diterbitkan'
+            : warning.resolution === 'completed'
+              ? 'Kompen selesai setelah SP'
+              : warning.letter_status === 'issued'
+                ? 'SP-1 terbit'
+                : warning.letter_status === 'draft'
+                  ? 'Draft SP-1'
+                  : warning.letter_status === 'cancelled'
+                    ? 'SP dibatalkan'
+                    : 'Belum dibuat';
+    return (
+        <span
+            className={cn(
+                'inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold',
+                warning.resolution === 'completed'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : warning.letter_status === 'issued'
+                      ? 'bg-rose-100 text-rose-700'
+                      : warning.letter_status === 'cancelled'
+                        ? 'bg-slate-100 text-slate-700'
+                        : warning.letter_status === 'draft'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-[#B1C9EF]/40 text-[#395886]',
+            )}
+        >
+            {warning.classification === 'fixed' ? 'Fixed · ' : 'Temporary · '}
+            {label}
+        </span>
+    );
+}
+
+function TemporaryCandidateTable({
+    data,
+    selectedStudentId,
+    onSelect,
+}: {
+    data: Pagination<Student>;
+    selectedStudentId: number | null;
+    onSelect: (student: Student) => void;
+}): React.JSX.Element {
+    return (
+        <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
+            <div className="flex flex-col justify-between gap-2 border-b border-[#F0F3FA] px-5 py-4 sm:flex-row sm:items-center">
+                <div>
+                    <h2 className="text-base font-extrabold text-[#395886]">
+                        Kandidat sementara
+                    </h2>
+                    <p className="mt-0.5 text-xs text-[#395886]/70">
+                        Mahasiswa dengan sisa jam pada periode yang batas
+                        waktunya belum lewat. Pilih satu untuk membuat draft
+                        SP-1.
+                    </p>
+                </div>
+                <span className="w-fit rounded-full bg-[#B1C9EF]/40 px-3 py-1 text-xs font-bold text-[#395886]">
+                    Temporary
+                </span>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-sm">
+                    <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
+                        <tr>
+                            <th className="px-4 py-3">Mahasiswa</th>
+                            <th className="px-4 py-3">Kelas</th>
+                            <th className="px-4 py-3">Periode</th>
+                            <th className="px-4 py-3 text-right">Sisa[j]</th>
+                            <th className="px-4 py-3 text-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F0F3FA]">
+                        {data.data.map((student) => (
+                            <tr
+                                key={student.id}
+                                className={cn(
+                                    'transition-colors hover:bg-[#B1C9EF]/10',
+                                    selectedStudentId === student.id &&
+                                        'bg-[#B1C9EF]/20',
+                                )}
+                            >
+                                <td className="px-4 py-3">
+                                    <p className="font-bold text-[#395886]">
+                                        {student.nama_mahasiswa}
+                                    </p>
+                                    <p className="font-mono text-xs text-[#628ECB]">
+                                        {student.nim}
+                                    </p>
+                                </td>
+                                <td className="px-4 py-3 text-xs font-semibold text-[#395886]">
+                                    {student.kelas}
+                                </td>
+                                <td className="px-4 py-3 text-xs text-[#395886]/70">
+                                    {student.periode_semester}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono text-xs font-bold text-[#395886]">
+                                    {number(student.effective_sisa_hutang_jam)}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => onSelect(student)}
+                                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                                    >
+                                        {selectedStudentId === student.id
+                                            ? 'Dipilih'
+                                            : 'Pilih'}
+                                    </Button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <Pager data={data} />
+        </section>
+    );
+}
+
+function WarningTable({
+    data,
+    onSelect,
+}: {
+    data: Pagination<Warning>;
+    onSelect: (warning: Warning) => void;
+}): React.JSX.Element {
+    return (
+        <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[850px] text-sm">
+                    <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
+                        <tr>
+                            <th className="px-4 py-3">Mahasiswa</th>
+                            <th className="px-4 py-3">Kelas</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Sisa[j]</th>
+                            <th className="px-4 py-3">Catatan</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F0F3FA]">
+                        {data.data.map((warning) => (
+                            <tr
+                                key={warning.id}
+                                onClick={() => onSelect(warning)}
+                                className="cursor-pointer hover:bg-[#B1C9EF]/10"
+                            >
+                                <td className="px-4 py-3">
+                                    <p className="font-bold text-[#395886]">
+                                        {warning.nama_mahasiswa}
+                                    </p>
+                                    <p className="font-mono text-xs text-[#628ECB]">
+                                        {warning.nim}
+                                    </p>
+                                </td>
+                                <td className="px-4 py-3 text-xs font-semibold">
+                                    {warning.kelas}
+                                </td>
+                                <td className="px-4 py-3">
+                                    <WarningStatusBadge warning={warning} />
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono text-xs">
+                                    {number(
+                                        String(
+                                            warning.snapshot.sisa_hutang_jam,
+                                        ),
+                                    )}
+                                </td>
+                                <td className="max-w-xs px-4 py-3 text-xs text-[#395886]/70">
+                                    {warning.reason ?? '—'}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <Pager data={data} />
+        </section>
+    );
+}
+
+function WarningPanel({
+    cutoffs,
+    filterOptions,
+    filters,
+    warnings,
+    temporaryCandidates,
+    selectedWarning,
+    onSelectWarning,
+}: {
+    cutoffs: Cutoff[];
+    filterOptions: FilterOptions;
+    filters: Filters;
+    warnings: Pagination<Warning> | null;
+    temporaryCandidates: Pagination<Student> | null;
+    selectedWarning: Warning | null;
+    onSelectWarning: (warning: Warning) => void;
+}): React.JSX.Element {
+    const [selectedStudent, setSelectedStudent] = useState<Student | null>(
+        null,
+    );
+    const warningDownloadUrl = filters.periode_semester
+        ? downloadWarnings.url({
+              query: {
+                  search: filters.search,
+                  kelas: filters.kelas,
+                  periode_semester: filters.periode_semester,
+              },
+          })
+        : null;
+    const warningPdfDownloadUrl = filters.periode_semester
+        ? downloadWarningsPdf.url({
+              query: {
+                  search: filters.search,
+                  kelas: filters.kelas,
+                  periode_semester: filters.periode_semester,
+              },
+          })
+        : null;
+
+    return (
+        <section className="grid gap-4">
+            <Form
+                {...adminIndex.form()}
+                className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(220px,1fr)_minmax(180px,auto)_minmax(180px,auto)_auto]"
+            >
+                <input name="tab" type="hidden" value="warnings" />
+                <Input
+                    name="search"
+                    defaultValue={filters.search}
+                    maxLength={100}
+                    placeholder="Cari nama atau NIM"
+                    className="rounded-xl border-[#8AAEE0] bg-white"
+                />
+                <select
+                    name="kelas"
+                    defaultValue={filters.kelas ?? ''}
+                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                >
+                    <option value="">Semua kelas</option>
+                    {filterOptions.kelas.map((kelas) => (
+                        <option key={kelas} value={kelas}>
+                            {kelas}
+                        </option>
+                    ))}
+                </select>
+                <select
+                    name="periode_semester"
+                    defaultValue={filters.periode_semester ?? ''}
+                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                >
+                    <option value="">Semua periode</option>
+                    {filterOptions.periode_semester.map((period) => (
+                        <option key={period} value={period}>
+                            {period}
+                        </option>
+                    ))}
+                </select>
+                <Button
+                    type="submit"
+                    className="rounded-xl bg-[#395886] text-xs font-bold"
+                >
+                    <Search className="mr-1.5 size-4" />
+                    Terapkan
+                </Button>
+            </Form>
+            <div className="grid gap-4 xl:grid-cols-2">
+                <Form
+                    {...storeCutoff.form()}
+                    className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm"
+                >
+                    {({ processing, errors }) => (
+                        <>
+                            <div>
+                                <h2 className="text-lg font-extrabold text-[#395886]">
+                                    Batas waktu periode
+                                </h2>
+                                <p className="mt-1 text-xs text-[#395886]/70">
+                                    Timezone operasional: Asia/Jakarta.
+                                </p>
+                            </div>
+                            <select
+                                name="periode_semester"
+                                required
+                                className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                            >
+                                <option value="">Pilih periode</option>
+                                {filterOptions.periode_semester.map(
+                                    (period) => (
+                                        <option key={period} value={period}>
+                                            {period}
+                                        </option>
+                                    ),
+                                )}
+                            </select>
+                            <Input
+                                name="deadline_at"
+                                type="datetime-local"
+                                required
+                            />
+                            {errors.deadline_at ? (
+                                <p className="text-xs font-bold text-rose-600">
+                                    {errors.deadline_at}
+                                </p>
+                            ) : null}
+                            <Button
+                                disabled={processing}
+                                type="submit"
+                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                            >
+                                <Clock3 className="mr-2 size-4" />
+                                Simpan batas waktu
+                            </Button>
+                            <div className="text-xs text-[#395886]/70">
+                                {cutoffs.map((cutoff) => (
+                                    <p key={cutoff.id}>
+                                        {cutoff.periode_semester}:{' '}
+                                        {new Date(
+                                            cutoff.deadline_at,
+                                        ).toLocaleString('id-ID', {
+                                            timeZone: cutoff.timezone,
+                                        })}
+                                    </p>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </Form>
+                <Form
+                    {...storeWarning.form()}
+                    className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm"
+                >
+                    {({ processing, errors }) => (
+                        <>
+                            <div>
+                                <h2 className="text-lg font-extrabold text-[#395886]">
+                                    Tambah SP-1 manual
+                                </h2>
+                                <p className="mt-1 text-xs text-[#395886]/70">
+                                    Pilih kandidat pada tabel di bawah. Sistem
+                                    menyimpan snapshot sisa jam saat ini.
+                                </p>
+                            </div>
+                            <input
+                                name="student_id"
+                                type="hidden"
+                                value={selectedStudent?.id ?? ''}
+                                required
+                            />
+                            <div className="rounded-xl border border-[#D5DEEF] bg-[#F0F3FA]/70 px-3 py-2.5 text-xs text-[#395886]">
+                                {selectedStudent ? (
+                                    <span>
+                                        <strong>
+                                            {selectedStudent.nama_mahasiswa}
+                                        </strong>
+                                        {' · '}
+                                        {selectedStudent.nim}
+                                        {' · sisa '}
+                                        {number(
+                                            selectedStudent.effective_sisa_hutang_jam,
+                                        )}
+                                        {' jam'}
+                                    </span>
+                                ) : (
+                                    'Belum ada mahasiswa yang dipilih.'
+                                )}
+                            </div>
+                            <Input
+                                name="reason"
+                                required
+                                minLength={5}
+                                maxLength={1000}
+                                placeholder="Alasan pembuatan draft SP-1"
+                            />
+                            {errors.student_id ? (
+                                <p className="text-xs font-bold text-rose-600">
+                                    {errors.student_id}
+                                </p>
+                            ) : null}
+                            <Button
+                                disabled={
+                                    processing || selectedStudent === null
+                                }
+                                type="submit"
+                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                            >
+                                <ShieldAlert className="mr-2 size-4" />
+                                Buat draft SP-1
+                            </Button>
+                        </>
+                    )}
+                </Form>
+            </div>
+            {temporaryCandidates?.data.length ? (
+                <TemporaryCandidateTable
+                    data={temporaryCandidates}
+                    selectedStudentId={selectedStudent?.id ?? null}
+                    onSelect={setSelectedStudent}
+                />
+            ) : (
+                <div className="rounded-3xl border border-dashed border-[#8AAEE0] bg-white/80 p-6 text-center text-xs font-semibold text-[#395886]/70">
+                    Tidak ada kandidat sementara. Tambahkan batas waktu untuk
+                    periode yang masih berjalan atau periksa sisa jam mahasiswa.
+                </div>
+            )}
+            <div className="flex flex-col justify-between gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm sm:flex-row sm:items-center">
+                <div>
+                    <h2 className="text-base font-extrabold text-[#395886]">
+                        Arsip dan status SP-1
+                    </h2>
+                    <p className="mt-0.5 text-xs text-[#395886]/70">
+                        Fixed dibuat saat batas waktu terlewati; draft dan
+                        penerbitan SP-1 tetap dikendalikan admin.
+                    </p>
+                </div>
+                {warningDownloadUrl && warningPdfDownloadUrl ? (
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                        >
+                            <a href={warningDownloadUrl}>
+                                <FileSpreadsheet className="mr-1.5 size-3.5" />
+                                XLSX
+                            </a>
+                        </Button>
+                        <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                        >
+                            <a href={warningPdfDownloadUrl}>
+                                <FileText className="mr-1.5 size-3.5" />
+                                PDF
+                            </a>
+                        </Button>
+                    </div>
+                ) : (
+                    <p className="text-xs font-semibold text-[#395886]/60">
+                        Pilih periode dengan filter untuk mengekspor arsip.
+                    </p>
+                )}
+            </div>
+            {warnings?.data.length ? (
+                <WarningTable data={warnings} onSelect={onSelectWarning} />
+            ) : (
+                <EmptyTableState isAdmin />
+            )}
+            {selectedWarning ? (
+                <Form
+                    {...updateWarning.form(selectedWarning.id)}
+                    className="grid gap-3 rounded-3xl border border-[#8AAEE0]/60 bg-white p-5 md:grid-cols-[1fr_1fr_auto]"
+                >
+                    {({ processing }) => (
+                        <>
+                            <select
+                                name="letter_status"
+                                defaultValue={selectedWarning.letter_status}
+                                className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                            >
+                                <option value="draft">Draft SP-1</option>
+                                <option value="issued">Terbitkan SP-1</option>
+                                <option value="cancelled">Batalkan SP-1</option>
+                            </select>
+                            <Input
+                                name="reason"
+                                required
+                                minLength={5}
+                                defaultValue={selectedWarning.reason ?? ''}
+                                placeholder="Alasan perubahan status"
+                            />
+                            <Button
+                                disabled={processing}
+                                type="submit"
+                                className="rounded-xl bg-[#395886] text-xs font-bold"
+                            >
+                                <Save className="mr-2 size-4" />
+                                Simpan SP
+                            </Button>
+                        </>
+                    )}
+                </Form>
+            ) : null}
+        </section>
+    );
+}
+
+function ActivityLogTable({
+    data,
+}: {
+    data: Pagination<ActivityLog>;
+}): React.JSX.Element {
+    return (
+        <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[750px] text-sm">
+                    <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
+                        <tr>
+                            <th className="px-4 py-3">Waktu</th>
+                            <th className="px-4 py-3">Aktivitas</th>
+                            <th className="px-4 py-3">Subjek</th>
+                            <th className="px-4 py-3">Aktor</th>
+                            <th className="px-4 py-3">Alasan</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F0F3FA]">
+                        {data.data.map((log) => (
+                            <tr key={log.id}>
+                                <td className="px-4 py-3 text-xs">
+                                    {new Date(log.occurred_at).toLocaleString(
+                                        'id-ID',
+                                        { timeZone: 'Asia/Jakarta' },
+                                    )}
+                                </td>
+                                <td className="px-4 py-3 font-mono text-xs text-[#395886]">
+                                    {log.event_type}
+                                </td>
+                                <td className="px-4 py-3 text-xs">
+                                    {log.nim ?? log.subject_type}
+                                </td>
+                                <td className="px-4 py-3 text-xs">
+                                    {log.actor_name ?? 'Sistem'}
+                                </td>
+                                <td className="max-w-xs px-4 py-3 text-xs text-[#395886]/70">
+                                    {log.reason ?? '—'}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <Pager data={data} />
+        </section>
+    );
+}
+
 function EmptyTableState({ isAdmin }: { isAdmin: boolean }): React.JSX.Element {
     return (
         <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-12 text-center text-sm backdrop-blur-xl transition-all duration-300">
@@ -1069,12 +1962,24 @@ export default function KompenResponHubIndex({
     students,
     details,
     imports,
+    warnings,
+    temporaryCandidates,
+    activityLogs,
+    cutoffs,
     activeImportTasks,
     canRollbackLatestImport,
 }: KompenResponHubPageProps): React.JSX.Element {
     const indexAction = isAdmin ? adminIndex : studentIndex;
     const tabs = isAdmin ? adminTabs : studentTabs;
     const [isUploadRequestActive, setIsUploadRequestActive] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [selectedStudent, setSelectedStudent] = useState<Student | null>(
+        null,
+    );
+    const [selectedDetail, setSelectedDetail] = useState<Detail | null>(null);
+    const [selectedWarning, setSelectedWarning] = useState<Warning | null>(
+        null,
+    );
 
     return (
         <>
@@ -1168,7 +2073,7 @@ export default function KompenResponHubIndex({
                         <Alert className="animate-in fade-in slide-in-from-top-2 rounded-2xl border border-emerald-200 bg-emerald-50/90 text-emerald-900 shadow-sm backdrop-blur-md duration-300">
                             <CheckCircle2 className="size-5 animate-bounce text-emerald-600" />
                             <AlertTitle className="text-base font-bold text-emerald-950">
-                                Impor Workbook Berhasil
+                                Tindakan Berhasil Disimpan
                             </AlertTitle>
                             <AlertDescription className="mt-0.5 text-xs text-emerald-700">
                                 {flash.success}
@@ -1208,7 +2113,10 @@ export default function KompenResponHubIndex({
                                 key={tab}
                                 href={indexAction.url({
                                     query:
-                                        tab === 'upload' || tab === 'imports'
+                                        tab === 'upload' ||
+                                        tab === 'imports' ||
+                                        tab === 'warnings' ||
+                                        tab === 'activity'
                                             ? { tab }
                                             : { ...filters, tab },
                                 })}
@@ -1280,8 +2188,38 @@ export default function KompenResponHubIndex({
                         </section>
                     ) : null}
 
+                    {activeTab === 'warnings' && isAdmin ? (
+                        <WarningPanel
+                            cutoffs={cutoffs}
+                            filterOptions={filterOptions}
+                            filters={filters}
+                            warnings={warnings}
+                            temporaryCandidates={temporaryCandidates}
+                            selectedWarning={selectedWarning}
+                            onSelectWarning={setSelectedWarning}
+                        />
+                    ) : null}
+
+                    {activeTab === 'activity' && isAdmin ? (
+                        activityLogs?.data.length ? (
+                            <ActivityLogTable data={activityLogs} />
+                        ) : (
+                            <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-10 text-center text-xs font-bold text-[#395886]/70">
+                                Belum ada aktivitas yang tercatat.
+                            </div>
+                        )
+                    ) : null}
+
                     {activeTab === 'students' || activeTab === 'details' ? (
                         <section className="flex flex-col gap-4">
+                            {isAdmin ? (
+                                <div className="flex justify-end">
+                                    <EditModeControl
+                                        enabled={isEditMode}
+                                        onChange={setIsEditMode}
+                                    />
+                                </div>
+                            ) : null}
                             <FilterPanel
                                 key={activeTab}
                                 activeTab={activeTab}
@@ -1292,13 +2230,37 @@ export default function KompenResponHubIndex({
                             {(activeTab === 'students' ? students : details)
                                 ?.data.length ? (
                                 activeTab === 'students' && students ? (
-                                    <StudentTable data={students} />
+                                    <StudentTable
+                                        data={students}
+                                        isEditMode={isAdmin && isEditMode}
+                                        onSelect={setSelectedStudent}
+                                    />
                                 ) : details ? (
-                                    <DetailTable data={details} />
+                                    <DetailTable
+                                        data={details}
+                                        isEditMode={isAdmin && isEditMode}
+                                        onSelect={setSelectedDetail}
+                                    />
                                 ) : null
                             ) : (
                                 <EmptyTableState isAdmin={isAdmin} />
                             )}
+                            {isAdmin &&
+                            isEditMode &&
+                            activeTab === 'students' &&
+                            selectedStudent ? (
+                                <StudentCorrectionPanel
+                                    student={selectedStudent}
+                                />
+                            ) : null}
+                            {isAdmin &&
+                            isEditMode &&
+                            activeTab === 'details' &&
+                            selectedDetail ? (
+                                <DetailCorrectionPanel
+                                    detail={selectedDetail}
+                                />
+                            ) : null}
                         </section>
                     ) : null}
                 </div>
