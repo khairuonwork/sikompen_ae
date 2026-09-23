@@ -2,6 +2,7 @@
 
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Jobs\ProcessKompenResponHubImport;
+use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImport;
@@ -187,7 +188,8 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
     expect($import->periode_semester)->toBe('2026/2027 Gasal')
         ->and($import->uploaded_by_admin_id)->toBe($admin->id)
         ->and($import->uploader_name)->toBe('Khairul Anwar')
-        ->and($import->uploader_email)->toBe($admin->email);
+        ->and($import->uploader_email)->toBe($admin->email)
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.completed')->exists())->toBeTrue();
 
     $this->actingAs($admin, 'admin')->get('/admin?tab=imports')
         ->assertOk()
@@ -308,7 +310,8 @@ test('an admin can delete only the latest upload and its related data is removed
         ->and($auditLog->source_import_id)->toBe($latestImport->id)
         ->and($auditLog->actor_email)->toBe($admin->email)
         ->and($auditLog->student_count)->toBe(1)
-        ->and($auditLog->detail_count)->toBe(0);
+        ->and($auditLog->detail_count)->toBe(0)
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.rolled_back')->exists())->toBeTrue();
 });
 
 test('a rollback clears cached filter options', function () {
