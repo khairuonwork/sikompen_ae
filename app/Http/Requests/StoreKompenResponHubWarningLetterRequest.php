@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\KompenResponHubStudent;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreKompenResponHubWarningLetterRequest extends FormRequest
 {
@@ -21,8 +23,14 @@ class StoreKompenResponHubWarningLetterRequest extends FormRequest
      */
     public function rules(): array
     {
+        $student = new KompenResponHubStudent;
+
         return [
-            'student_id' => ['required', 'integer', 'exists:sikompen_mahasiswa,id'],
+            'student_id' => [
+                'required',
+                'integer',
+                Rule::exists($student->getConnectionName().'.'.$student->getTable(), 'id'),
+            ],
             'reason' => ['required', 'string', 'min:5', 'max:1000'],
         ];
     }

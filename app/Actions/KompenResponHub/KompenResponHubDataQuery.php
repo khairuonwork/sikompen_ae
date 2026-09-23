@@ -5,9 +5,13 @@ namespace App\Actions\KompenResponHub;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImportAuditLog;
+use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
+use App\Models\KompenResponHubStudentProgress;
+use App\Models\KompenResponHubStudentSummaryOverride;
 use App\Models\KompenResponHubWarningLetter;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as BaseQueryBuilder;
 use Illuminate\Support\Facades\Cache;
 
 class KompenResponHubDataQuery
@@ -42,6 +46,38 @@ class KompenResponHubDataQuery
         }
 
         return $query->orderByDesc('id');
+    }
+
+    /**
+     * Return students with remaining debt while their applicable period is
+     * still open. These records are candidates only: creating a draft SP-1
+     * remains an explicit administrative action.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return Builder<KompenResponHubStudent>
+     */
+    public function temporaryWarningCandidates(array $filters): Builder
+    {
+        $studentTable = (new KompenResponHubStudent)->getTable();
+        $cutoffTable = (new KompenResponHubPeriodCutoff)->getTable();
+        $progressTable = (new KompenResponHubStudentProgress)->getTable();
+        $summaryOverrideTable = (new KompenResponHubStudentSummaryOverride)->getTable();
+
+        $effectiveDebt = sprintf(
+            'COALESCE((SELECT total_kompensasi_jam FROM %1$s WHERE current_student_id = %2$s.id LIMIT 1), %2$s.total_kompensasi_jam) + COALESCE((SELECT total_responsi_jam FROM %1$s WHERE current_student_id = %2$s.id LIMIT 1), %2$s.total_responsi_jam) - COALESCE((SELECT kompensasi_dikerjakan_jam FROM %3$s WHERE current_student_id = %2$s.id LIMIT 1), 0) - COALESCE((SELECT responsi_dikerjakan_jam FROM %3$s WHERE current_student_id = %2$s.id LIMIT 1), 0)',
+            $summaryOverrideTable,
+            $studentTable,
+            $progressTable,
+        );
+
+        return $this->students($filters)
+            ->whereExists(function (BaseQueryBuilder $query) use ($cutoffTable, $studentTable): void {
+                $query->selectRaw('1')
+                    ->from($cutoffTable)
+                    ->whereColumn("{$cutoffTable}.periode_semester", "{$studentTable}.periode_semester")
+                    ->where('deadline_at', '>', now());
+            })
+            ->whereRaw("({$effectiveDebt}) > 0");
     }
 
     /** @return Builder<KompenResponHubActivityLog> */

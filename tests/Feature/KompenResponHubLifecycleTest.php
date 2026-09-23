@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImport;
@@ -84,6 +85,78 @@ test('an admin can prepare a manual SP-1 draft before the cutoff', function () {
     expect(KompenResponHubWarningLetter::query()->sole())
         ->letter_status->toBe(KompenResponHubWarningLetter::LetterStatusDraft)
         ->and(KompenResponHubWarningLetter::query()->sole()->classification)->toBe('temporary');
+});
+
+test('completed progress resolves an existing warning without deleting its trace', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->addWeek(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post('/admin/kompen-respon/warnings', [
+            'student_id' => $student->id,
+            'reason' => 'Draft dibuat setelah verifikasi administrasi.',
+        ])
+        ->assertRedirect();
+
+    $this->actingAs($admin, 'admin')
+        ->put("/admin/kompen-respon/students/{$student->id}/progress", [
+            'kompensasi_dikerjakan_jam' => 1.5,
+            'responsi_dikerjakan_jam' => 2,
+            'last_worked_at' => now('Asia/Jakarta')->format('Y-m-d\\TH:i'),
+            'reason' => 'Seluruh jam Kompen dan Responsi telah diselesaikan.',
+        ])
+        ->assertRedirect();
+
+    expect(KompenResponHubWarningLetter::query()->sole())
+        ->resolution->toBe('completed')
+        ->and(KompenResponHubWarningLetter::query()->sole()->snapshot['sisa_hutang_jam'])->toBe(0)
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'warning.resolution_updated')->exists())->toBeTrue();
+});
+
+test('temporary candidates only include students with an open cutoff and remaining debt', function () {
+    $student = createLifecycleStudent();
+    KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->addWeek(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $candidateIds = app(KompenResponHubDataQuery::class)
+        ->temporaryWarningCandidates([])
+        ->pluck('id');
+
+    expect($candidateIds)->toContain($student->id);
+});
+
+test('the scheduled command changes temporary warnings to fixed after the cutoff', function () {
+    $student = createLifecycleStudent();
+    $cutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+    $warning = KompenResponHubWarningLetter::create([
+        'cutoff_id' => $cutoff->id,
+        'current_student_id' => $student->id,
+        'nim' => $student->nim,
+        'periode_semester' => $student->periode_semester,
+        'kelas' => $student->kelas,
+        'nama_mahasiswa' => $student->nama_mahasiswa,
+        'classification' => 'temporary',
+        'letter_status' => KompenResponHubWarningLetter::LetterStatusDraft,
+        'resolution' => 'outstanding',
+        'snapshot' => ['sisa_hutang_jam' => 3.5],
+    ]);
+
+    $this->artisan('sikompen:archive-warning-candidates')->assertSuccessful();
+
+    expect($warning->fresh())->classification->toBe('fixed')
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'warning.classification_fixed')->exists())->toBeTrue();
 });
 
 function createLifecycleStudent(): KompenResponHubStudent

@@ -64,6 +64,7 @@ class KompenResponHubLifecycleController extends Controller
         ])->save();
 
         $this->activity->execute('progress.updated', 'student_progress', (string) $progress->id, $request->user('admin'), $request, $student->nim, $student->periode_semester, $student->kelas, $validated['reason'], $before, $progress->only(['kompensasi_dikerjakan_jam', 'responsi_dikerjakan_jam', 'last_worked_at', 'reason']));
+        $this->syncWarningResolution($student, $request);
 
         return back()->with('success', 'Progres pengerjaan mahasiswa berhasil diperbarui.');
     }
@@ -86,6 +87,7 @@ class KompenResponHubLifecycleController extends Controller
         ])->save();
 
         $this->activity->execute('summary.override_updated', 'student_summary_override', (string) $override->id, $request->user('admin'), $request, $student->nim, $student->periode_semester, $student->kelas, $validated['reason'], $before, $override->only(['total_kompensasi_jam', 'total_responsi_jam', 'reason']));
+        $this->syncWarningResolution($student, $request);
 
         return back()->with('success', 'Koreksi Kompen dan Respon berhasil disimpan.');
     }
@@ -115,6 +117,7 @@ class KompenResponHubLifecycleController extends Controller
         $student = KompenResponHubStudent::query()->with(['progress', 'summaryOverride'])->findOrFail($validated['student_id']);
         $cutoff = KompenResponHubPeriodCutoff::query()->where('periode_semester', $student->periode_semester)->first();
         abort_if($cutoff === null, 422, 'Tetapkan batas waktu periode sebelum membuat SP.');
+        abort_if($this->studentSnapshot($student)['sisa_hutang_jam'] <= 0, 422, 'SP-1 tidak dapat dibuat karena mahasiswa tidak memiliki sisa jam.');
 
         $warning = KompenResponHubWarningLetter::query()->firstOrNew(['cutoff_id' => $cutoff->id, 'current_student_id' => $student->id]);
         $before = $warning->exists ? $warning->only(['letter_status', 'resolution', 'reason']) : null;
@@ -169,5 +172,39 @@ class KompenResponHubLifecycleController extends Controller
         $workedResponsi = (float) ($student->progress?->responsi_dikerjakan_jam ?? 0);
 
         return ['total_kompensasi_jam' => $totalKompen, 'total_responsi_jam' => $totalResponsi, 'kompensasi_dikerjakan_jam' => $workedKompen, 'responsi_dikerjakan_jam' => $workedResponsi, 'sisa_hutang_jam' => max(0, $totalKompen + $totalResponsi - $workedKompen - $workedResponsi)];
+    }
+
+    private function syncWarningResolution(KompenResponHubStudent $student, StoreKompenResponHubStudentProgressRequest|StoreKompenResponHubStudentSummaryOverrideRequest $request): void
+    {
+        $student->load(['progress', 'summaryOverride']);
+        $resolution = $this->studentSnapshot($student)['sisa_hutang_jam'] <= 0
+            ? 'completed'
+            : 'outstanding';
+
+        KompenResponHubWarningLetter::query()
+            ->where('current_student_id', $student->id)
+            ->where('resolution', '!=', $resolution)
+            ->each(function (KompenResponHubWarningLetter $warning) use ($student, $request, $resolution): void {
+                $before = $warning->only(['resolution', 'snapshot']);
+                $warning->update([
+                    'resolution' => $resolution,
+                    'snapshot' => $this->studentSnapshot($student),
+                    'updated_by_admin_id' => $request->user('admin')?->id,
+                ]);
+
+                $this->activity->execute(
+                    'warning.resolution_updated',
+                    'warning_letter',
+                    (string) $warning->id,
+                    $request->user('admin'),
+                    $request,
+                    $student->nim,
+                    $student->periode_semester,
+                    $student->kelas,
+                    'Status penyelesaian diselaraskan dengan progres Kompen dan Responsi.',
+                    $before,
+                    $warning->only(['resolution', 'snapshot']),
+                );
+            });
     }
 }

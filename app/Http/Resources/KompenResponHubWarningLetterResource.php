@@ -6,9 +6,9 @@ use App\Models\KompenResponHubWarningLetter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/** @mixin KompenResponHubWarningLetter */
 class KompenResponHubWarningLetterResource extends JsonResource
 {
-    /** @mixin KompenResponHubWarningLetter */
     /**
      * Transform the resource into an array.
      *

@@ -15,7 +15,7 @@ class ImportKompenResponHubWorkbook
 {
     /**
      * @param  array{preview: array{periode_semester: ?string, classes: list<string>, class_count: int, student_count: int, detail_count: int}, students: list<array<string, mixed>>, details: list<array<string, mixed>>}  $payload
-     * @return array{import_id: int, class_count: int, student_count: int, detail_count: int}
+     * @return array{import_id: int, periode_semester: string, class_count: int, student_count: int, detail_count: int}
      */
     public function execute(
         array $payload,
@@ -117,6 +117,7 @@ class ImportKompenResponHubWorkbook
 
                 return [
                     'import_id' => $import->id,
+                    'periode_semester' => $period,
                     'class_count' => $preview['class_count'],
                     'student_count' => $preview['student_count'],
                     'detail_count' => $preview['detail_count'],

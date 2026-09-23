@@ -145,6 +145,14 @@ class KompenResponHubController extends Controller
                     KompenResponHubWarningLetterResource::class,
                 )
                 : null,
+            'temporaryCandidates' => $isAdmin && $activeTab === 'warnings'
+                ? $this->resourcePaginator(
+                    $this->dataQuery->temporaryWarningCandidates($filters)
+                        ->paginate($this->perPage($filters), ['*'], 'candidate_page')
+                        ->withQueryString(),
+                    KompenResponHubStudentResource::class,
+                )
+                : null,
             'activityLogs' => $isAdmin && $activeTab === 'activity'
                 ? $this->resourcePaginator(
                     $this->dataQuery->activityLogs($filters)->paginate($this->perPage($filters))->withQueryString(),

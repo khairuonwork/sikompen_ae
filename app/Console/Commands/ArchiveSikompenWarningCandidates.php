@@ -27,6 +27,30 @@ class ArchiveSikompenWarningCandidates extends Command
             ->where('deadline_at', '<=', now())
             ->orderBy('id')
             ->each(function (KompenResponHubPeriodCutoff $cutoff) use (&$createdCount): void {
+                KompenResponHubWarningLetter::query()
+                    ->where('cutoff_id', $cutoff->id)
+                    ->where('classification', 'temporary')
+                    ->chunkById(200, function ($warnings) use ($cutoff): void {
+                        foreach ($warnings as $warning) {
+                            $before = $warning->only(['classification']);
+                            $warning->update(['classification' => 'fixed']);
+                            $this->activity->execute(
+                                'warning.classification_fixed',
+                                'warning_letter',
+                                (string) $warning->id,
+                                null,
+                                null,
+                                $warning->nim,
+                                $warning->periode_semester,
+                                $warning->kelas,
+                                'Batas waktu periode telah terlewati.',
+                                $before,
+                                $warning->only(['classification']),
+                                ['cutoff_id' => $cutoff->id],
+                            );
+                        }
+                    });
+
                 KompenResponHubStudent::query()
                     ->where('periode_semester', $cutoff->periode_semester)
                     ->with(['progress', 'summaryOverride'])
