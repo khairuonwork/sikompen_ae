@@ -88,6 +88,32 @@ class KompenResponHubDownloadController extends Controller
         );
     }
 
+    public function warnings(DownloadKompenResponHubDataRequest $request): StreamedResponse
+    {
+        $filters = $request->validated();
+
+        return $this->downloadSpreadsheet(
+            'surat-peringatan',
+            $filters['periode_semester'],
+            $this->dataQuery->warnings($filters)->limit(self::ExportLimit + 1)->get(),
+            'Surat Peringatan',
+            $this->warningColumns(),
+        );
+    }
+
+    public function warningsPdf(DownloadKompenResponHubDataRequest $request): Response
+    {
+        $filters = $request->validated();
+
+        return $this->downloadPdf(
+            'surat-peringatan',
+            $filters['periode_semester'],
+            $this->dataQuery->warnings($filters)->limit(self::PdfExportLimit + 1)->get(),
+            'Surat Peringatan',
+            $this->warningColumns(),
+        );
+    }
+
     /**
      * @template TModel of Model
      *
@@ -334,11 +360,12 @@ class KompenResponHubDownloadController extends Controller
             ['field' => 'total_jam_sakit', 'heading' => 'S[j]', 'type' => 'hours', 'width' => 11],
             ['field' => 'total_jam_izin', 'heading' => 'I[j]', 'type' => 'hours', 'width' => 11],
             ['field' => 'total_jam_bolos', 'heading' => 'B[j]', 'type' => 'hours', 'width' => 11],
-            ['field' => 'total_kompensasi_jam', 'heading' => 'Kompensasi[j]', 'type' => 'hours', 'width' => 15],
-            ['field' => 'total_responsi_jam', 'heading' => 'Responsi[j]', 'type' => 'hours', 'width' => 14],
-            ['field' => 'total_hutang_jam', 'heading' => 'Total[j]', 'type' => 'hours', 'width' => 12],
-            ['field' => 'kompensasi_dikerjakan_jam', 'heading' => 'Dikerjakan[j]', 'type' => 'hours', 'width' => 16],
-            ['field' => 'sisa_hutang_jam', 'heading' => 'Sisa Kompen[j]', 'type' => 'hours', 'width' => 16],
+            ['field' => 'effective_total_kompensasi_jam', 'heading' => 'Kompensasi[j]', 'type' => 'hours', 'width' => 15],
+            ['field' => 'effective_total_responsi_jam', 'heading' => 'Responsi[j]', 'type' => 'hours', 'width' => 14],
+            ['field' => 'effective_total_hutang_jam', 'heading' => 'Total[j]', 'type' => 'hours', 'width' => 12],
+            ['field' => 'effective_kompensasi_dikerjakan_jam', 'heading' => 'Komp. dikerjakan[j]', 'type' => 'hours', 'width' => 18],
+            ['field' => 'effective_responsi_dikerjakan_jam', 'heading' => 'Resp. dikerjakan[j]', 'type' => 'hours', 'width' => 18],
+            ['field' => 'effective_sisa_hutang_jam', 'heading' => 'Sisa[j]', 'type' => 'hours', 'width' => 13],
         ];
     }
 
@@ -351,15 +378,31 @@ class KompenResponHubDownloadController extends Controller
             ['field' => 'student.nama_mahasiswa', 'heading' => 'Nama Mahasiswa', 'type' => 'text', 'width' => 26],
             ['field' => 'student.kelas', 'heading' => 'Kelas', 'type' => 'text', 'width' => 12],
             ['field' => 'student.periode_semester', 'heading' => 'Periode', 'type' => 'text', 'width' => 20],
-            ['field' => 'mata_kuliah', 'heading' => 'Mata Kuliah', 'type' => 'text', 'width' => 24],
-            ['field' => 'nama_dosen', 'heading' => 'Nama Dosen', 'type' => 'text', 'width' => 22],
-            ['field' => 'tanggal', 'heading' => 'Tanggal', 'type' => 'date', 'width' => 14],
-            ['field' => 'jenis_pertemuan', 'heading' => 'Jenis Pertemuan', 'type' => 'text', 'width' => 18],
-            ['field' => 'presensi', 'heading' => 'Presensi', 'type' => 'text', 'width' => 14],
-            ['field' => 'menit_keterlambatan', 'heading' => 'Menit Terlambat', 'type' => 'integer', 'width' => 16],
-            ['field' => 'keterangan', 'heading' => 'Keterangan', 'type' => 'text', 'width' => 28],
-            ['field' => 'jam_kompensasi', 'heading' => 'Jam Kompensasi', 'type' => 'hours', 'width' => 17],
-            ['field' => 'jam_responsi', 'heading' => 'Jam Responsi', 'type' => 'hours', 'width' => 15],
+            ['field' => 'effective_mata_kuliah', 'heading' => 'Mata Kuliah', 'type' => 'text', 'width' => 24],
+            ['field' => 'effective_nama_dosen', 'heading' => 'Nama Dosen', 'type' => 'text', 'width' => 22],
+            ['field' => 'effective_tanggal', 'heading' => 'Tanggal', 'type' => 'date', 'width' => 14],
+            ['field' => 'effective_jenis_pertemuan', 'heading' => 'Jenis Pertemuan', 'type' => 'text', 'width' => 18],
+            ['field' => 'effective_presensi', 'heading' => 'Presensi', 'type' => 'text', 'width' => 14],
+            ['field' => 'effective_menit_keterlambatan', 'heading' => 'Menit Terlambat', 'type' => 'integer', 'width' => 16],
+            ['field' => 'effective_keterangan', 'heading' => 'Keterangan', 'type' => 'text', 'width' => 28],
+            ['field' => 'effective_jam_kompensasi', 'heading' => 'Jam Kompensasi', 'type' => 'hours', 'width' => 17],
+            ['field' => 'effective_jam_responsi', 'heading' => 'Jam Responsi', 'type' => 'hours', 'width' => 15],
+        ];
+    }
+
+    /** @return list<array{field: string, heading: string, type: 'text'|'integer'|'hours'|'date', width: int}> */
+    private function warningColumns(): array
+    {
+        return [
+            ['field' => 'nim', 'heading' => 'NIM', 'type' => 'text', 'width' => 16],
+            ['field' => 'nama_mahasiswa', 'heading' => 'Nama Mahasiswa', 'type' => 'text', 'width' => 26],
+            ['field' => 'kelas', 'heading' => 'Kelas', 'type' => 'text', 'width' => 12],
+            ['field' => 'classification', 'heading' => 'Indikator', 'type' => 'text', 'width' => 14],
+            ['field' => 'letter_status', 'heading' => 'Status SP-1', 'type' => 'text', 'width' => 16],
+            ['field' => 'resolution', 'heading' => 'Penyelesaian', 'type' => 'text', 'width' => 16],
+            ['field' => 'snapshot.sisa_hutang_jam', 'heading' => 'Sisa[j]', 'type' => 'hours', 'width' => 13],
+            ['field' => 'issued_at', 'heading' => 'Diterbitkan', 'type' => 'date', 'width' => 16],
+            ['field' => 'reason', 'heading' => 'Catatan', 'type' => 'text', 'width' => 30],
         ];
     }
 }

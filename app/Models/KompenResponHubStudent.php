@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class KompenResponHubStudent extends Model
 {
@@ -57,5 +58,50 @@ class KompenResponHubStudent extends Model
     public function details(): HasMany
     {
         return $this->hasMany(KompenResponHubDetail::class);
+    }
+
+    public function progress(): HasOne
+    {
+        return $this->hasOne(KompenResponHubStudentProgress::class, 'current_student_id');
+    }
+
+    public function summaryOverride(): HasOne
+    {
+        return $this->hasOne(KompenResponHubStudentSummaryOverride::class, 'current_student_id');
+    }
+
+    public function latestWarning(): HasOne
+    {
+        return $this->hasOne(KompenResponHubWarningLetter::class, 'current_student_id')->latestOfMany();
+    }
+
+    public function getEffectiveTotalKompensasiJamAttribute(): string
+    {
+        return $this->summaryOverride?->total_kompensasi_jam ?? $this->total_kompensasi_jam;
+    }
+
+    public function getEffectiveTotalResponsiJamAttribute(): string
+    {
+        return $this->summaryOverride?->total_responsi_jam ?? $this->total_responsi_jam;
+    }
+
+    public function getEffectiveKompensasiDikerjakanJamAttribute(): string
+    {
+        return $this->progress?->kompensasi_dikerjakan_jam ?? '0.0000';
+    }
+
+    public function getEffectiveResponsiDikerjakanJamAttribute(): string
+    {
+        return $this->progress?->responsi_dikerjakan_jam ?? '0.0000';
+    }
+
+    public function getEffectiveTotalHutangJamAttribute(): string
+    {
+        return number_format((float) $this->effective_total_kompensasi_jam + (float) $this->effective_total_responsi_jam, 4, '.', '');
+    }
+
+    public function getEffectiveSisaHutangJamAttribute(): string
+    {
+        return number_format(max(0, (float) $this->effective_total_hutang_jam - (float) $this->effective_kompensasi_dikerjakan_jam - (float) $this->effective_responsi_dikerjakan_jam), 4, '.', '');
     }
 }

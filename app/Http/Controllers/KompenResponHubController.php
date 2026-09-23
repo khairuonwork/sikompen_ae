@@ -5,14 +5,17 @@ namespace App\Http\Controllers;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
+use App\Http\Resources\KompenResponHubActivityLogResource;
 use App\Http\Resources\KompenResponHubDetailResource;
 use App\Http\Resources\KompenResponHubImportAuditLogResource;
 use App\Http\Resources\KompenResponHubImportTaskResource;
 use App\Http\Resources\KompenResponHubStudentResource;
+use App\Http\Resources\KompenResponHubWarningLetterResource;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
+use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
@@ -84,7 +87,7 @@ class KompenResponHubController extends Controller
             ])
             ->exists();
 
-        if (! $isAdmin && in_array($activeTab, ['upload', 'imports'], true)) {
+        if (! $isAdmin && in_array($activeTab, ['upload', 'imports', 'warnings', 'activity'], true)) {
             $activeTab = 'students';
         }
 
@@ -94,6 +97,18 @@ class KompenResponHubController extends Controller
             'isProxySession' => $this->proxyAccess->hasValidProxySession($request),
             'filters' => $filters,
             'filterOptions' => $this->dataQuery->filterOptions(),
+            'cutoffs' => $isAdmin
+                ? KompenResponHubPeriodCutoff::query()
+                    ->orderByDesc('deadline_at')
+                    ->get(['id', 'periode_semester', 'deadline_at', 'timezone'])
+                    ->map(fn (KompenResponHubPeriodCutoff $cutoff): array => [
+                        'id' => $cutoff->id,
+                        'periode_semester' => $cutoff->periode_semester,
+                        'deadline_at' => $cutoff->deadline_at->toIso8601String(),
+                        'timezone' => $cutoff->timezone,
+                    ])
+                    ->all()
+                : [],
             'activeImportTasks' => $isAdmin
                 ? KompenResponHubImportTaskResource::collection(
                     KompenResponHubImportTask::query()
@@ -124,6 +139,18 @@ class KompenResponHubController extends Controller
                     KompenResponHubImportAuditLogResource::class,
                 )
                 : null,
+            'warnings' => $isAdmin && $activeTab === 'warnings'
+                ? $this->resourcePaginator(
+                    $this->dataQuery->warnings($filters)->paginate($this->perPage($filters))->withQueryString(),
+                    KompenResponHubWarningLetterResource::class,
+                )
+                : null,
+            'activityLogs' => $isAdmin && $activeTab === 'activity'
+                ? $this->resourcePaginator(
+                    $this->dataQuery->activityLogs($filters)->paginate($this->perPage($filters))->withQueryString(),
+                    KompenResponHubActivityLogResource::class,
+                )
+                : null,
             'canRollbackLatestImport' => $isAdmin
                 && ! $hasActiveImportTask
                 && KompenResponHubImport::query()->exists(),
@@ -137,10 +164,10 @@ class KompenResponHubController extends Controller
     }
 
     /**
-     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog
+     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog|\App\Models\KompenResponHubWarningLetter|\App\Models\KompenResponHubActivityLog
      *
      * @param  LengthAwarePaginator<int, TModel>  $paginator
-     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource>  $resource
+     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource|KompenResponHubWarningLetterResource|KompenResponHubActivityLogResource>  $resource
      * @return array<string, mixed>
      */
     private function resourcePaginator(LengthAwarePaginator $paginator, string $resource): array

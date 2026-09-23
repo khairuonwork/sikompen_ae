@@ -5,6 +5,9 @@ namespace App\Actions\KompenResponHub;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubStudent;
+use App\Models\KompenResponHubStudentProgress;
+use App\Models\KompenResponHubStudentSummaryOverride;
+use App\Models\KompenResponHubWarningLetter;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -64,11 +67,13 @@ class ImportKompenResponHubWorkbook
 
                 foreach ($payload['details'] as $detailAttributes) {
                     $studentKey = "{$detailAttributes['kelas']}:{$detailAttributes['nim']}";
+                    $sourceKey = hash('sha256', json_encode($detailAttributes, JSON_THROW_ON_ERROR));
 
                     DB::connection(config('kompen-respon-hub.database_connection'))
                         ->table('sikompen_detail_kompen')
                         ->insert([
                             'kompen_respon_hub_student_id' => $studentIds[$studentKey],
+                            'source_key' => $sourceKey,
                             'tanggal' => $detailAttributes['tanggal'],
                             'mata_kuliah' => $detailAttributes['mata_kuliah'],
                             'nama_dosen' => $detailAttributes['nama_dosen'],
@@ -81,6 +86,20 @@ class ImportKompenResponHubWorkbook
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);
+                }
+
+                foreach ($payload['students'] as $studentAttributes) {
+                    $studentKey = "{$studentAttributes['kelas']}:{$studentAttributes['nim']}";
+                    $identity = [
+                        'nim' => $studentAttributes['nim'],
+                        'periode_semester' => $period,
+                        'kelas' => $studentAttributes['kelas'],
+                    ];
+                    $currentStudentId = $studentIds[$studentKey];
+
+                    KompenResponHubStudentProgress::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
+                    KompenResponHubStudentSummaryOverride::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
+                    KompenResponHubWarningLetter::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
                 }
 
                 KompenResponHubImportAuditLog::create([

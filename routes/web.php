@@ -8,6 +8,7 @@ use App\Http\Controllers\KompenResponHubImportController;
 use App\Http\Controllers\KompenResponHubImportRollbackController;
 use App\Http\Controllers\KompenResponHubImportTaskController;
 use App\Http\Controllers\KompenResponHubLandingController;
+use App\Http\Controllers\KompenResponHubLifecycleController;
 use App\Http\Controllers\SiAdminProxyAccessController;
 use Illuminate\Support\Facades\Route;
 
@@ -63,6 +64,28 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
             ->name('kompen-respon.imports.rollback');
         Route::get('kompen-respon/import-tasks/{importTask}', [KompenResponHubImportTaskController::class, 'show'])
             ->name('kompen-respon.import-tasks.show');
+        Route::put('kompen-respon/cutoffs', [KompenResponHubLifecycleController::class, 'storeCutoff'])
+            ->middleware('throttle:20,1')
+            ->name('kompen-respon.cutoffs.store');
+        Route::put('kompen-respon/students/{student}/progress', [KompenResponHubLifecycleController::class, 'storeProgress'])
+            ->middleware('throttle:30,1')
+            ->name('kompen-respon.students.progress.store');
+        Route::put('kompen-respon/students/{student}/summary-override', [KompenResponHubLifecycleController::class, 'storeSummaryOverride'])
+            ->middleware('throttle:30,1')
+            ->name('kompen-respon.students.summary-override.store');
+        Route::put('kompen-respon/details/{detail}/override', [KompenResponHubLifecycleController::class, 'storeDetailOverride'])
+            ->middleware('throttle:30,1')
+            ->name('kompen-respon.details.override.store');
+        Route::post('kompen-respon/warnings', [KompenResponHubLifecycleController::class, 'storeWarning'])
+            ->middleware('throttle:20,1')
+            ->name('kompen-respon.warnings.store');
+        Route::put('kompen-respon/warnings/{warning}', [KompenResponHubLifecycleController::class, 'updateWarning'])
+            ->middleware('throttle:20,1')
+            ->name('kompen-respon.warnings.update');
+        Route::get('kompen-respon/downloads/warnings', [KompenResponHubDownloadController::class, 'warnings'])
+            ->name('kompen-respon.downloads.warnings');
+        Route::get('kompen-respon/downloads/warnings/pdf', [KompenResponHubDownloadController::class, 'warningsPdf'])
+            ->name('kompen-respon.downloads.warnings.pdf');
 
         Route::middleware('sikompen.standalone')->group(function (): void {
             Route::get('settings', [KompenResponHubAdminSetupController::class, 'settings'])->name('settings');

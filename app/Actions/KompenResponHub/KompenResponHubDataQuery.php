@@ -2,9 +2,11 @@
 
 namespace App\Actions\KompenResponHub;
 
+use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubStudent;
+use App\Models\KompenResponHubWarningLetter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 
@@ -19,6 +21,39 @@ class KompenResponHubDataQuery
             ->with('sourceImport:id')
             ->orderByDesc('occurred_at')
             ->orderByDesc('id');
+    }
+
+    /** @return Builder<KompenResponHubWarningLetter> */
+    public function warnings(array $filters): Builder
+    {
+        $query = KompenResponHubWarningLetter::query()->with('student');
+
+        foreach (['kelas', 'periode_semester'] as $field) {
+            if (filled($filters[$field] ?? null)) {
+                $query->where($field, $filters[$field]);
+            }
+        }
+
+        if (filled($filters['search'] ?? null)) {
+            $query->where(function (Builder $warningQuery) use ($filters): void {
+                $warningQuery->where('nama_mahasiswa', 'like', "%{$filters['search']}%")
+                    ->orWhere('nim', 'like', "%{$filters['search']}%");
+            });
+        }
+
+        return $query->orderByDesc('id');
+    }
+
+    /** @return Builder<KompenResponHubActivityLog> */
+    public function activityLogs(array $filters): Builder
+    {
+        $query = KompenResponHubActivityLog::query();
+
+        if (filled($filters['periode_semester'] ?? null)) {
+            $query->where('periode_semester', $filters['periode_semester']);
+        }
+
+        return $query->orderByDesc('occurred_at')->orderByDesc('id');
     }
 
     /** @return array{tingkat: list<int>, kelas: list<string>, periode_semester: list<string>} */
@@ -59,7 +94,7 @@ class KompenResponHubDataQuery
      */
     public function students(array $filters): Builder
     {
-        $query = KompenResponHubStudent::query();
+        $query = KompenResponHubStudent::query()->with(['progress', 'summaryOverride', 'latestWarning']);
 
         foreach (['nim', 'kelas', 'periode_semester', 'tingkat'] as $field) {
             if (filled($filters[$field] ?? null)) {
@@ -92,7 +127,7 @@ class KompenResponHubDataQuery
     public function details(array $filters): Builder
     {
         $query = KompenResponHubDetail::query()
-            ->with('student')
+            ->with(['student.progress', 'student.summaryOverride', 'override'])
             ->where(function (Builder $query): void {
                 $query->where('jam_kompensasi', '>', 0)
                     ->orWhere('jam_responsi', '>', 0);

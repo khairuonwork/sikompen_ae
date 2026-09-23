@@ -81,6 +81,32 @@ services:
     volumes:
       - sikompen_import_storage:/var/www/html/storage/app/private/kompen-respon-hub/imports
 
+  scheduler:
+    build:
+      context: .
+      target: app
+    image: sikompen-app:local
+    restart: unless-stopped
+    command: php artisan schedule:work
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_DATABASE: "${KOMPEN_DB_DATABASE:-kompen_database}"
+      DB_USERNAME: "${KOMPEN_DB_USERNAME:-kompen_user}"
+      DB_PASSWORD: "${KOMPEN_DB_PASSWORD:-kompen_local_password}"
+      KOMPEN_DB_HOST: database
+      KOMPEN_DB_PORT: 3306
+      KOMPEN_DB_DATABASE: "${KOMPEN_DB_DATABASE:-kompen_database}"
+      KOMPEN_DB_USERNAME: "${KOMPEN_DB_USERNAME:-kompen_user}"
+      KOMPEN_DB_PASSWORD: "${KOMPEN_DB_PASSWORD:-kompen_local_password}"
+    depends_on:
+      database:
+        condition: service_healthy
+
   database:
     image: mariadb:11.4
     restart: unless-stopped
