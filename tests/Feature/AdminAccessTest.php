@@ -64,6 +64,7 @@ test('an admin can log in and receives an authenticated session', function () {
         ->assertRedirect('/admin');
 
     $this->assertAuthenticatedAs($admin, 'admin');
+    $this->get('/admin')->assertOk();
 });
 
 test('failed admin logins are rate limited after five attempts', function () {

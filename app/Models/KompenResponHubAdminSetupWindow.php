@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Database\Factories\KompenResponHubAdminSetupWindowFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property string|null $activation_code_hash
+ * @property CarbonImmutable|null $expires_at
+ */
 class KompenResponHubAdminSetupWindow extends Model
 {
     /** @use HasFactory<KompenResponHubAdminSetupWindowFactory> */

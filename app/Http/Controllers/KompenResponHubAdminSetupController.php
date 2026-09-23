@@ -19,12 +19,12 @@ class KompenResponHubAdminSetupController extends Controller
 {
     public function create(): Response
     {
-        $hasAdmin = KompenResponHubAdmin::query()->exists();
+        $hasRegisteredAdmin = KompenResponHubAdmin::query()->exists();
         $setupWindow = $this->setupWindow();
 
         return Inertia::render('auth/admin-setup', [
-            'setupOpen' => ! $hasAdmin || $setupWindow->isOpen(),
-            'requiresActivationCode' => $hasAdmin,
+            'setupOpen' => $this->isRegistrationOpen($hasRegisteredAdmin, $setupWindow),
+            'requiresActivationCode' => $hasRegisteredAdmin,
         ]);
     }
 
@@ -34,13 +34,13 @@ class KompenResponHubAdminSetupController extends Controller
             $setupWindow = KompenResponHubAdminSetupWindow::query()
                 ->lockForUpdate()
                 ->findOrFail(1);
-            $hasAdmin = KompenResponHubAdmin::query()->lockForUpdate()->exists();
+            $hasRegisteredAdmin = KompenResponHubAdmin::query()->lockForUpdate()->exists();
 
-            if ($hasAdmin && ! $setupWindow->isOpen()) {
+            if (! $this->isRegistrationOpen($hasRegisteredAdmin, $setupWindow)) {
                 abort(403, 'Pendaftaran admin sedang tidak dibuka.');
             }
 
-            if ($hasAdmin && ! Hash::check($request->string('activation_code')->toString(), $setupWindow->activation_code_hash)) {
+            if ($hasRegisteredAdmin && ! Hash::check($request->string('activation_code')->toString(), $setupWindow->activation_code_hash)) {
                 throw ValidationException::withMessages([
                     'activation_code' => 'Kode aktivasi tidak tepat.',
                 ]);
@@ -105,5 +105,12 @@ class KompenResponHubAdminSetupController extends Controller
     private function setupWindow(): KompenResponHubAdminSetupWindow
     {
         return KompenResponHubAdminSetupWindow::query()->findOrFail(1);
+    }
+
+    private function isRegistrationOpen(
+        bool $hasRegisteredAdmin,
+        KompenResponHubAdminSetupWindow $setupWindow,
+    ): bool {
+        return ! $hasRegisteredAdmin || $setupWindow->isOpen();
     }
 }
