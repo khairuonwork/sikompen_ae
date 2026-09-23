@@ -71,8 +71,8 @@ export default function Welcome({
                                 </div>
                             </CardHeader>
                             <CardContent className="pt-6 space-y-3">
-                                <Button 
-                                    asChild 
+                                <Button
+                                    asChild
                                     className="w-full bg-[#395886] hover:bg-[#1E293B] text-white rounded-2xl shadow-md hover:shadow-xl active:scale-95 transition-all duration-300 font-bold text-xs py-3"
                                 >
                                     <Link

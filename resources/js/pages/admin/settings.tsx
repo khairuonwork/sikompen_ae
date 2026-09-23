@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { Form, Head, Link } from '@inertiajs/react';
-import { 
-    Clock3, 
-    Copy, 
-    Check, 
-    LockKeyhole, 
-    Settings, 
-    UserPlus, 
-    ArrowLeft, 
-    ShieldCheck, 
-    AlertCircle 
+import {
+    Clock3,
+    Copy,
+    Check,
+    LockKeyhole,
+    Settings,
+    UserPlus,
+    ArrowLeft,
+    ShieldCheck,
+    AlertCircle
 } from 'lucide-react';
 import {
     disable,
@@ -85,8 +85,8 @@ export default function AdminSettings({
                                 </h1>
                             </div>
                         </div>
-                        <Button 
-                            asChild 
+                        <Button
+                            asChild
                             variant="outline"
                             className="border-[#8AAEE0] text-[#395886] bg-white/80 hover:bg-[#395886] hover:text-white hover:border-[#395886] transition-all duration-300 rounded-2xl font-bold text-xs px-4 py-2.5 active:scale-95 shadow-2xs"
                         >
@@ -171,7 +171,7 @@ export default function AdminSettings({
 
                         <CardFooter className="flex flex-wrap justify-end gap-3 border-t border-[#F0F3FA] pt-6 pb-6 px-6 bg-[#F0F3FA]/40">
                             {setupWindow.isOpen && (
-                                <Form 
+                                <Form
                                     method="delete"
                                     {...sikompenForm({ action: disable.url() })}
                                 >
@@ -189,13 +189,13 @@ export default function AdminSettings({
                                 </Form>
                             )}
 
-                            <Form 
+                            <Form
                                 method="post"
                                 {...sikompenForm({ action: enable.url() })}
                             >
                                 {({ processing }) => (
-                                    <Button 
-                                        type="submit" 
+                                    <Button
+                                        type="submit"
                                         disabled={processing}
                                         className="bg-[#395886] hover:bg-[#1E293B] text-white rounded-2xl shadow-md hover:shadow-xl active:scale-95 transition-all duration-300 font-bold text-xs px-6 py-2.5"
                                     >
