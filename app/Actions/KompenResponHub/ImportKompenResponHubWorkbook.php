@@ -46,6 +46,7 @@ class ImportKompenResponHubWorkbook
                     'class_count' => $preview['class_count'],
                     'student_count' => $preview['student_count'],
                     'detail_count' => $preview['detail_count'],
+                    'quality_report' => $this->qualityReport($payload),
                     'imported_at' => now(),
                 ]);
 
@@ -124,8 +125,53 @@ class ImportKompenResponHubWorkbook
                 ];
             });
 
-        Cache::forget(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_KEY);
+        Cache::forever(
+            KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_VERSION_KEY,
+            (int) Cache::get(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_VERSION_KEY, 1) + 1,
+        );
 
         return $result;
+    }
+
+    /**
+     * Persist a concise, human-readable validation result with the import.
+     * The parser has already rejected malformed workbooks before this action
+     * executes, so every check recorded here represents accepted source data.
+     *
+     * @param  array{preview: array{periode_semester: ?string, classes: list<string>, class_count: int, student_count: int, detail_count: int}, students: list<array<string, mixed>>, details: list<array<string, mixed>>}  $payload
+     * @return array{status: string, checks: list<array{label: string, status: string, detail: string}>}
+     */
+    private function qualityReport(array $payload): array
+    {
+        $preview = $payload['preview'];
+        $studentsWithDebt = collect($payload['students'])
+            ->filter(fn (array $student): bool => (float) $student['total_hutang_jam'] > 0)
+            ->count();
+
+        return [
+            'status' => 'passed',
+            'checks' => [
+                [
+                    'label' => 'Struktur workbook',
+                    'status' => 'passed',
+                    'detail' => 'Sheet, kolom wajib, dan periode berhasil dibaca.',
+                ],
+                [
+                    'label' => 'Identitas mahasiswa',
+                    'status' => 'passed',
+                    'detail' => sprintf('%d mahasiswa pada %d kelas siap diimpor.', $preview['student_count'], $preview['class_count']),
+                ],
+                [
+                    'label' => 'Detail Kompen',
+                    'status' => 'passed',
+                    'detail' => sprintf('%d detail Kompen/Responsi tervalidasi.', $preview['detail_count']),
+                ],
+                [
+                    'label' => 'Ringkasan hutang',
+                    'status' => 'passed',
+                    'detail' => sprintf('%d mahasiswa memiliki jam Kompen atau Responsi.', $studentsWithDebt),
+                ],
+            ],
+        ];
     }
 }

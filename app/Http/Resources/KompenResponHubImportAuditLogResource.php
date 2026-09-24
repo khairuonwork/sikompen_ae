@@ -30,6 +30,10 @@ class KompenResponHubImportAuditLogResource extends JsonResource
             'class_count' => $this->class_count,
             'student_count' => $this->student_count,
             'detail_count' => $this->detail_count,
+            'quality_report' => $this->when(
+                $this->relationLoaded('sourceImport') && $this->sourceImport !== null,
+                $this->sourceImport?->quality_report,
+            ),
             'occurred_at' => $this->occurred_at->toIso8601String(),
         ];
     }

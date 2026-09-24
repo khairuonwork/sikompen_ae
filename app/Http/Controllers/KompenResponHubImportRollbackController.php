@@ -77,7 +77,10 @@ class KompenResponHubImportRollbackController extends Controller
                 ->with('error', 'Belum ada unggahan yang dapat dihapus.');
         }
 
-        Cache::forget(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_KEY);
+        Cache::forever(
+            KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_VERSION_KEY,
+            (int) Cache::get(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_VERSION_KEY, 1) + 1,
+        );
         Storage::disk('local')->delete($rollback['stored_path']);
         $admin = is_int($actor['id'])
             ? KompenResponHubAdmin::query()->find($actor['id'])

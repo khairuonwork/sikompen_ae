@@ -69,6 +69,7 @@ class SiAdminProxyAccess
         $email = $request->session()->get('si_admin_proxy.email');
         $role = $request->session()->get('si_admin_proxy.role');
         $userId = $request->session()->get('si_admin_proxy.user_id');
+        $studentNim = $request->session()->get('si_admin_proxy.student_nim', '');
 
         $sessionAgeInSeconds = is_int($authenticatedAt)
             ? now()->getTimestamp() - $authenticatedAt
@@ -83,6 +84,18 @@ class SiAdminProxyAccess
             && is_string($role)
             && in_array($role, config('si-admin-proxy.allowed_roles'), true)
             && is_string($userId)
-            && preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/', $userId) === 1;
+            && preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/', $userId) === 1
+            && ($role !== 'mahasiswa' || (is_string($studentNim) && preg_match('/^[0-9]{9,20}$/', $studentNim) === 1));
+    }
+
+    public function studentNim(Request $request): ?string
+    {
+        if (! config('si-admin-proxy.enabled') || $this->hasAdminAccess($request)) {
+            return null;
+        }
+
+        $studentNim = $request->session()->get('si_admin_proxy.student_nim');
+
+        return is_string($studentNim) ? $studentNim : null;
     }
 }

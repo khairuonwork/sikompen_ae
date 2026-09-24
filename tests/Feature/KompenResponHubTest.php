@@ -43,6 +43,27 @@ test('the public page and data API do not require a login', function () {
     $this->get('/admin/login')->assertOk();
 });
 
+test('the admin landing page provides a period-aware operational summary', function () {
+    $student = createStudent();
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->get('/admin')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('activeTab', 'dashboard')
+            ->where('dashboard.summary.total_students', 1)
+            ->where('dashboard.summary.outstanding_students', 1)
+            ->has('dashboard.worklist.temporary_candidates')
+            ->has('dashboard.worklist.fixed_candidates')
+            ->has('dashboard.worklist.warnings_to_follow_up'),
+        );
+
+    $this->actingAs($admin, 'admin')->getJson("/admin/kompen-respon/students/{$student->id}/overview")
+        ->assertOk()
+        ->assertJsonPath('data.summary.nim', $student->nim)
+        ->assertJsonPath('data.source.total_kompensasi_jam', '1.5000');
+});
+
 test('the dynamic filters only expose uploaded periods and filter their records', function () {
     createStudent();
     $otherImport = KompenResponHubImport::create([
@@ -242,6 +263,8 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
         ->and($import->uploaded_by_admin_id)->toBe($admin->id)
         ->and($import->uploader_name)->toBe('Khairul Anwar')
         ->and($import->uploader_email)->toBe($admin->email)
+        ->and($import->quality_report['status'])->toBe('passed')
+        ->and($import->quality_report['checks'])->toHaveCount(4)
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.completed')->exists())->toBeTrue();
 
     $this->actingAs($admin, 'admin')->get('/admin?tab=imports')
@@ -251,7 +274,8 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
             ->has('imports.data', 1)
             ->where('imports.data.0.event_type', 'upload')
             ->where('imports.data.0.actor_name', 'Khairul Anwar')
-            ->where('imports.data.0.actor_email', $admin->email),
+            ->where('imports.data.0.actor_email', $admin->email)
+            ->where('imports.data.0.quality_report.status', 'passed'),
         );
 
     $this->getJson('/api/kompen-respon/details?nim=123456789')

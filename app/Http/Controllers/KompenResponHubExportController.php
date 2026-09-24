@@ -28,6 +28,11 @@ class KompenResponHubExportController extends Controller
             ->only(['nim', 'nama', 'search', 'kelas', 'tingkat', 'periode_semester', 'mata_kuliah', 'nama_dosen'])
             ->filter(fn (mixed $value): bool => filled($value))
             ->all();
+        $studentNim = $access->studentNim($request);
+
+        if ($studentNim !== null) {
+            $filters['nim'] = $studentNim;
+        }
 
         $task = KompenResponHubExportTask::create([
             'request_session_id' => $request->session()->getId(),

@@ -12,6 +12,7 @@ use App\Http\Resources\KompenResponHubImportAuditLogResource;
 use App\Http\Resources\KompenResponHubImportTaskResource;
 use App\Http\Resources\KompenResponHubStudentResource;
 use App\Http\Resources\KompenResponHubWarningLetterResource;
+use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubExportTask;
 use App\Models\KompenResponHubImport;
@@ -43,7 +44,7 @@ class KompenResponHubController extends Controller
 
     public function students(KompenResponHubTableRequest $request): JsonResponse
     {
-        $filters = $request->validated();
+        $filters = $this->filtersForRequest($request);
 
         return KompenResponHubStudentResource::collection(
             $this->dataQuery->students($filters)->paginate($this->perPage($filters))->withQueryString(),
@@ -52,7 +53,7 @@ class KompenResponHubController extends Controller
 
     public function details(KompenResponHubTableRequest $request): JsonResponse
     {
-        $filters = $request->validated();
+        $filters = $this->filtersForRequest($request);
 
         return KompenResponHubDetailResource::collection(
             $this->dataQuery->details($filters)->paginate($this->perPage($filters))->withQueryString(),
@@ -61,6 +62,9 @@ class KompenResponHubController extends Controller
 
     public function student(KompenResponHubStudent $student): JsonResponse
     {
+        $studentNim = $this->proxyAccess->studentNim(request());
+        abort_if($studentNim !== null && $student->nim !== $studentNim, 404);
+
         $student->load([
             'details' => fn ($query) => $query->orderByDesc('tanggal')->with('student'),
         ]);
@@ -73,15 +77,56 @@ class KompenResponHubController extends Controller
         ]);
     }
 
-    public function filterOptions(): JsonResponse
+    public function adminStudentOverview(KompenResponHubStudent $student): JsonResponse
     {
-        return response()->json($this->dataQuery->filterOptions());
+        $student->load([
+            'importBatch:id,original_filename,imported_at',
+            'progress',
+            'summaryOverride',
+            'latestWarning',
+            'details' => fn ($query) => $query->orderByDesc('tanggal')->with(['override', 'student']),
+        ]);
+
+        $warnings = $this->dataQuery->warnings([
+            'nim' => $student->nim,
+            'periode_semester' => $student->periode_semester,
+            'kelas' => $student->kelas,
+        ])->get();
+
+        $activities = KompenResponHubActivityLog::query()
+            ->where('nim', $student->nim)
+            ->where('periode_semester', $student->periode_semester)
+            ->where('kelas', $student->kelas)
+            ->latest('occurred_at')
+            ->limit(20)
+            ->get();
+
+        return response()->json([
+            'data' => [
+                'summary' => new KompenResponHubStudentResource($student),
+                'source' => [
+                    'import_filename' => $student->importBatch?->original_filename,
+                    'imported_at' => $student->importBatch?->imported_at?->toIso8601String(),
+                    'total_kompensasi_jam' => $student->total_kompensasi_jam,
+                    'total_responsi_jam' => $student->total_responsi_jam,
+                    'sisa_hutang_jam' => $student->sisa_hutang_jam,
+                ],
+                'details' => KompenResponHubDetailResource::collection($student->details),
+                'warnings' => KompenResponHubWarningLetterResource::collection($warnings),
+                'activities' => KompenResponHubActivityLogResource::collection($activities),
+            ],
+        ]);
+    }
+
+    public function filterOptions(KompenResponHubTableRequest $request): JsonResponse
+    {
+        return response()->json($this->dataQuery->filterOptions($this->filtersForRequest($request)));
     }
 
     private function index(KompenResponHubTableRequest $request, bool $isAdmin): Response
     {
-        $filters = $request->validated();
-        $activeTab = $filters['tab'] ?? ($isAdmin ? 'upload' : 'students');
+        $filters = $this->filtersForRequest($request);
+        $activeTab = $filters['tab'] ?? ($isAdmin ? 'dashboard' : 'students');
         $hasActiveImportTask = $isAdmin && KompenResponHubImportTask::query()
             ->whereIn('status', [
                 KompenResponHubImportTask::STATUS_QUEUED,
@@ -89,7 +134,7 @@ class KompenResponHubController extends Controller
             ])
             ->exists();
 
-        if (! $isAdmin && in_array($activeTab, ['upload', 'imports', 'warnings', 'activity'], true)) {
+        if (! $isAdmin && in_array($activeTab, ['dashboard', 'upload', 'imports', 'warnings', 'activity'], true)) {
             $activeTab = 'students';
         }
 
@@ -99,6 +144,12 @@ class KompenResponHubController extends Controller
             'isProxySession' => $this->proxyAccess->hasValidProxySession($request),
             'filters' => $filters,
             'filterOptions' => $this->dataQuery->filterOptions(),
+            'activityFilterOptions' => $isAdmin && $activeTab === 'activity'
+                ? $this->dataQuery->activityFilterOptions()
+                : ['event_types' => [], 'actor_emails' => []],
+            'dashboard' => $isAdmin && $activeTab === 'dashboard'
+                ? $this->dashboardData($filters)
+                : null,
             'cutoffs' => $isAdmin
                 ? KompenResponHubPeriodCutoff::query()
                     ->orderByDesc('deadline_at')
@@ -145,7 +196,7 @@ class KompenResponHubController extends Controller
                 : null,
             'imports' => $isAdmin && $activeTab === 'imports'
                 ? $this->resourcePaginator(
-                    $this->dataQuery->importAuditLogs()->paginate($this->perPage($filters))->withQueryString(),
+                    $this->dataQuery->importAuditLogs($filters)->paginate($this->perPage($filters))->withQueryString(),
                     KompenResponHubImportAuditLogResource::class,
                 )
                 : null,
@@ -187,6 +238,37 @@ class KompenResponHubController extends Controller
     private function perPage(array $filters): int
     {
         return (int) ($filters['per_page'] ?? 15);
+    }
+
+    /** @return array<string, mixed> */
+    private function filtersForRequest(KompenResponHubTableRequest $request): array
+    {
+        $filters = $request->validated();
+        $studentNim = $this->proxyAccess->studentNim($request);
+
+        if ($studentNim !== null) {
+            $filters['nim'] = $studentNim;
+        }
+
+        return $filters;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function dashboardData(array $filters): array
+    {
+        $worklist = $this->dataQuery->adminWorklist($filters);
+
+        return [
+            'summary' => $this->dataQuery->dashboardSummary($filters),
+            'worklist' => [
+                'temporary_candidates' => KompenResponHubStudentResource::collection($worklist['temporary']->get())->resolve(),
+                'fixed_candidates' => KompenResponHubStudentResource::collection($worklist['fixed']->get())->resolve(),
+                'warnings_to_follow_up' => KompenResponHubWarningLetterResource::collection($worklist['warnings']->get())->resolve(),
+            ],
+        ];
     }
 
     /**
