@@ -169,6 +169,7 @@ class KompenResponHubDataQuery
         $studentTable = (new KompenResponHubStudent)->getTable();
         $effectiveDebt = $this->effectiveDebtExpression($studentTable);
         $summary = $this->students($filters)
+            ->reorder()
             ->toBase()
             ->selectRaw('COUNT(*) as total_students')
             ->selectRaw("SUM(CASE WHEN ({$effectiveDebt}) > 0 THEN 1 ELSE 0 END) as outstanding_students")
