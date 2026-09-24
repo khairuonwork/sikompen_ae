@@ -1,4 +1,4 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, router } from '@inertiajs/react';
 import {
     Download,
     FileText,
@@ -18,6 +18,8 @@ import {
     ShieldAlert,
     Clock3,
     Save,
+    X,
+    Trash2,
 } from 'lucide-react';
 import { type DragEvent, useEffect, useState } from 'react';
 import {
@@ -30,13 +32,10 @@ import { show as importTaskStatus } from '@/actions/App/Http/Controllers/KompenR
 import { destroy as logout } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
 import { settings as adminSettings } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
 import {
-    details as downloadDetails,
-    detailsPdf as downloadDetailsPdf,
-    students as downloadStudents,
-    studentsPdf as downloadStudentsPdf,
-    warnings as downloadWarnings,
-    warningsPdf as downloadWarningsPdf,
-} from '@/actions/App/Http/Controllers/KompenResponHubDownloadController';
+    download as downloadExport,
+    show as exportTaskStatus,
+    store as storeExport,
+} from '@/actions/App/Http/Controllers/KompenResponHubExportController';
 import {
     storeCutoff,
     storeDetailOverride,
@@ -44,6 +43,7 @@ import {
     storeSummaryOverride,
     storeWarning,
     updateWarning,
+    destroyWarning,
 } from '@/actions/App/Http/Controllers/KompenResponHubLifecycleController';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -134,6 +134,7 @@ type ActivityLog = {
     event_type: string;
     subject_type: string;
     nim: string | null;
+    subject_name: string | null;
     periode_semester: string | null;
     kelas: string | null;
     actor_type: string;
@@ -175,6 +176,21 @@ type ImportTask = {
     completed_at: string | null;
 };
 
+type ExportTask = {
+    id: number;
+    access_token: string;
+    resource: 'students' | 'details' | 'warnings';
+    format: 'xlsx' | 'pdf';
+    status: 'queued' | 'processing' | 'completed' | 'failed';
+    progress: number;
+    progress_message: string;
+    download_filename: string | null;
+    error_message: string | null;
+    queued_at: string | null;
+    completed_at: string | null;
+    expires_at: string | null;
+};
+
 type Pagination<T> = {
     data: T[];
     links: { prev: string | null; next: string | null };
@@ -182,6 +198,8 @@ type Pagination<T> = {
 };
 
 type Filters = {
+    nim?: string;
+    nama?: string;
     search?: string;
     tingkat?: number;
     kelas?: string;
@@ -207,9 +225,11 @@ type KompenResponHubPageProps = {
     imports: Pagination<ImportAuditLog> | null;
     warnings: Pagination<Warning> | null;
     temporaryCandidates: Pagination<Student> | null;
+    fixedCandidates: Pagination<Student> | null;
     activityLogs: Pagination<ActivityLog> | null;
     cutoffs: Cutoff[];
     activeImportTasks: ImportTask[];
+    exportTasks: ExportTask[];
     canRollbackLatestImport: boolean;
 };
 
@@ -231,6 +251,22 @@ function number(value: string): string {
     return new Intl.NumberFormat('id-ID', {
         maximumFractionDigits: 2,
     }).format(Number(value));
+}
+
+function datetimeLocalValue(value: string, timeZone: string): string {
+    const dateParts = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+    }).formatToParts(new Date(value));
+    const part = (type: Intl.DateTimeFormatPartTypes): string =>
+        dateParts.find((item) => item.type === type)?.value ?? '';
+
+    return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}`;
 }
 
 function Pager<T>({ data }: { data: Pagination<T> }): React.JSX.Element {
@@ -785,6 +821,172 @@ function ImportProgressPanel({
     );
 }
 
+function queueExport(
+    resource: ExportTask['resource'],
+    format: ExportTask['format'],
+    filters: Filters,
+): void {
+    router.post(
+        storeExport.url(),
+        {
+            resource,
+            format,
+            nim: filters.nim,
+            nama: filters.nama,
+            search: filters.search,
+            kelas: filters.kelas,
+            tingkat: filters.tingkat,
+            periode_semester: filters.periode_semester,
+        },
+        { preserveScroll: true },
+    );
+}
+
+function ExportProgressPanel({
+    initialExportTasks,
+}: {
+    initialExportTasks: ExportTask[];
+}): React.JSX.Element | null {
+    const [exportTasks, setExportTasks] = useState(initialExportTasks);
+    const activeTaskIds = exportTasks
+        .filter(
+            (task) => task.status === 'queued' || task.status === 'processing',
+        )
+        .map((task) => task.id);
+    const activeTaskKey = activeTaskIds.join(',');
+
+    useEffect(() => {
+        setExportTasks(initialExportTasks);
+    }, [initialExportTasks]);
+
+    useEffect(() => {
+        if (activeTaskIds.length === 0) {
+            return;
+        }
+
+        let isMounted = true;
+        const refreshProgress = async (): Promise<void> => {
+            try {
+                const updatedTasks: ExportTask[] = [];
+
+                for (const exportTaskId of activeTaskIds) {
+                    const task = exportTasks.find(
+                        (currentTask) => currentTask.id === exportTaskId,
+                    );
+                    if (!task) {
+                        continue;
+                    }
+
+                    const response = await fetch(
+                        exportTaskStatus.url(exportTaskId, {
+                            query: { token: task.access_token },
+                        }),
+                        {
+                            credentials: 'same-origin',
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        },
+                    );
+
+                    if (!response.ok) {
+                        throw new Error('Status ekspor tidak dapat dimuat.');
+                    }
+
+                    const payload: { data: ExportTask } = await response.json();
+                    updatedTasks.push(payload.data);
+                }
+
+                if (!isMounted) {
+                    return;
+                }
+
+                setExportTasks((currentTasks) =>
+                    currentTasks.map(
+                        (task) =>
+                            updatedTasks.find(
+                                (updatedTask) => updatedTask.id === task.id,
+                            ) ?? task,
+                    ),
+                );
+            } catch {
+                return;
+            }
+        };
+
+        void refreshProgress();
+        const interval = window.setInterval(() => {
+            void refreshProgress();
+        }, 1500);
+
+        return () => {
+            isMounted = false;
+            window.clearInterval(interval);
+        };
+    }, [activeTaskKey]);
+
+    if (exportTasks.length === 0) {
+        return null;
+    }
+
+    return (
+        <section className="grid gap-3" aria-live="polite">
+            {exportTasks.map((task) => (
+                <div
+                    key={task.id}
+                    className="grid gap-3 rounded-3xl border border-white/80 bg-white/85 p-4 shadow-sm"
+                >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <p className="text-sm font-extrabold text-[#395886]">
+                                Ekspor{' '}
+                                {task.resource === 'students'
+                                    ? 'Kompen dan Respon'
+                                    : task.resource === 'details'
+                                      ? 'Detail Kompen'
+                                      : 'Surat Peringatan'}{' '}
+                                · {task.format.toUpperCase()}
+                            </p>
+                            <p className="mt-0.5 text-xs text-[#395886]/70">
+                                {task.progress_message}
+                            </p>
+                        </div>
+                        {task.status === 'completed' ? (
+                            <Button
+                                asChild
+                                size="sm"
+                                className="rounded-xl bg-[#395886] text-xs font-bold"
+                            >
+                                <a
+                                    href={downloadExport.url(task.id, {
+                                        query: { token: task.access_token },
+                                    })}
+                                >
+                                    <Download className="mr-1.5 size-3.5" />
+                                    Unduh file
+                                </a>
+                            </Button>
+                        ) : task.status === 'failed' ? (
+                            <span className="text-xs font-bold text-rose-600">
+                                {task.error_message}
+                            </span>
+                        ) : (
+                            <span className="font-mono text-xs font-bold text-[#395886]">
+                                {task.progress}%
+                            </span>
+                        )}
+                    </div>
+                    {task.status === 'queued' ||
+                    task.status === 'processing' ? (
+                        <ProgressBar value={task.progress} />
+                    ) : null}
+                </div>
+            ))}
+        </section>
+    );
+}
+
 function UploadPanel({
     onUploadRequestActivityChange,
 }: {
@@ -912,30 +1114,6 @@ function FilterPanel({
         filters.per_page?.toString() ?? '15',
     );
     const indexAction = isAdmin ? adminIndex : studentIndex;
-    const spreadsheetDownloadAction =
-        activeTab === 'students' ? downloadStudents : downloadDetails;
-    const pdfDownloadAction =
-        activeTab === 'students' ? downloadStudentsPdf : downloadDetailsPdf;
-    const downloadQuery = {
-        search: filters.search,
-        tingkat: tingkat || undefined,
-        kelas: kelas || undefined,
-        periode_semester: periode,
-    };
-    const spreadsheetDownloadUrl = periode
-        ? spreadsheetDownloadAction.url({
-              query: {
-                  ...downloadQuery,
-              },
-          })
-        : null;
-    const pdfDownloadUrl = periode
-        ? pdfDownloadAction.url({
-              query: {
-                  ...downloadQuery,
-              },
-          })
-        : null;
 
     return (
         <Form
@@ -1078,42 +1256,31 @@ function FilterPanel({
                 >
                     Reset filter
                 </Link>
-                {spreadsheetDownloadUrl && pdfDownloadUrl ? (
-                    <div className="flex flex-wrap gap-2">
-                        <Button
-                            asChild
-                            size="sm"
-                            variant="outline"
-                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white"
-                        >
-                            <a
-                                href={spreadsheetDownloadUrl}
-                                className="flex items-center gap-1.5"
-                            >
-                                <FileSpreadsheet className="size-3.5" />
-                                Download XLSX
-                            </a>
-                        </Button>
-                        <Button
-                            asChild
-                            size="sm"
-                            variant="outline"
-                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white"
-                        >
-                            <a
-                                href={pdfDownloadUrl}
-                                className="flex items-center gap-1.5"
-                            >
-                                <FileText className="size-3.5" />
-                                Download PDF
-                            </a>
-                        </Button>
-                    </div>
-                ) : (
-                    <span className="text-xs font-semibold text-[#395886]/70 italic">
-                        Pilih periode untuk mengunduh data.
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-[#395886]/70">
+                        Tanpa filter berarti seluruh data.
                     </span>
-                )}
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => queueExport(activeTab, 'xlsx', filters)}
+                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs hover:bg-[#395886] hover:text-white"
+                    >
+                        <FileSpreadsheet className="mr-1.5 size-3.5" />
+                        Buat XLSX
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => queueExport(activeTab, 'pdf', filters)}
+                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs hover:bg-[#395886] hover:text-white"
+                    >
+                        <FileText className="mr-1.5 size-3.5" />
+                        Buat PDF
+                    </Button>
+                </div>
             </div>
         </Form>
     );
@@ -1145,22 +1312,36 @@ function EditModeControl({
 
 function StudentCorrectionPanel({
     student,
+    onClose,
 }: {
     student: Student;
+    onClose: () => void;
 }): React.JSX.Element {
     return (
         <section className="grid gap-4 rounded-3xl border border-[#8AAEE0]/60 bg-white/90 p-5 shadow-sm">
-            <div>
-                <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
-                    Mahasiswa dipilih
-                </p>
-                <h3 className="mt-1 text-base font-extrabold text-[#395886]">
-                    {student.nama_mahasiswa} · {student.nim}
-                </h3>
-                <p className="mt-1 text-xs text-[#395886]/70">
-                    Simpan setiap koreksi dengan alasan agar jejak audit tetap
-                    lengkap.
-                </p>
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
+                        Mahasiswa dipilih
+                    </p>
+                    <h3 className="mt-1 text-base font-extrabold text-[#395886]">
+                        {student.nama_mahasiswa} · {student.nim}
+                    </h3>
+                    <p className="mt-1 text-xs text-[#395886]/70">
+                        Simpan setiap koreksi dengan alasan agar jejak audit
+                        tetap lengkap.
+                    </p>
+                </div>
+                <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    onClick={onClose}
+                    className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]"
+                    aria-label="Tutup panel perbaikan"
+                >
+                    <X className="size-4" />
+                </Button>
             </div>
             <div className="grid gap-4 xl:grid-cols-2">
                 <Form
@@ -1288,8 +1469,10 @@ function StudentCorrectionPanel({
 
 function DetailCorrectionPanel({
     detail,
+    onClose,
 }: {
     detail: Detail;
+    onClose: () => void;
 }): React.JSX.Element {
     return (
         <Form
@@ -1298,13 +1481,25 @@ function DetailCorrectionPanel({
         >
             {({ errors, processing }) => (
                 <>
-                    <div className="md:col-span-2">
-                        <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
-                            Detail dipilih
-                        </p>
-                        <h3 className="mt-1 text-base font-extrabold text-[#395886]">
-                            {detail.nama_mahasiswa} · {detail.mata_kuliah}
-                        </h3>
+                    <div className="flex items-start justify-between gap-4 md:col-span-2">
+                        <div>
+                            <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
+                                Detail dipilih
+                            </p>
+                            <h3 className="mt-1 text-base font-extrabold text-[#395886]">
+                                {detail.nama_mahasiswa} · {detail.mata_kuliah}
+                            </h3>
+                        </div>
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            onClick={onClose}
+                            className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]"
+                            aria-label="Tutup panel perbaikan"
+                        >
+                            <X className="size-4" />
+                        </Button>
                     </div>
                     <Input
                         name="tanggal"
@@ -1429,30 +1624,35 @@ function WarningStatusBadge({
     );
 }
 
-function TemporaryCandidateTable({
+function WarningCandidateTable({
     data,
+    classification,
     selectedStudentId,
     onSelect,
 }: {
     data: Pagination<Student>;
+    classification: 'temporary' | 'fixed';
     selectedStudentId: number | null;
     onSelect: (student: Student) => void;
 }): React.JSX.Element {
+    const isTemporary = classification === 'temporary';
+
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
             <div className="flex flex-col justify-between gap-2 border-b border-[#F0F3FA] px-5 py-4 sm:flex-row sm:items-center">
                 <div>
                     <h2 className="text-base font-extrabold text-[#395886]">
-                        Kandidat sementara
+                        {isTemporary ? 'Kandidat sementara' : 'Kandidat final'}
                     </h2>
                     <p className="mt-0.5 text-xs text-[#395886]/70">
-                        Mahasiswa dengan sisa jam pada periode yang batas
-                        waktunya belum lewat. Pilih satu untuk membuat draft
-                        SP-1.
+                        {isTemporary
+                            ? 'Mahasiswa dengan sisa jam pada periode yang batas waktunya belum lewat.'
+                            : 'Mahasiswa dengan sisa jam setelah batas waktu periode terlewati.'}{' '}
+                        Pilih satu untuk membuat atau membuat ulang draft SP-1.
                     </p>
                 </div>
                 <span className="w-fit rounded-full bg-[#B1C9EF]/40 px-3 py-1 text-xs font-bold text-[#395886]">
-                    Temporary
+                    {isTemporary ? 'Temporary' : 'Fixed'}
                 </span>
             </div>
             <div className="overflow-x-auto">
@@ -1583,38 +1783,30 @@ function WarningPanel({
     filters,
     warnings,
     temporaryCandidates,
+    fixedCandidates,
     selectedWarning,
     onSelectWarning,
+    onCloseWarning,
 }: {
     cutoffs: Cutoff[];
     filterOptions: FilterOptions;
     filters: Filters;
     warnings: Pagination<Warning> | null;
     temporaryCandidates: Pagination<Student> | null;
+    fixedCandidates: Pagination<Student> | null;
     selectedWarning: Warning | null;
     onSelectWarning: (warning: Warning) => void;
+    onCloseWarning: () => void;
 }): React.JSX.Element {
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(
         null,
     );
-    const warningDownloadUrl = filters.periode_semester
-        ? downloadWarnings.url({
-              query: {
-                  search: filters.search,
-                  kelas: filters.kelas,
-                  periode_semester: filters.periode_semester,
-              },
-          })
-        : null;
-    const warningPdfDownloadUrl = filters.periode_semester
-        ? downloadWarningsPdf.url({
-              query: {
-                  search: filters.search,
-                  kelas: filters.kelas,
-                  periode_semester: filters.periode_semester,
-              },
-          })
-        : null;
+    const [selectedCutoffPeriod, setSelectedCutoffPeriod] = useState(
+        filters.periode_semester ?? '',
+    );
+    const selectedCutoff = cutoffs.find(
+        (cutoff) => cutoff.periode_semester === selectedCutoffPeriod,
+    );
 
     return (
         <section className="grid gap-4">
@@ -1680,6 +1872,10 @@ function WarningPanel({
                             <select
                                 name="periode_semester"
                                 required
+                                value={selectedCutoffPeriod}
+                                onChange={(event) =>
+                                    setSelectedCutoffPeriod(event.target.value)
+                                }
                                 className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
                             >
                                 <option value="">Pilih periode</option>
@@ -1692,9 +1888,18 @@ function WarningPanel({
                                 )}
                             </select>
                             <Input
+                                key={selectedCutoff?.id ?? 'new-cutoff'}
                                 name="deadline_at"
                                 type="datetime-local"
                                 required
+                                defaultValue={
+                                    selectedCutoff
+                                        ? datetimeLocalValue(
+                                              selectedCutoff.deadline_at,
+                                              selectedCutoff.timezone,
+                                          )
+                                        : ''
+                                }
                             />
                             {errors.deadline_at ? (
                                 <p className="text-xs font-bold text-rose-600">
@@ -1724,45 +1929,44 @@ function WarningPanel({
                         </>
                     )}
                 </Form>
+                <div className="grid content-start gap-2 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm">
+                    <h2 className="text-lg font-extrabold text-[#395886]">
+                        Tambah SP-1 manual
+                    </h2>
+                    <p className="text-xs leading-relaxed text-[#395886]/70">
+                        Pilih mahasiswa pada tabel kandidat. Form pembuatan
+                        draft akan muncul setelah satu kandidat dipilih.
+                    </p>
+                </div>
+            </div>
+            {selectedStudent ? (
                 <Form
                     {...storeWarning.form()}
-                    className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm"
+                    className="grid gap-3 rounded-3xl border border-[#8AAEE0]/60 bg-white p-5 shadow-sm md:grid-cols-[1fr_minmax(240px,1.5fr)_auto]"
                 >
                     {({ processing, errors }) => (
                         <>
                             <div>
-                                <h2 className="text-lg font-extrabold text-[#395886]">
-                                    Tambah SP-1 manual
-                                </h2>
+                                <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
+                                    Kandidat dipilih
+                                </p>
+                                <p className="mt-1 text-sm font-extrabold text-[#395886]">
+                                    {selectedStudent.nama_mahasiswa} ·{' '}
+                                    {selectedStudent.nim}
+                                </p>
                                 <p className="mt-1 text-xs text-[#395886]/70">
-                                    Pilih kandidat pada tabel di bawah. Sistem
-                                    menyimpan snapshot sisa jam saat ini.
+                                    Sisa{' '}
+                                    {number(
+                                        selectedStudent.effective_sisa_hutang_jam,
+                                    )}{' '}
+                                    jam.
                                 </p>
                             </div>
                             <input
                                 name="student_id"
                                 type="hidden"
-                                value={selectedStudent?.id ?? ''}
-                                required
+                                value={selectedStudent.id}
                             />
-                            <div className="rounded-xl border border-[#D5DEEF] bg-[#F0F3FA]/70 px-3 py-2.5 text-xs text-[#395886]">
-                                {selectedStudent ? (
-                                    <span>
-                                        <strong>
-                                            {selectedStudent.nama_mahasiswa}
-                                        </strong>
-                                        {' · '}
-                                        {selectedStudent.nim}
-                                        {' · sisa '}
-                                        {number(
-                                            selectedStudent.effective_sisa_hutang_jam,
-                                        )}
-                                        {' jam'}
-                                    </span>
-                                ) : (
-                                    'Belum ada mahasiswa yang dipilih.'
-                                )}
-                            </div>
                             <Input
                                 name="reason"
                                 required
@@ -1770,28 +1974,37 @@ function WarningPanel({
                                 maxLength={1000}
                                 placeholder="Alasan pembuatan draft SP-1"
                             />
-                            {errors.student_id ? (
-                                <p className="text-xs font-bold text-rose-600">
-                                    {errors.student_id}
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                    disabled={processing}
+                                    type="submit"
+                                    className="rounded-xl bg-[#395886] text-xs font-bold"
+                                >
+                                    <ShieldAlert className="mr-2 size-4" />
+                                    Buat draft SP-1
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setSelectedStudent(null)}
+                                    className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]"
+                                >
+                                    Batal
+                                </Button>
+                            </div>
+                            {errors.student_id || errors.reason ? (
+                                <p className="text-xs font-bold text-rose-600 md:col-span-3">
+                                    {errors.student_id ?? errors.reason}
                                 </p>
                             ) : null}
-                            <Button
-                                disabled={
-                                    processing || selectedStudent === null
-                                }
-                                type="submit"
-                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
-                            >
-                                <ShieldAlert className="mr-2 size-4" />
-                                Buat draft SP-1
-                            </Button>
                         </>
                     )}
                 </Form>
-            </div>
+            ) : null}
             {temporaryCandidates?.data.length ? (
-                <TemporaryCandidateTable
+                <WarningCandidateTable
                     data={temporaryCandidates}
+                    classification="temporary"
                     selectedStudentId={selectedStudent?.id ?? null}
                     onSelect={setSelectedStudent}
                 />
@@ -1799,6 +2012,19 @@ function WarningPanel({
                 <div className="rounded-3xl border border-dashed border-[#8AAEE0] bg-white/80 p-6 text-center text-xs font-semibold text-[#395886]/70">
                     Tidak ada kandidat sementara. Tambahkan batas waktu untuk
                     periode yang masih berjalan atau periksa sisa jam mahasiswa.
+                </div>
+            )}
+            {fixedCandidates?.data.length ? (
+                <WarningCandidateTable
+                    data={fixedCandidates}
+                    classification="fixed"
+                    selectedStudentId={selectedStudent?.id ?? null}
+                    onSelect={setSelectedStudent}
+                />
+            ) : (
+                <div className="rounded-3xl border border-dashed border-[#8AAEE0] bg-white/80 p-6 text-center text-xs font-semibold text-[#395886]/70">
+                    Kandidat final akan muncul di sini setelah batas waktu
+                    periode terlewati dan masih ada sisa jam.
                 </div>
             )}
             <div className="flex flex-col justify-between gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm sm:flex-row sm:items-center">
@@ -1811,78 +2037,227 @@ function WarningPanel({
                         penerbitan SP-1 tetap dikendalikan admin.
                     </p>
                 </div>
-                {warningDownloadUrl && warningPdfDownloadUrl ? (
-                    <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2">
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => queueExport('warnings', 'xlsx', filters)}
+                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                    >
+                        <FileSpreadsheet className="mr-1.5 size-3.5" />
+                        Buat XLSX
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => queueExport('warnings', 'pdf', filters)}
+                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                    >
+                        <FileText className="mr-1.5 size-3.5" />
+                        Buat PDF
+                    </Button>
+                </div>
+            </div>
+            {selectedWarning ? (
+                <section className="grid gap-4 rounded-3xl border border-[#8AAEE0]/60 bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
+                                SP-1 dipilih
+                            </p>
+                            <h3 className="mt-1 text-base font-extrabold text-[#395886]">
+                                {selectedWarning.nama_mahasiswa} ·{' '}
+                                {selectedWarning.nim}
+                            </h3>
+                        </div>
                         <Button
-                            asChild
-                            size="sm"
+                            type="button"
+                            size="icon"
                             variant="outline"
-                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                            onClick={onCloseWarning}
+                            className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]"
+                            aria-label="Tutup panel SP-1"
                         >
-                            <a href={warningDownloadUrl}>
-                                <FileSpreadsheet className="mr-1.5 size-3.5" />
-                                XLSX
-                            </a>
-                        </Button>
-                        <Button
-                            asChild
-                            size="sm"
-                            variant="outline"
-                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
-                        >
-                            <a href={warningPdfDownloadUrl}>
-                                <FileText className="mr-1.5 size-3.5" />
-                                PDF
-                            </a>
+                            <X className="size-4" />
                         </Button>
                     </div>
-                ) : (
-                    <p className="text-xs font-semibold text-[#395886]/60">
-                        Pilih periode dengan filter untuk mengekspor arsip.
-                    </p>
-                )}
-            </div>
+                    <div className="grid gap-4 xl:grid-cols-2">
+                        <Form
+                            {...updateWarning.form(selectedWarning.id)}
+                            className="grid gap-3 rounded-2xl border border-[#D5DEEF] p-4"
+                        >
+                            {({ processing }) => (
+                                <>
+                                    <p className="text-sm font-bold text-[#395886]">
+                                        Perbarui status SP-1
+                                    </p>
+                                    <select
+                                        name="letter_status"
+                                        defaultValue={
+                                            selectedWarning.letter_status
+                                        }
+                                        className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                                    >
+                                        <option value="draft">
+                                            Draft SP-1
+                                        </option>
+                                        <option value="issued">
+                                            Terbitkan SP-1
+                                        </option>
+                                    </select>
+                                    <Input
+                                        name="reason"
+                                        required
+                                        minLength={5}
+                                        maxLength={1000}
+                                        defaultValue={
+                                            selectedWarning.reason ?? ''
+                                        }
+                                        placeholder="Alasan perubahan status"
+                                    />
+                                    <Button
+                                        disabled={processing}
+                                        type="submit"
+                                        className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                                    >
+                                        <Save className="mr-2 size-4" />
+                                        Simpan status
+                                    </Button>
+                                </>
+                            )}
+                        </Form>
+                        <Form
+                            {...destroyWarning.form(selectedWarning.id)}
+                            className="grid gap-3 rounded-2xl border border-rose-200 bg-rose-50/50 p-4"
+                            onBefore={() =>
+                                window.confirm(
+                                    'Batalkan SP-1 ini? Riwayat audit tetap tersimpan dan mahasiswa dapat dipilih kembali.',
+                                )
+                            }
+                        >
+                            {({ processing }) => (
+                                <>
+                                    <p className="text-sm font-bold text-rose-800">
+                                        Batalkan / hapus dari proses aktif
+                                    </p>
+                                    <p className="text-xs text-rose-700">
+                                        Pembatalan tidak menghapus jejak audit.
+                                        Mahasiswa dapat dipilih lagi untuk
+                                        membuat draft baru.
+                                    </p>
+                                    <Input
+                                        name="reason"
+                                        required
+                                        minLength={5}
+                                        maxLength={1000}
+                                        placeholder="Alasan pembatalan SP-1"
+                                    />
+                                    <Button
+                                        disabled={
+                                            processing ||
+                                            selectedWarning.letter_status ===
+                                                'cancelled'
+                                        }
+                                        type="submit"
+                                        variant="outline"
+                                        className="w-fit rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
+                                    >
+                                        <Trash2 className="mr-2 size-4" />
+                                        Batalkan SP-1
+                                    </Button>
+                                </>
+                            )}
+                        </Form>
+                    </div>
+                </section>
+            ) : null}
             {warnings?.data.length ? (
                 <WarningTable data={warnings} onSelect={onSelectWarning} />
             ) : (
                 <EmptyTableState isAdmin />
             )}
-            {selectedWarning ? (
-                <Form
-                    {...updateWarning.form(selectedWarning.id)}
-                    className="grid gap-3 rounded-3xl border border-[#8AAEE0]/60 bg-white p-5 md:grid-cols-[1fr_1fr_auto]"
-                >
-                    {({ processing }) => (
-                        <>
-                            <select
-                                name="letter_status"
-                                defaultValue={selectedWarning.letter_status}
-                                className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
-                            >
-                                <option value="draft">Draft SP-1</option>
-                                <option value="issued">Terbitkan SP-1</option>
-                                <option value="cancelled">Batalkan SP-1</option>
-                            </select>
-                            <Input
-                                name="reason"
-                                required
-                                minLength={5}
-                                defaultValue={selectedWarning.reason ?? ''}
-                                placeholder="Alasan perubahan status"
-                            />
-                            <Button
-                                disabled={processing}
-                                type="submit"
-                                className="rounded-xl bg-[#395886] text-xs font-bold"
-                            >
-                                <Save className="mr-2 size-4" />
-                                Simpan SP
-                            </Button>
-                        </>
-                    )}
-                </Form>
-            ) : null}
         </section>
+    );
+}
+
+function activityDescription(log: ActivityLog): string {
+    const descriptions: Record<string, string> = {
+        'import.completed': 'Workbook berhasil diimpor',
+        'import.rolled_back': 'Impor terakhir dihapus',
+        'progress.updated': 'Progres pengerjaan diperbarui',
+        'summary.override_updated': 'Total Kompen dan Responsi dikoreksi',
+        'detail.override_updated': 'Detail Kompen dikoreksi',
+        'cutoff.updated': 'Batas waktu periode diperbarui',
+        'warning.drafted': 'Draft SP-1 dibuat',
+        'warning.issued': 'SP-1 diterbitkan',
+        'warning.cancelled': 'SP-1 dibatalkan',
+        'warning.archived': 'Kandidat SP diarsipkan sebagai fixed',
+        'warning.classification_fixed': 'Kandidat SP dipindahkan ke fixed',
+        'warning.classification_temporary':
+            'Kandidat SP dikembalikan ke temporary',
+        'warning.resolution_updated': 'Status penyelesaian SP diperbarui',
+        'export.completed': 'File ekspor selesai dibuat',
+    };
+
+    return (
+        descriptions[log.event_type] ?? log.event_type.replaceAll('.', ' · ')
+    );
+}
+
+function ActivityFilterPanel({
+    filters,
+    filterOptions,
+}: {
+    filters: Filters;
+    filterOptions: FilterOptions;
+}): React.JSX.Element {
+    return (
+        <Form
+            {...adminIndex.form()}
+            className="flex flex-col gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm sm:flex-row sm:items-end"
+        >
+            <input name="tab" type="hidden" value="activity" />
+            <div className="grid flex-1 gap-1.5">
+                <Label
+                    htmlFor="activity-period"
+                    className="text-xs font-bold text-[#395886]"
+                >
+                    Periode aktivitas
+                </Label>
+                <select
+                    id="activity-period"
+                    name="periode_semester"
+                    defaultValue={filters.periode_semester ?? ''}
+                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                >
+                    <option value="">Semua periode</option>
+                    {filterOptions.periode_semester.map((period) => (
+                        <option key={period} value={period}>
+                            {period}
+                        </option>
+                    ))}
+                </select>
+            </div>
+            <Button
+                type="submit"
+                className="rounded-xl bg-[#395886] text-xs font-bold"
+            >
+                <Search className="mr-1.5 size-4" />
+                Terapkan
+            </Button>
+            <Button
+                asChild
+                type="button"
+                variant="outline"
+                className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]"
+            >
+                <Link href={adminIndex.url({ query: { tab: 'activity' } })}>
+                    Reset
+                </Link>
+            </Button>
+        </Form>
     );
 }
 
@@ -1913,11 +2288,24 @@ function ActivityLogTable({
                                         { timeZone: 'Asia/Jakarta' },
                                     )}
                                 </td>
-                                <td className="px-4 py-3 font-mono text-xs text-[#395886]">
-                                    {log.event_type}
+                                <td className="px-4 py-3 text-xs font-semibold text-[#395886]">
+                                    {activityDescription(log)}
                                 </td>
                                 <td className="px-4 py-3 text-xs">
-                                    {log.nim ?? log.subject_type}
+                                    {log.subject_name ? (
+                                        <>
+                                            <p className="font-semibold text-[#395886]">
+                                                {log.subject_name}
+                                            </p>
+                                            {log.nim ? (
+                                                <p className="font-mono text-[11px] text-[#628ECB]">
+                                                    {log.nim}
+                                                </p>
+                                            ) : null}
+                                        </>
+                                    ) : (
+                                        (log.nim ?? log.subject_type)
+                                    )}
                                 </td>
                                 <td className="px-4 py-3 text-xs">
                                     {log.actor_name ?? 'Sistem'}
@@ -1964,9 +2352,11 @@ export default function KompenResponHubIndex({
     imports,
     warnings,
     temporaryCandidates,
+    fixedCandidates,
     activityLogs,
     cutoffs,
     activeImportTasks,
+    exportTasks,
     canRollbackLatestImport,
 }: KompenResponHubPageProps): React.JSX.Element {
     const indexAction = isAdmin ? adminIndex : studentIndex;
@@ -2102,6 +2492,7 @@ export default function KompenResponHubIndex({
                             initialImportTasks={activeImportTasks}
                         />
                     ) : null}
+                    <ExportProgressPanel initialExportTasks={exportTasks} />
 
                     {/* Navigation Tabs */}
                     <nav
@@ -2195,19 +2586,27 @@ export default function KompenResponHubIndex({
                             filters={filters}
                             warnings={warnings}
                             temporaryCandidates={temporaryCandidates}
+                            fixedCandidates={fixedCandidates}
                             selectedWarning={selectedWarning}
                             onSelectWarning={setSelectedWarning}
+                            onCloseWarning={() => setSelectedWarning(null)}
                         />
                     ) : null}
 
                     {activeTab === 'activity' && isAdmin ? (
-                        activityLogs?.data.length ? (
-                            <ActivityLogTable data={activityLogs} />
-                        ) : (
-                            <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-10 text-center text-xs font-bold text-[#395886]/70">
-                                Belum ada aktivitas yang tercatat.
-                            </div>
-                        )
+                        <section className="grid gap-4">
+                            <ActivityFilterPanel
+                                filters={filters}
+                                filterOptions={filterOptions}
+                            />
+                            {activityLogs?.data.length ? (
+                                <ActivityLogTable data={activityLogs} />
+                            ) : (
+                                <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-10 text-center text-xs font-bold text-[#395886]/70">
+                                    Belum ada aktivitas yang tercatat.
+                                </div>
+                            )}
+                        </section>
                     ) : null}
 
                     {activeTab === 'students' || activeTab === 'details' ? (
@@ -2216,7 +2615,13 @@ export default function KompenResponHubIndex({
                                 <div className="flex justify-end">
                                     <EditModeControl
                                         enabled={isEditMode}
-                                        onChange={setIsEditMode}
+                                        onChange={(enabled) => {
+                                            setIsEditMode(enabled);
+                                            if (!enabled) {
+                                                setSelectedStudent(null);
+                                                setSelectedDetail(null);
+                                            }
+                                        }}
                                     />
                                 </div>
                             ) : null}
@@ -2227,6 +2632,24 @@ export default function KompenResponHubIndex({
                                 filters={filters}
                                 filterOptions={filterOptions}
                             />
+                            {isAdmin &&
+                            isEditMode &&
+                            activeTab === 'students' &&
+                            selectedStudent ? (
+                                <StudentCorrectionPanel
+                                    student={selectedStudent}
+                                    onClose={() => setSelectedStudent(null)}
+                                />
+                            ) : null}
+                            {isAdmin &&
+                            isEditMode &&
+                            activeTab === 'details' &&
+                            selectedDetail ? (
+                                <DetailCorrectionPanel
+                                    detail={selectedDetail}
+                                    onClose={() => setSelectedDetail(null)}
+                                />
+                            ) : null}
                             {(activeTab === 'students' ? students : details)
                                 ?.data.length ? (
                                 activeTab === 'students' && students ? (
@@ -2245,22 +2668,6 @@ export default function KompenResponHubIndex({
                             ) : (
                                 <EmptyTableState isAdmin={isAdmin} />
                             )}
-                            {isAdmin &&
-                            isEditMode &&
-                            activeTab === 'students' &&
-                            selectedStudent ? (
-                                <StudentCorrectionPanel
-                                    student={selectedStudent}
-                                />
-                            ) : null}
-                            {isAdmin &&
-                            isEditMode &&
-                            activeTab === 'details' &&
-                            selectedDetail ? (
-                                <DetailCorrectionPanel
-                                    detail={selectedDetail}
-                                />
-                            ) : null}
                         </section>
                     ) : null}
                 </div>
