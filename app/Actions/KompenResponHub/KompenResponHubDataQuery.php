@@ -41,7 +41,10 @@ class KompenResponHubDataQuery
         $query = KompenResponHubWarningLetter::query()->with('student');
 
         if (! $includeCancelled) {
-            $query->where('letter_status', '!=', KompenResponHubWarningLetter::LetterStatusCancelled);
+            $query->whereIn('letter_status', [
+                KompenResponHubWarningLetter::LetterStatusDraft,
+                KompenResponHubWarningLetter::LetterStatusIssued,
+            ]);
         }
 
         foreach (['nim', 'kelas', 'periode_semester'] as $field) {
