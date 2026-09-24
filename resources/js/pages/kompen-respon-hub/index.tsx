@@ -45,6 +45,7 @@ import {
 } from '@/actions/App/Http/Controllers/KompenResponHubExportController';
 import {
     storeCutoff,
+    closeCutoff,
     storeDetailOverride,
     storeProgress,
     storeSummaryOverride,
@@ -97,6 +98,7 @@ type Student = {
     effective_kompensasi_dikerjakan_jam: string;
     effective_responsi_dikerjakan_jam: string;
     effective_sisa_hutang_jam: string;
+    progress_status: 'not_started' | 'in_progress' | 'completed' | 'overdue' | 'period_closed';
     last_worked_at: string | null;
     has_summary_override: boolean;
     warning: Warning | null;
@@ -155,6 +157,7 @@ type Cutoff = {
     id: number;
     periode_semester: string;
     deadline_at: string;
+    closed_at: string | null;
     timezone: string;
 };
 
@@ -400,6 +403,7 @@ function StudentTable({
         'Nama',
         'Kelas',
         'Periode',
+        'Status',
         'T[j]',
         'S[j]',
         'I[j]',
@@ -454,6 +458,9 @@ function StudentTable({
                                 <td className="px-4 py-3.5 text-xs font-semibold text-[#628ECB]">
                                     {student.periode_semester}
                                 </td>
+                                <td className="px-4 py-3.5">
+                                    <ProgressStatusBadge status={student.progress_status} />
+                                </td>
                                 {[
                                     student.total_jam_terlambat,
                                     student.total_jam_sakit,
@@ -497,6 +504,29 @@ function StudentTable({
             <Pager data={data} />
         </section>
     );
+}
+
+function ProgressStatusBadge({
+    status,
+}: {
+    status: Student['progress_status'];
+}): React.JSX.Element {
+    const labels: Record<Student['progress_status'], string> = {
+        not_started: 'Belum mulai',
+        in_progress: 'Sedang dikerjakan',
+        completed: 'Selesai',
+        overdue: 'Lewat cutoff',
+        period_closed: 'Periode ditutup',
+    };
+    const tones: Record<Student['progress_status'], string> = {
+        not_started: 'bg-slate-100 text-slate-700',
+        in_progress: 'bg-blue-100 text-blue-800',
+        completed: 'bg-emerald-100 text-emerald-800',
+        overdue: 'bg-rose-100 text-rose-800',
+        period_closed: 'bg-slate-200 text-slate-800',
+    };
+
+    return <span className={cn('inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-black', tones[status])}>{labels[status]}</span>;
 }
 
 function DetailTable({
@@ -1984,6 +2014,7 @@ function WarningPanel({
                                 name="deadline_at"
                                 type="datetime-local"
                                 required
+                                disabled={selectedCutoff?.closed_at !== null}
                                 defaultValue={
                                     selectedCutoff
                                         ? datetimeLocalValue(
@@ -1999,13 +2030,36 @@ function WarningPanel({
                                 </p>
                             ) : null}
                             <Button
-                                disabled={processing}
+                                disabled={processing || selectedCutoff?.closed_at !== null}
                                 type="submit"
                                 className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
                             >
                                 <Clock3 className="mr-2 size-4" />
                                 Simpan batas waktu
                             </Button>
+                            {selectedCutoff ? (
+                                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/50 p-3">
+                                    <p className="mr-auto text-xs font-semibold text-[#395886]/75">
+                                        {selectedCutoff.closed_at
+                                            ? `Periode ditutup pada ${new Date(selectedCutoff.closed_at).toLocaleString('id-ID', { timeZone: selectedCutoff.timezone })}.`
+                                            : 'Tutup periode setelah batas waktu lewat untuk mengunci perubahan.'}
+                                    </p>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={selectedCutoff.closed_at !== null}
+                                        onClick={() => {
+                                            if (window.confirm('Tutup periode ini? Perubahan manual dan impor baru akan dikunci.')) {
+                                                router.post(closeCutoff.url(selectedCutoff.id));
+                                            }
+                                        }}
+                                        className="rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
+                                    >
+                                        <ShieldAlert className="mr-1.5 size-3.5" />
+                                        Tutup periode
+                                    </Button>
+                                </div>
+                            ) : null}
                             <div className="text-xs text-[#395886]/70">
                                 {cutoffs.map((cutoff) => (
                                     <p key={cutoff.id}>
@@ -2666,7 +2720,8 @@ function StudentOverviewPanel({
                     <dl className="mt-3 grid gap-2 text-xs">
                         <OverviewValue label="Kompen" value={`${number(summary.effective_total_kompensasi_jam)} jam`} />
                         <OverviewValue label="Responsi" value={`${number(summary.effective_total_responsi_jam)} jam`} />
-                        <OverviewValue label="Sudah dikerjakan" value={`${number(summary.effective_kompensasi_dikerjakan_jam)} + ${number(summary.effective_responsi_dikerjakan_jam)} jam`} />
+                        <OverviewValue label="Kompen dikerjakan" value={`${number(summary.effective_kompensasi_dikerjakan_jam)} jam`} />
+                        <OverviewValue label="Responsi dikerjakan" value={`${number(summary.effective_responsi_dikerjakan_jam)} jam`} />
                         <OverviewValue label="Sisa hutang" value={`${number(summary.effective_sisa_hutang_jam)} jam`} emphasized />
                     </dl>
                     {summary.has_summary_override ? <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">Nilai efektif menggunakan koreksi admin.</p> : null}
