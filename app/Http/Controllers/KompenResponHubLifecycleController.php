@@ -119,7 +119,7 @@ class KompenResponHubLifecycleController extends Controller
         $student = KompenResponHubStudent::query()->with(['progress', 'summaryOverride'])->findOrFail($validated['student_id']);
         $cutoff = KompenResponHubPeriodCutoff::query()->where('periode_semester', $student->periode_semester)->first();
         abort_if($cutoff === null, 422, 'Tetapkan batas waktu periode sebelum membuat SP.');
-        abort_if($this->studentSnapshot($student)['sisa_hutang_jam'] <= 0, 422, 'SP-1 tidak dapat dibuat karena mahasiswa tidak memiliki sisa jam.');
+        abort_if($this->studentSnapshot($student)['sisa_hutang_jam'] <= 0, 422, 'SP tidak dapat dibuat karena mahasiswa tidak memiliki sisa jam.');
 
         $warning = KompenResponHubWarningLetter::query()->firstOrNew(['cutoff_id' => $cutoff->id, 'current_student_id' => $student->id]);
         $before = $warning->exists ? $warning->only(['letter_status', 'resolution', 'reason']) : null;
@@ -140,7 +140,7 @@ class KompenResponHubLifecycleController extends Controller
 
         $this->activity->execute('warning.drafted', 'warning_letter', (string) $warning->id, $request->user('admin'), $request, $student->nim, $student->periode_semester, $student->kelas, $validated['reason'], $before, $warning->only(['classification', 'letter_status', 'resolution', 'snapshot', 'reason']), subjectName: $student->nama_mahasiswa);
 
-        return back()->with('success', 'Draft SP-1 berhasil dibuat.');
+        return back()->with('success', 'Draft SP berhasil dibuat.');
     }
 
     public function updateWarning(UpdateKompenResponHubWarningLetterRequest $request, KompenResponHubWarningLetter $warning): RedirectResponse
@@ -157,7 +157,7 @@ class KompenResponHubLifecycleController extends Controller
 
         $this->activity->execute("warning.{$validated['letter_status']}", 'warning_letter', (string) $warning->id, $request->user('admin'), $request, $warning->nim, $warning->periode_semester, $warning->kelas, $validated['reason'], $before, $warning->only(['letter_status', 'resolution', 'reason', 'issued_at', 'cancelled_at']), subjectName: $warning->nama_mahasiswa);
 
-        return back()->with('success', 'Status SP-1 berhasil diperbarui.');
+        return back()->with('success', 'Status SP berhasil diperbarui.');
     }
 
     public function destroyWarning(DestroyKompenResponHubWarningLetterRequest $request, KompenResponHubWarningLetter $warning): RedirectResponse
@@ -173,7 +173,7 @@ class KompenResponHubLifecycleController extends Controller
 
         $this->activity->execute('warning.cancelled', 'warning_letter', (string) $warning->id, $request->user('admin'), $request, $warning->nim, $warning->periode_semester, $warning->kelas, $validated['reason'], $before, $warning->only(['letter_status', 'resolution', 'reason', 'cancelled_at']), subjectName: $warning->nama_mahasiswa);
 
-        return back()->with('success', 'SP-1 dibatalkan. Mahasiswa dapat dipilih kembali untuk membuat draft baru.');
+        return back()->with('success', 'SP dibatalkan. Data kembali ke daftar kandidat dan riwayat pembatalan tetap tersimpan.');
     }
 
     /** @return array{nim: string, periode_semester: string, kelas: string} */

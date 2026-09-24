@@ -172,6 +172,8 @@ test('an admin can cancel an SP and draft it again for the same student', functi
 
     expect($warning->fresh()->letter_status)
         ->toBe(KompenResponHubWarningLetter::LetterStatusCancelled)
+        ->and(app(KompenResponHubDataQuery::class)->warnings([])->count())
+        ->toBe(0)
         ->and(KompenResponHubActivityLog::query()
             ->where('event_type', 'warning.cancelled')
             ->where('subject_name', $student->nama_mahasiswa)
@@ -189,7 +191,7 @@ test('an admin can cancel an SP and draft it again for the same student', functi
         ->and($warning->fresh()->cancelled_at)->toBeNull();
 });
 
-test('the scheduled command changes temporary warnings to fixed after the cutoff', function () {
+test('the dashboard only counts active SP records that are fixed', function () {
     $student = createLifecycleStudent();
     $cutoff = KompenResponHubPeriodCutoff::create([
         'periode_semester' => $student->periode_semester,
@@ -212,6 +214,7 @@ test('the scheduled command changes temporary warnings to fixed after the cutoff
     $this->artisan('sikompen:archive-warning-candidates')->assertSuccessful();
 
     expect($warning->fresh())->classification->toBe('fixed')
+        ->and(app(KompenResponHubDataQuery::class)->dashboardSummary([])['warning_count'])->toBe(1)
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'warning.classification_fixed')->exists())->toBeTrue();
 });
 

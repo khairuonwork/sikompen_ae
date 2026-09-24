@@ -91,7 +91,7 @@ class KompenResponHubController extends Controller
             'nim' => $student->nim,
             'periode_semester' => $student->periode_semester,
             'kelas' => $student->kelas,
-        ])->get();
+        ], true)->get();
 
         $activities = KompenResponHubActivityLog::query()
             ->where('nim', $student->nim)

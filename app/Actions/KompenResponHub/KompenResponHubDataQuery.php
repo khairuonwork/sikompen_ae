@@ -36,9 +36,13 @@ class KompenResponHubDataQuery
     }
 
     /** @return Builder<KompenResponHubWarningLetter> */
-    public function warnings(array $filters): Builder
+    public function warnings(array $filters, bool $includeCancelled = false): Builder
     {
         $query = KompenResponHubWarningLetter::query()->with('student');
+
+        if (! $includeCancelled) {
+            $query->where('letter_status', '!=', KompenResponHubWarningLetter::LetterStatusCancelled);
+        }
 
         foreach (['nim', 'kelas', 'periode_semester'] as $field) {
             if (filled($filters[$field] ?? null)) {
@@ -184,8 +188,13 @@ class KompenResponHubDataQuery
             'outstanding_students' => $outstandingStudents,
             'completed_students' => $totalStudents - $outstandingStudents,
             'outstanding_hours' => round((float) ($summary->outstanding_hours ?? 0), 2),
-            'warning_count' => $this->warnings($filters)->count(),
-            'issued_warning_count' => $this->warnings($filters)->where('letter_status', KompenResponHubWarningLetter::LetterStatusIssued)->count(),
+            'warning_count' => $this->warnings($filters)
+                ->where('classification', 'fixed')
+                ->count(),
+            'issued_warning_count' => $this->warnings($filters)
+                ->where('classification', 'fixed')
+                ->where('letter_status', KompenResponHubWarningLetter::LetterStatusIssued)
+                ->count(),
             'periods' => KompenResponHubPeriodCutoff::query()
                 ->when(filled($filters['periode_semester'] ?? null), fn (Builder $query): Builder => $query->where('periode_semester', $filters['periode_semester']))
                 ->orderByDesc('deadline_at')
@@ -206,6 +215,7 @@ class KompenResponHubDataQuery
             'temporary' => $this->temporaryWarningCandidates($filters)->limit(5),
             'fixed' => $this->fixedWarningCandidates($filters)->limit(5),
             'warnings' => $this->warnings($filters)
+                ->where('classification', 'fixed')
                 ->whereIn('letter_status', [KompenResponHubWarningLetter::LetterStatusDraft, KompenResponHubWarningLetter::LetterStatusIssued])
                 ->limit(5),
         ];
