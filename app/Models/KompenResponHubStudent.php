@@ -75,6 +75,11 @@ class KompenResponHubStudent extends Model
         return $this->hasOne(KompenResponHubWarningLetter::class, 'current_student_id')->latestOfMany();
     }
 
+    public function cutoff(): HasOne
+    {
+        return $this->hasOne(KompenResponHubPeriodCutoff::class, 'periode_semester', 'periode_semester');
+    }
+
     public function getEffectiveTotalKompensasiJamAttribute(): string
     {
         return $this->summaryOverride?->total_kompensasi_jam ?? $this->total_kompensasi_jam;

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\KompenResponHub\EnsureKompenResponHubPeriodIsOpen;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Http\Requests\CloseKompenResponHubPeriodRequest;
 use App\Http\Requests\DestroyKompenResponHubWarningLetterRequest;
 use App\Http\Requests\StoreKompenResponHubDetailOverrideRequest;
 use App\Http\Requests\StoreKompenResponHubPeriodCutoffRequest;
@@ -22,7 +24,10 @@ use Illuminate\Http\RedirectResponse;
 
 class KompenResponHubLifecycleController extends Controller
 {
-    public function __construct(private RecordKompenResponHubActivity $activity) {}
+    public function __construct(
+        private RecordKompenResponHubActivity $activity,
+        private EnsureKompenResponHubPeriodIsOpen $periodLock,
+    ) {}
 
     public function storeCutoff(StoreKompenResponHubPeriodCutoffRequest $request): RedirectResponse
     {
@@ -30,6 +35,7 @@ class KompenResponHubLifecycleController extends Controller
         abort_unless(KompenResponHubStudent::query()->where('periode_semester', $validated['periode_semester'])->exists(), 422, 'Periode belum memiliki data mahasiswa.');
 
         $cutoff = KompenResponHubPeriodCutoff::query()->firstOrNew(['periode_semester' => $validated['periode_semester']]);
+        abort_if($cutoff->closed_at !== null, 422, 'Periode telah ditutup dan tidak dapat diubah.');
         $before = $cutoff->exists ? $cutoff->only(['deadline_at', 'timezone']) : null;
         $cutoff->fill([
             'deadline_at' => CarbonImmutable::createFromFormat('Y-m-d\\TH:i', $validated['deadline_at'], 'Asia/Jakarta')->utc(),
@@ -43,8 +49,34 @@ class KompenResponHubLifecycleController extends Controller
         return back()->with('success', 'Batas waktu periode berhasil disimpan.');
     }
 
+    public function closeCutoff(
+        CloseKompenResponHubPeriodRequest $request,
+        KompenResponHubPeriodCutoff $cutoff,
+    ): RedirectResponse {
+        abort_if($cutoff->closed_at !== null, 422, 'Periode ini sudah ditutup.');
+        abort_unless($cutoff->deadline_at->isPast(), 422, 'Periode hanya dapat ditutup setelah batas waktunya terlewati.');
+
+        $cutoff->update([
+            'closed_at' => now(),
+            'closed_by_admin_id' => $request->user('admin')?->id,
+        ]);
+
+        $this->activity->execute(
+            'period.closed',
+            'period_cutoff',
+            (string) $cutoff->id,
+            $request->user('admin'),
+            $request,
+            period: $cutoff->periode_semester,
+            afterState: $cutoff->only(['closed_at']),
+        );
+
+        return back()->with('success', 'Periode ditutup. Data semester ini kini terkunci dari perubahan manual dan impor baru.');
+    }
+
     public function storeProgress(StoreKompenResponHubStudentProgressRequest $request, KompenResponHubStudent $student): RedirectResponse
     {
+        $this->ensurePeriodIsOpen($student->periode_semester);
         $validated = $request->validated();
         $override = KompenResponHubStudentSummaryOverride::query()->where('current_student_id', $student->id)->first();
         $totalKompen = (float) ($override?->total_kompensasi_jam ?? $student->total_kompensasi_jam);
@@ -73,6 +105,7 @@ class KompenResponHubLifecycleController extends Controller
 
     public function storeSummaryOverride(StoreKompenResponHubStudentSummaryOverrideRequest $request, KompenResponHubStudent $student): RedirectResponse
     {
+        $this->ensurePeriodIsOpen($student->periode_semester);
         $validated = $request->validated();
         $progress = KompenResponHubStudentProgress::query()->where('current_student_id', $student->id)->first();
         abort_if((float) $validated['total_kompensasi_jam'] < (float) ($progress?->kompensasi_dikerjakan_jam ?? 0) || (float) $validated['total_responsi_jam'] < (float) ($progress?->responsi_dikerjakan_jam ?? 0), 422, 'Total hutang tidak boleh lebih kecil dari jam yang sudah dikerjakan.');
@@ -98,6 +131,7 @@ class KompenResponHubLifecycleController extends Controller
     {
         $validated = $request->validated();
         $detail->loadMissing('student');
+        $this->ensurePeriodIsOpen($detail->student?->periode_semester);
         $sourceKey = $detail->source_key ?? hash('sha256', "legacy-detail:{$detail->id}");
         if ($detail->source_key === null) {
             $detail->update(['source_key' => $sourceKey]);
@@ -117,6 +151,7 @@ class KompenResponHubLifecycleController extends Controller
     {
         $validated = $request->validated();
         $student = KompenResponHubStudent::query()->with(['progress', 'summaryOverride'])->findOrFail($validated['student_id']);
+        $this->ensurePeriodIsOpen($student->periode_semester);
         $cutoff = KompenResponHubPeriodCutoff::query()->where('periode_semester', $student->periode_semester)->first();
         abort_if($cutoff === null, 422, 'Tetapkan batas waktu periode sebelum membuat SP.');
         abort_if($this->studentSnapshot($student)['sisa_hutang_jam'] <= 0, 422, 'SP tidak dapat dibuat karena mahasiswa tidak memiliki sisa jam.');
@@ -145,6 +180,7 @@ class KompenResponHubLifecycleController extends Controller
 
     public function updateWarning(UpdateKompenResponHubWarningLetterRequest $request, KompenResponHubWarningLetter $warning): RedirectResponse
     {
+        $this->ensurePeriodIsOpen($warning->periode_semester);
         $validated = $request->validated();
         $before = $warning->only(['letter_status', 'resolution', 'reason', 'issued_at', 'cancelled_at']);
         $warning->fill([
@@ -162,6 +198,7 @@ class KompenResponHubLifecycleController extends Controller
 
     public function destroyWarning(DestroyKompenResponHubWarningLetterRequest $request, KompenResponHubWarningLetter $warning): RedirectResponse
     {
+        $this->ensurePeriodIsOpen($warning->periode_semester);
         $validated = $request->validated();
         $before = $warning->only(['letter_status', 'resolution', 'reason', 'cancelled_at']);
         $warning->update([
@@ -259,5 +296,10 @@ class KompenResponHubLifecycleController extends Controller
                     subjectName: $warning->nama_mahasiswa,
                 );
             });
+    }
+
+    private function ensurePeriodIsOpen(?string $period): void
+    {
+        abort_if($period === null || $this->periodLock->isClosed($period), 422, 'Periode telah ditutup dan data tidak dapat diubah.');
     }
 }

@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class ImportKompenResponHubWorkbook
 {
+    public function __construct(private EnsureKompenResponHubPeriodIsOpen $periodLock) {}
+
     /**
      * @param  array{preview: array{periode_semester: ?string, classes: list<string>, class_count: int, student_count: int, detail_count: int}, students: list<array<string, mixed>>, details: list<array<string, mixed>>}  $payload
      * @return array{import_id: int, periode_semester: string, class_count: int, student_count: int, detail_count: int}
@@ -31,6 +33,10 @@ class ImportKompenResponHubWorkbook
 
         if ($period === null) {
             throw new \LogicException('Periode semester tidak ditemukan pada workbook.');
+        }
+
+        if ($this->periodLock->isClosed($period)) {
+            throw new \LogicException('Periode telah ditutup dan tidak dapat menerima impor baru.');
         }
 
         $result = DB::connection(config('kompen-respon-hub.database_connection'))
@@ -147,6 +153,13 @@ class ImportKompenResponHubWorkbook
         $studentsWithDebt = collect($payload['students'])
             ->filter(fn (array $student): bool => (float) $student['total_hutang_jam'] > 0)
             ->count();
+        $studentKeys = collect($payload['students'])
+            ->map(fn (array $student): string => "{$student['kelas']}:{$student['nim']}")
+            ->flip();
+        $uniqueStudentKeys = $studentKeys->count();
+        $linkedDetails = collect($payload['details'])
+            ->filter(fn (array $detail): bool => $studentKeys->has("{$detail['kelas']}:{$detail['nim']}"))
+            ->count();
 
         return [
             'status' => 'passed',
@@ -159,12 +172,12 @@ class ImportKompenResponHubWorkbook
                 [
                     'label' => 'Identitas mahasiswa',
                     'status' => 'passed',
-                    'detail' => sprintf('%d mahasiswa pada %d kelas siap diimpor.', $preview['student_count'], $preview['class_count']),
+                    'detail' => sprintf('%d NIM unik pada %d kelas siap diimpor.', $uniqueStudentKeys, $preview['class_count']),
                 ],
                 [
                     'label' => 'Detail Kompen',
                     'status' => 'passed',
-                    'detail' => sprintf('%d detail Kompen/Responsi tervalidasi.', $preview['detail_count']),
+                    'detail' => sprintf('%d dari %d detail terhubung ke mahasiswa pada ringkasan.', $linkedDetails, $preview['detail_count']),
                 ],
                 [
                     'label' => 'Ringkasan hutang',

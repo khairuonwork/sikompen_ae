@@ -13,11 +13,11 @@ class KompenResponHubPeriodCutoff extends Model
 
     protected $table = 'sikompen_periode_cutoffs';
 
-    protected $fillable = ['periode_semester', 'deadline_at', 'timezone', 'updated_by_admin_id'];
+    protected $fillable = ['periode_semester', 'deadline_at', 'timezone', 'updated_by_admin_id', 'closed_at', 'closed_by_admin_id'];
 
     protected function casts(): array
     {
-        return ['deadline_at' => 'immutable_datetime'];
+        return ['deadline_at' => 'immutable_datetime', 'closed_at' => 'immutable_datetime'];
     }
 
     public function getConnectionName(): ?string

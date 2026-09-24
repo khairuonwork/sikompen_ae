@@ -239,7 +239,7 @@ class KompenResponHubDataQuery
      */
     public function students(array $filters): Builder
     {
-        $query = KompenResponHubStudent::query()->with(['progress', 'summaryOverride', 'latestWarning']);
+        $query = KompenResponHubStudent::query()->with(['progress', 'summaryOverride', 'latestWarning', 'cutoff']);
 
         foreach (['nim', 'kelas', 'periode_semester', 'tingkat'] as $field) {
             if (filled($filters[$field] ?? null)) {

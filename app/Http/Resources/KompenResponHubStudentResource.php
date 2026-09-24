@@ -31,6 +31,7 @@ class KompenResponHubStudentResource extends JsonResource
             'effective_kompensasi_dikerjakan_jam' => $this->effective_kompensasi_dikerjakan_jam,
             'effective_responsi_dikerjakan_jam' => $this->effective_responsi_dikerjakan_jam,
             'effective_sisa_hutang_jam' => $this->effective_sisa_hutang_jam,
+            'progress_status' => $this->progressStatus(),
             'last_worked_at' => $this->progress?->last_worked_at?->toIso8601String(),
             'has_summary_override' => $this->summaryOverride !== null,
             'warning' => $this->latestWarning === null ? null : [
@@ -40,5 +41,26 @@ class KompenResponHubStudentResource extends JsonResource
                 'resolution' => $this->latestWarning->resolution,
             ],
         ];
+    }
+
+    private function progressStatus(): string
+    {
+        if ((float) $this->effective_sisa_hutang_jam <= 0) {
+            return 'completed';
+        }
+
+        if ($this->cutoff?->closed_at !== null) {
+            return 'period_closed';
+        }
+
+        if ($this->cutoff?->deadline_at?->isPast()) {
+            return 'overdue';
+        }
+
+        if ((float) $this->effective_kompensasi_dikerjakan_jam > 0 || (float) $this->effective_responsi_dikerjakan_jam > 0) {
+            return 'in_progress';
+        }
+
+        return 'not_started';
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\KompenResponHub\ImportKompenResponHubWorkbook;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
@@ -216,6 +217,52 @@ test('the dashboard only counts active SP records that are fixed', function () {
     expect($warning->fresh())->classification->toBe('fixed')
         ->and(app(KompenResponHubDataQuery::class)->dashboardSummary([])['warning_count'])->toBe(1)
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'warning.classification_fixed')->exists())->toBeTrue();
+});
+
+test('an admin can close an elapsed period and its progress becomes locked', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $cutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/close")
+        ->assertRedirect();
+
+    expect($cutoff->fresh()->closed_at)->not->toBeNull()
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'period.closed')->exists())->toBeTrue();
+
+    $this->actingAs($admin, 'admin')
+        ->put("/admin/kompen-respon/students/{$student->id}/progress", [
+            'kompensasi_dikerjakan_jam' => 1,
+            'responsi_dikerjakan_jam' => 0,
+            'last_worked_at' => now('Asia/Jakarta')->format('Y-m-d\\TH:i'),
+            'reason' => 'Tidak boleh tersimpan setelah periode ditutup.',
+        ])
+        ->assertUnprocessable();
+
+    expect(fn () => app(ImportKompenResponHubWorkbook::class)->execute(
+        [
+            'preview' => [
+                'periode_semester' => $student->periode_semester,
+                'classes' => [],
+                'class_count' => 0,
+                'student_count' => 0,
+                'detail_count' => 0,
+            ],
+            'students' => [],
+            'details' => [],
+        ],
+        'closed-period.xlsx',
+        'kompen-respon-hub/imports/closed-period.xlsx',
+        str_repeat('a', 64),
+        $admin->id,
+        'Admin Test',
+        $admin->email,
+    ))->toThrow(LogicException::class, 'Periode telah ditutup');
 });
 
 function createLifecycleStudent(): KompenResponHubStudent

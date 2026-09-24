@@ -71,6 +71,9 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
         Route::put('kompen-respon/cutoffs', [KompenResponHubLifecycleController::class, 'storeCutoff'])
             ->middleware('throttle:20,1')
             ->name('kompen-respon.cutoffs.store');
+        Route::post('kompen-respon/cutoffs/{cutoff}/close', [KompenResponHubLifecycleController::class, 'closeCutoff'])
+            ->middleware('throttle:5,15')
+            ->name('kompen-respon.cutoffs.close');
         Route::put('kompen-respon/students/{student}/progress', [KompenResponHubLifecycleController::class, 'storeProgress'])
             ->middleware('throttle:30,1')
             ->name('kompen-respon.students.progress.store');

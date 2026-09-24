@@ -66,6 +66,10 @@ class KompenResponHubController extends Controller
         abort_if($studentNim !== null && $student->nim !== $studentNim, 404);
 
         $student->load([
+            'progress',
+            'summaryOverride',
+            'latestWarning',
+            'cutoff',
             'details' => fn ($query) => $query->orderByDesc('tanggal')->with('student'),
         ]);
 
@@ -84,6 +88,7 @@ class KompenResponHubController extends Controller
             'progress',
             'summaryOverride',
             'latestWarning',
+            'cutoff',
             'details' => fn ($query) => $query->orderByDesc('tanggal')->with(['override', 'student']),
         ]);
 
@@ -158,6 +163,7 @@ class KompenResponHubController extends Controller
                         'id' => $cutoff->id,
                         'periode_semester' => $cutoff->periode_semester,
                         'deadline_at' => $cutoff->deadline_at->toIso8601String(),
+                        'closed_at' => $cutoff->closed_at?->toIso8601String(),
                         'timezone' => $cutoff->timezone,
                     ])
                     ->all()

@@ -50,6 +50,7 @@ class KompenResponHubImportRollbackController extends Controller
                 KompenResponHubImportAuditLog::create([
                     'event_type' => KompenResponHubImportAuditLog::EVENT_ROLLBACK,
                     'source_import_id' => $latestImport->id,
+                    'actor_name' => $actor['email'],
                     'actor_email' => $actor['email'],
                     'periode_semester' => $latestImport->periode_semester,
                     'original_filename' => $latestImport->original_filename,

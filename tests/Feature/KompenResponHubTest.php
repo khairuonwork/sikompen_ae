@@ -385,6 +385,7 @@ test('an admin can delete only the latest upload and its related data is removed
     $auditLog = KompenResponHubImportAuditLog::query()->latest('id')->firstOrFail();
     expect($auditLog->event_type)->toBe(KompenResponHubImportAuditLog::EVENT_ROLLBACK)
         ->and($auditLog->source_import_id)->toBe($latestImport->id)
+        ->and($auditLog->actor_name)->toBe($admin->email)
         ->and($auditLog->actor_email)->toBe($admin->email)
         ->and($auditLog->student_count)->toBe(1)
         ->and($auditLog->detail_count)->toBe(0)
