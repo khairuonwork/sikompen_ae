@@ -1689,9 +1689,9 @@ function WarningStatusBadge({
             : warning.resolution === 'completed'
               ? 'Kompen selesai setelah SP'
               : warning.letter_status === 'issued'
-                ? 'SP-1 terbit'
+                ? 'SP terbit'
                 : warning.letter_status === 'draft'
-                  ? 'Draft SP-1'
+                  ? 'Draft SP'
                   : warning.letter_status === 'cancelled'
                     ? 'SP dibatalkan'
                     : 'Belum dibuat';
@@ -1734,13 +1734,13 @@ function WarningCandidateTable({
             <div className="flex flex-col justify-between gap-2 border-b border-[#F0F3FA] px-5 py-4 sm:flex-row sm:items-center">
                 <div>
                     <h2 className="text-base font-extrabold text-[#395886]">
-                        {isTemporary ? 'Kandidat sementara' : 'Kandidat final'}
+                        {isTemporary ? 'Kandidat sementara' : 'Kandidat pasti'}
                     </h2>
                     <p className="mt-0.5 text-xs text-[#395886]/70">
                         {isTemporary
                             ? 'Mahasiswa dengan sisa jam pada periode yang batas waktunya belum lewat.'
                             : 'Mahasiswa dengan sisa jam setelah batas waktu periode terlewati.'}{' '}
-                        Pilih satu untuk membuat atau membuat ulang draft SP-1.
+                        Pilih satu untuk membuat atau membuat ulang draft SP.
                     </p>
                 </div>
                 <span className="w-fit rounded-full bg-[#B1C9EF]/40 px-3 py-1 text-xs font-bold text-[#395886]">
@@ -2023,7 +2023,7 @@ function WarningPanel({
                 </Form>
                 <div className="grid content-start gap-2 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm">
                     <h2 className="text-lg font-extrabold text-[#395886]">
-                        Tambah SP-1 manual
+                        Tambah SP manual
                     </h2>
                     <p className="text-xs leading-relaxed text-[#395886]/70">
                         Pilih mahasiswa pada tabel kandidat. Form pembuatan
@@ -2064,7 +2064,7 @@ function WarningPanel({
                                 required
                                 minLength={5}
                                 maxLength={1000}
-                                placeholder="Alasan pembuatan draft SP-1"
+                                placeholder="Alasan pembuatan draft SP"
                             />
                             <div className="flex flex-wrap items-center gap-2">
                                 <Button
@@ -2073,7 +2073,7 @@ function WarningPanel({
                                     className="rounded-xl bg-[#395886] text-xs font-bold"
                                 >
                                     <ShieldAlert className="mr-2 size-4" />
-                                    Buat draft SP-1
+                                    Buat draft SP
                                 </Button>
                                 <Button
                                     type="button"
@@ -2115,18 +2115,18 @@ function WarningPanel({
                 />
             ) : (
                 <div className="rounded-3xl border border-dashed border-[#8AAEE0] bg-white/80 p-6 text-center text-xs font-semibold text-[#395886]/70">
-                    Kandidat final akan muncul di sini setelah batas waktu
+                    Kandidat pasti akan muncul di sini setelah batas waktu
                     periode terlewati dan masih ada sisa jam.
                 </div>
             )}
             <div className="flex flex-col justify-between gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm sm:flex-row sm:items-center">
                 <div>
                     <h2 className="text-base font-extrabold text-[#395886]">
-                        Arsip dan status SP-1
+                        Arsip dan status SP
                     </h2>
                     <p className="mt-0.5 text-xs text-[#395886]/70">
                         Fixed dibuat saat batas waktu terlewati; draft dan
-                        penerbitan SP-1 tetap dikendalikan admin.
+                        penerbitan SP tetap dikendalikan admin.
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -2157,7 +2157,7 @@ function WarningPanel({
                     <div className="flex items-start justify-between gap-4">
                         <div>
                             <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
-                                SP-1 dipilih
+                                SP dipilih
                             </p>
                             <h3 className="mt-1 text-base font-extrabold text-[#395886]">
                                 {selectedWarning.nama_mahasiswa} ·{' '}
@@ -2170,7 +2170,7 @@ function WarningPanel({
                             variant="outline"
                             onClick={onCloseWarning}
                             className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]"
-                            aria-label="Tutup panel SP-1"
+                            aria-label="Tutup panel SP"
                         >
                             <X className="size-4" />
                         </Button>
@@ -2183,7 +2183,7 @@ function WarningPanel({
                             {({ processing }) => (
                                 <>
                                     <p className="text-sm font-bold text-[#395886]">
-                                        Perbarui status SP-1
+                                        Perbarui status SP
                                     </p>
                                     <select
                                         name="letter_status"
@@ -2193,10 +2193,10 @@ function WarningPanel({
                                         className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
                                     >
                                         <option value="draft">
-                                            Draft SP-1
+                                            Draft SP
                                         </option>
                                         <option value="issued">
-                                            Terbitkan SP-1
+                                            Terbitkan SP
                                         </option>
                                     </select>
                                     <Input
@@ -2225,7 +2225,7 @@ function WarningPanel({
                             className="grid gap-3 rounded-2xl border border-rose-200 bg-rose-50/50 p-4"
                             onBefore={() =>
                                 window.confirm(
-                                    'Batalkan SP-1 ini? Riwayat audit tetap tersimpan dan mahasiswa dapat dipilih kembali.',
+                                    'Batalkan SP ini? Riwayat audit tetap tersimpan dan mahasiswa kembali ke daftar kandidat.',
                                 )
                             }
                         >
@@ -2244,7 +2244,7 @@ function WarningPanel({
                                         required
                                         minLength={5}
                                         maxLength={1000}
-                                        placeholder="Alasan pembatalan SP-1"
+                                        placeholder="Alasan pembatalan SP"
                                     />
                                     <Button
                                         disabled={
@@ -2257,7 +2257,7 @@ function WarningPanel({
                                         className="w-fit rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
                                     >
                                         <Trash2 className="mr-2 size-4" />
-                                        Batalkan SP-1
+                                        Batalkan SP
                                     </Button>
                                 </>
                             )}
@@ -2282,9 +2282,9 @@ function activityDescription(log: ActivityLog): string {
         'summary.override_updated': 'Total Kompen dan Responsi dikoreksi',
         'detail.override_updated': 'Detail Kompen dikoreksi',
         'cutoff.updated': 'Batas waktu periode diperbarui',
-        'warning.drafted': 'Draft SP-1 dibuat',
-        'warning.issued': 'SP-1 diterbitkan',
-        'warning.cancelled': 'SP-1 dibatalkan',
+        'warning.drafted': 'Draft SP dibuat',
+        'warning.issued': 'SP diterbitkan',
+        'warning.cancelled': 'SP dibatalkan',
         'warning.archived': 'Kandidat SP diarsipkan sebagai fixed',
         'warning.classification_fixed': 'Kandidat SP dipindahkan ke fixed',
         'warning.classification_temporary':
@@ -2482,7 +2482,7 @@ function DashboardPanel({
             icon: CheckCircle2,
         },
         {
-            label: 'SP-1 aktif',
+            label: 'SP aktif (fixed)',
             value: dashboard.summary.warning_count,
             detail: `${dashboard.summary.issued_warning_count} telah diterbitkan`,
             icon: ShieldAlert,
@@ -2598,12 +2598,12 @@ function DashboardPanel({
                             description="Masih memiliki sisa jam sebelum batas waktu."
                         />
                         <DashboardWorklistLink
-                            title="Kandidat fixed"
+                            title="Kandidat pasti"
                             count={dashboard.worklist.fixed_candidates.length}
-                            description="Lewat batas waktu dan perlu peninjauan SP-1."
+                            description="Lewat batas waktu dan perlu peninjauan SP."
                         />
                         <DashboardWorklistLink
-                            title="SP-1 perlu ditindaklanjuti"
+                            title="SP perlu ditindaklanjuti"
                             count={dashboard.worklist.warnings_to_follow_up.length}
                             description="Draft atau surat aktif pada periode terpilih."
                         />
@@ -2690,7 +2690,7 @@ function StudentOverviewPanel({
                             </div>
                         )) : <p className="text-xs text-[#395886]/65">Belum ada perubahan manual yang tercatat.</p>}
                     </div>
-                    <p className="mt-4 text-[11px] text-[#395886]/65">{overview.details.length} detail Kompen · {overview.warnings.length} riwayat SP-1</p>
+                    <p className="mt-4 text-[11px] text-[#395886]/65">{overview.details.length} detail Kompen · {overview.warnings.length} riwayat SP</p>
                 </div>
             </div>
         </section>
