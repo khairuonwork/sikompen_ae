@@ -20,8 +20,15 @@ import {
     Save,
     X,
     Trash2,
+    LayoutDashboard,
+    Users,
+    CalendarClock,
+    ClipboardList,
 } from 'lucide-react';
 import { type DragEvent, useEffect, useState } from 'react';
+import {
+    adminStudentOverview,
+} from '@/actions/App/Http/Controllers/KompenResponHubController';
 import {
     downloadUploadedWorkbook,
     downloadTemplate,
@@ -139,6 +146,7 @@ type ActivityLog = {
     kelas: string | null;
     actor_type: string;
     actor_name: string | null;
+    actor_email?: string | null;
     reason: string | null;
     occurred_at: string;
 };
@@ -162,6 +170,10 @@ type ImportAuditLog = {
     class_count: number;
     student_count: number;
     detail_count: number;
+    quality_report?: {
+        status: 'passed';
+        checks: { label: string; status: 'passed'; detail: string }[];
+    } | null;
     occurred_at: string;
 };
 
@@ -204,6 +216,8 @@ type Filters = {
     tingkat?: number;
     kelas?: string;
     periode_semester?: string;
+    activity_event?: string;
+    activity_actor?: string;
     per_page?: number;
 };
 
@@ -213,12 +227,55 @@ type FilterOptions = {
     periode_semester: string[];
 };
 
+type Dashboard = {
+    summary: {
+        total_students: number;
+        outstanding_students: number;
+        completed_students: number;
+        outstanding_hours: number;
+        warning_count: number;
+        issued_warning_count: number;
+        periods: {
+            periode_semester: string;
+            deadline_at: string | null;
+            status: 'open' | 'closed';
+        }[];
+    };
+    worklist: {
+        temporary_candidates: Student[];
+        fixed_candidates: Student[];
+        warnings_to_follow_up: Warning[];
+    };
+};
+
+type StudentOverview = {
+    summary: Student;
+    source: {
+        import_filename: string | null;
+        imported_at: string | null;
+        total_kompensasi_jam: string;
+        total_responsi_jam: string;
+        sisa_hutang_jam: string;
+    };
+    details: Detail[];
+    warnings: Warning[];
+    activities: ActivityLog[];
+};
+
 type KompenResponHubPageProps = {
     activeTab:
-        'upload' | 'students' | 'details' | 'imports' | 'warnings' | 'activity';
+        | 'dashboard'
+        | 'upload'
+        | 'students'
+        | 'details'
+        | 'imports'
+        | 'warnings'
+        | 'activity';
     isAdmin: boolean;
     filters: Filters;
     filterOptions: FilterOptions;
+    activityFilterOptions: { event_types: string[]; actor_emails: string[] };
+    dashboard: Dashboard | null;
     flash: { success: string | null; error: string | null };
     students: Pagination<Student> | null;
     details: Pagination<Detail> | null;
@@ -234,6 +291,7 @@ type KompenResponHubPageProps = {
 };
 
 const adminTabs = [
+    ['dashboard', 'Ringkasan'],
     ['upload', 'Upload Dokumen'],
     ['students', 'Kompen dan Respon'],
     ['details', 'Detail Kompen'],
@@ -329,10 +387,12 @@ function StudentTable({
     data,
     isEditMode = false,
     onSelect,
+    onOpenProfile,
 }: {
     data: Pagination<Student>;
     isEditMode?: boolean;
     onSelect?: (student: Student) => void;
+    onOpenProfile?: (student: Student) => void;
 }): React.JSX.Element {
     const headings = [
         'Tingkat',
@@ -350,6 +410,7 @@ function StudentTable({
         'Komp. selesai[j]',
         'Resp. selesai[j]',
         'Sisa[j]',
+        ...(onOpenProfile ? ['Profil'] : []),
     ];
 
     return (
@@ -412,6 +473,22 @@ function StudentTable({
                                         {number(value)}
                                     </td>
                                 ))}
+                                {onOpenProfile ? (
+                                    <td className="px-4 py-3.5">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                onOpenProfile(student);
+                                            }}
+                                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                                        >
+                                            Lihat
+                                        </Button>
+                                    </td>
+                                ) : null}
                             </tr>
                         ))}
                     </tbody>
@@ -531,6 +608,7 @@ function ImportAuditLogTable({
         'Kelas',
         'Mahasiswa',
         'Detail',
+        'Validasi',
     ];
 
     return (
@@ -619,6 +697,20 @@ function ImportAuditLogTable({
                                 </td>
                                 <td className="px-4 py-3.5 text-right font-mono text-xs font-bold text-[#395886] tabular-nums">
                                     {auditLog.detail_count}
+                                </td>
+                                <td className="min-w-64 px-4 py-3.5">
+                                    {auditLog.quality_report?.checks.length ? (
+                                        <div className="grid gap-1">
+                                            {auditLog.quality_report.checks.map((check) => (
+                                                <p key={check.label} className="text-[11px] leading-tight text-[#395886]/75">
+                                                    <span className="font-bold text-emerald-700">✓ {check.label}</span>
+                                                    <span className="block">{check.detail}</span>
+                                                </p>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs text-[#395886]/40 italic">Tidak tersedia untuk unggahan lama</span>
+                                    )}
                                 </td>
                             </tr>
                         ))}
@@ -2209,14 +2301,16 @@ function activityDescription(log: ActivityLog): string {
 function ActivityFilterPanel({
     filters,
     filterOptions,
+    activityFilterOptions,
 }: {
     filters: Filters;
     filterOptions: FilterOptions;
+    activityFilterOptions: { event_types: string[]; actor_emails: string[] };
 }): React.JSX.Element {
     return (
         <Form
             {...adminIndex.form()}
-            className="flex flex-col gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm sm:flex-row sm:items-end"
+            className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(160px,1fr)_minmax(180px,1fr)_minmax(180px,1fr)_auto_auto] md:items-end"
         >
             <input name="tab" type="hidden" value="activity" />
             <div className="grid flex-1 gap-1.5">
@@ -2236,6 +2330,42 @@ function ActivityFilterPanel({
                     {filterOptions.periode_semester.map((period) => (
                         <option key={period} value={period}>
                             {period}
+                        </option>
+                    ))}
+                </select>
+            </div>
+            <div className="grid gap-1.5">
+                <Label htmlFor="activity-event" className="text-xs font-bold text-[#395886]">
+                    Jenis aktivitas
+                </Label>
+                <select
+                    id="activity-event"
+                    name="activity_event"
+                    defaultValue={filters.activity_event ?? ''}
+                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                >
+                    <option value="">Semua aktivitas</option>
+                    {activityFilterOptions.event_types.map((eventType) => (
+                        <option key={eventType} value={eventType}>
+                            {eventType.replaceAll('.', ' · ')}
+                        </option>
+                    ))}
+                </select>
+            </div>
+            <div className="grid gap-1.5">
+                <Label htmlFor="activity-actor" className="text-xs font-bold text-[#395886]">
+                    Admin pelaksana
+                </Label>
+                <select
+                    id="activity-actor"
+                    name="activity_actor"
+                    defaultValue={filters.activity_actor ?? ''}
+                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                >
+                    <option value="">Semua admin</option>
+                    {activityFilterOptions.actor_emails.map((email) => (
+                        <option key={email} value={email}>
+                            {email}
                         </option>
                     ))}
                 </select>
@@ -2323,6 +2453,267 @@ function ActivityLogTable({
     );
 }
 
+function DashboardPanel({
+    dashboard,
+    filters,
+    filterOptions,
+}: {
+    dashboard: Dashboard;
+    filters: Filters;
+    filterOptions: FilterOptions;
+}): React.JSX.Element {
+    const cards = [
+        {
+            label: 'Mahasiswa terpantau',
+            value: dashboard.summary.total_students,
+            detail: 'Sesuai periode dan filter aktif',
+            icon: Users,
+        },
+        {
+            label: 'Masih memiliki sisa jam',
+            value: dashboard.summary.outstanding_students,
+            detail: `${number(String(dashboard.summary.outstanding_hours))} jam perlu ditindaklanjuti`,
+            icon: Clock3,
+        },
+        {
+            label: 'Kompen selesai',
+            value: dashboard.summary.completed_students,
+            detail: 'Tidak memiliki sisa jam efektif',
+            icon: CheckCircle2,
+        },
+        {
+            label: 'SP-1 aktif',
+            value: dashboard.summary.warning_count,
+            detail: `${dashboard.summary.issued_warning_count} telah diterbitkan`,
+            icon: ShieldAlert,
+        },
+    ];
+
+    return (
+        <section className="grid gap-5">
+            <Form
+                {...adminIndex.form()}
+                className="flex flex-col gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm sm:flex-row sm:items-end"
+            >
+                <input name="tab" type="hidden" value="dashboard" />
+                <div className="grid flex-1 gap-1.5">
+                    <Label
+                        htmlFor="dashboard-period"
+                        className="text-xs font-bold text-[#395886]"
+                    >
+                        Ringkas periode
+                    </Label>
+                    <select
+                        id="dashboard-period"
+                        name="periode_semester"
+                        defaultValue={filters.periode_semester ?? ''}
+                        className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                    >
+                        <option value="">Semua periode</option>
+                        {filterOptions.periode_semester.map((period) => (
+                            <option key={period} value={period}>
+                                {period}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <Button
+                    type="submit"
+                    className="rounded-xl bg-[#395886] text-xs font-bold"
+                >
+                    <Search className="mr-1.5 size-4" />
+                    Terapkan
+                </Button>
+            </Form>
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {cards.map((card) => {
+                    const Icon = card.icon;
+
+                    return (
+                        <Card key={card.label} className="border-white/80 bg-white/85 shadow-sm">
+                            <CardContent className="flex items-start justify-between gap-4 p-5">
+                                <div>
+                                    <p className="text-xs font-semibold text-[#395886]/70">
+                                        {card.label}
+                                    </p>
+                                    <p className="mt-2 text-3xl font-black tabular-nums text-[#395886]">
+                                        {number(String(card.value))}
+                                    </p>
+                                    <p className="mt-1 text-[11px] text-[#395886]/60">
+                                        {card.detail}
+                                    </p>
+                                </div>
+                                <div className="rounded-2xl bg-[#B1C9EF]/35 p-3 text-[#395886]">
+                                    <Icon className="size-5" />
+                                </div>
+                            </CardContent>
+                        </Card>
+                    );
+                })}
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+                <Card className="border-white/80 bg-white/85 shadow-sm">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base text-[#395886]">
+                            <CalendarClock className="size-4" /> Status periode
+                        </CardTitle>
+                        <CardDescription>
+                            Batas waktu menentukan apakah kandidat SP berada di daftar sementara atau arsip fixed.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-2">
+                        {dashboard.summary.periods.length ? dashboard.summary.periods.map((period) => (
+                            <div key={period.periode_semester} className="flex items-center justify-between rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 px-4 py-3">
+                                <div>
+                                    <p className="text-sm font-bold text-[#395886]">{period.periode_semester}</p>
+                                    <p className="text-xs text-[#395886]/65">
+                                        {period.deadline_at ? new Date(period.deadline_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) : 'Batas waktu belum ditetapkan'}
+                                    </p>
+                                </div>
+                                <span className={cn('rounded-full px-2.5 py-1 text-[10px] font-black uppercase', period.status === 'open' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700')}>
+                                    {period.status === 'open' ? 'Berjalan' : 'Ditutup'}
+                                </span>
+                            </div>
+                        )) : (
+                            <p className="rounded-2xl border border-dashed border-[#8AAEE0] p-4 text-xs text-[#395886]/70">Belum ada batas waktu periode. Tetapkan pada Surat Peringatan.</p>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card className="border-white/80 bg-white/85 shadow-sm">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base text-[#395886]">
+                            <ClipboardList className="size-4" /> Daftar kerja admin
+                        </CardTitle>
+                        <CardDescription>
+                            Prioritas yang membutuhkan keputusan atau tindak lanjut.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-3">
+                        <DashboardWorklistLink
+                            title="Kandidat sementara"
+                            count={dashboard.worklist.temporary_candidates.length}
+                            description="Masih memiliki sisa jam sebelum batas waktu."
+                        />
+                        <DashboardWorklistLink
+                            title="Kandidat fixed"
+                            count={dashboard.worklist.fixed_candidates.length}
+                            description="Lewat batas waktu dan perlu peninjauan SP-1."
+                        />
+                        <DashboardWorklistLink
+                            title="SP-1 perlu ditindaklanjuti"
+                            count={dashboard.worklist.warnings_to_follow_up.length}
+                            description="Draft atau surat aktif pada periode terpilih."
+                        />
+                        <Button asChild variant="outline" className="mt-1 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                            <Link href={adminIndex.url({ query: { tab: 'warnings', ...(filters.periode_semester ? { periode_semester: filters.periode_semester } : {}) } })}>
+                                Buka Surat Peringatan
+                            </Link>
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+        </section>
+    );
+}
+
+function DashboardWorklistLink({
+    title,
+    count,
+    description,
+}: {
+    title: string;
+    count: number;
+    description: string;
+}): React.JSX.Element {
+    return (
+        <div className="flex items-start justify-between gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 px-4 py-3">
+            <div>
+                <p className="text-sm font-bold text-[#395886]">{title}</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-[#395886]/65">{description}</p>
+            </div>
+            <span className="rounded-xl bg-[#395886] px-2.5 py-1 text-xs font-black tabular-nums text-white">{count}</span>
+        </div>
+    );
+}
+
+function StudentOverviewPanel({
+    overview,
+    onClose,
+}: {
+    overview: StudentOverview;
+    onClose: () => void;
+}): React.JSX.Element {
+    const { summary, source } = overview;
+
+    return (
+        <section className="overflow-hidden rounded-3xl border border-[#8AAEE0] bg-white shadow-lg">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#D5DEEF] bg-[#F0F3FA]/65 px-5 py-4">
+                <div>
+                    <p className="text-[10px] font-black tracking-[0.16em] text-[#628ECB] uppercase">Profil mahasiswa</p>
+                    <h2 className="mt-1 text-lg font-black text-[#395886]">{summary.nama_mahasiswa}</h2>
+                    <p className="font-mono text-xs text-[#395886]/70">{summary.nim} · {summary.kelas} · {summary.periode_semester}</p>
+                </div>
+                <Button type="button" variant="outline" onClick={onClose} className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                    <X className="mr-1.5 size-4" /> Tutup
+                </Button>
+            </div>
+            <div className="grid gap-4 p-5 xl:grid-cols-[1fr_1fr_1.2fr]">
+                <div className="rounded-2xl border border-[#D5DEEF] p-4">
+                    <p className="text-xs font-black tracking-wide text-[#395886] uppercase">Data efektif</p>
+                    <dl className="mt-3 grid gap-2 text-xs">
+                        <OverviewValue label="Kompen" value={`${number(summary.effective_total_kompensasi_jam)} jam`} />
+                        <OverviewValue label="Responsi" value={`${number(summary.effective_total_responsi_jam)} jam`} />
+                        <OverviewValue label="Sudah dikerjakan" value={`${number(summary.effective_kompensasi_dikerjakan_jam)} + ${number(summary.effective_responsi_dikerjakan_jam)} jam`} />
+                        <OverviewValue label="Sisa hutang" value={`${number(summary.effective_sisa_hutang_jam)} jam`} emphasized />
+                    </dl>
+                    {summary.has_summary_override ? <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">Nilai efektif menggunakan koreksi admin.</p> : null}
+                </div>
+                <div className="rounded-2xl border border-[#D5DEEF] p-4">
+                    <p className="text-xs font-black tracking-wide text-[#395886] uppercase">Sumber workbook</p>
+                    <dl className="mt-3 grid gap-2 text-xs">
+                        <OverviewValue label="Kompen asal" value={`${number(source.total_kompensasi_jam)} jam`} />
+                        <OverviewValue label="Responsi asal" value={`${number(source.total_responsi_jam)} jam`} />
+                        <OverviewValue label="Sisa asal" value={`${number(source.sisa_hutang_jam)} jam`} />
+                    </dl>
+                    <p className="mt-3 text-[11px] leading-relaxed text-[#395886]/65">{source.import_filename ?? 'Sumber unggahan tidak tersedia'}{source.imported_at ? ` · ${new Date(source.imported_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}` : ''}</p>
+                </div>
+                <div className="rounded-2xl border border-[#D5DEEF] p-4">
+                    <p className="text-xs font-black tracking-wide text-[#395886] uppercase">Jejak perubahan terakhir</p>
+                    <div className="mt-3 grid gap-2">
+                        {overview.activities.length ? overview.activities.slice(0, 4).map((activity) => (
+                            <div key={activity.id} className="border-l-2 border-[#8AAEE0] pl-3 text-xs">
+                                <p className="font-semibold text-[#395886]">{activityDescription(activity)}</p>
+                                <p className="text-[11px] text-[#395886]/65">{new Date(activity.occurred_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}{activity.reason ? ` · ${activity.reason}` : ''}</p>
+                            </div>
+                        )) : <p className="text-xs text-[#395886]/65">Belum ada perubahan manual yang tercatat.</p>}
+                    </div>
+                    <p className="mt-4 text-[11px] text-[#395886]/65">{overview.details.length} detail Kompen · {overview.warnings.length} riwayat SP-1</p>
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function OverviewValue({
+    label,
+    value,
+    emphasized = false,
+}: {
+    label: string;
+    value: string;
+    emphasized?: boolean;
+}): React.JSX.Element {
+    return (
+        <div className="flex items-center justify-between gap-3">
+            <dt className="text-[#395886]/65">{label}</dt>
+            <dd className={cn('font-mono font-bold text-[#395886]', emphasized && 'text-base')}>{value}</dd>
+        </div>
+    );
+}
+
 function EmptyTableState({ isAdmin }: { isAdmin: boolean }): React.JSX.Element {
     return (
         <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-12 text-center text-sm backdrop-blur-xl transition-all duration-300">
@@ -2346,6 +2737,8 @@ export default function KompenResponHubIndex({
     isAdmin,
     filters,
     filterOptions,
+    activityFilterOptions,
+    dashboard,
     flash,
     students,
     details,
@@ -2370,6 +2763,29 @@ export default function KompenResponHubIndex({
     const [selectedWarning, setSelectedWarning] = useState<Warning | null>(
         null,
     );
+    const [studentOverview, setStudentOverview] = useState<StudentOverview | null>(null);
+    const [isStudentOverviewLoading, setIsStudentOverviewLoading] = useState(false);
+
+    async function openStudentOverview(student: Student): Promise<void> {
+        setIsStudentOverviewLoading(true);
+
+        try {
+            const response = await fetch(adminStudentOverview.url(student.id), {
+                headers: { Accept: 'application/json' },
+            });
+
+            if (!response.ok) {
+                throw new Error('Profil mahasiswa tidak dapat dimuat.');
+            }
+
+            const payload = (await response.json()) as { data: StudentOverview };
+            setStudentOverview(payload.data);
+        } catch {
+            window.alert('Profil mahasiswa tidak dapat dimuat. Silakan coba lagi.');
+        } finally {
+            setIsStudentOverviewLoading(false);
+        }
+    }
 
     return (
         <>
@@ -2505,6 +2921,7 @@ export default function KompenResponHubIndex({
                                 href={indexAction.url({
                                     query:
                                         tab === 'upload' ||
+                                        tab === 'dashboard' ||
                                         tab === 'imports' ||
                                         tab === 'warnings' ||
                                         tab === 'activity'
@@ -2543,6 +2960,14 @@ export default function KompenResponHubIndex({
                     ) : null}
 
                     {/* Main Views */}
+                    {activeTab === 'dashboard' && isAdmin && dashboard ? (
+                        <DashboardPanel
+                            dashboard={dashboard}
+                            filters={filters}
+                            filterOptions={filterOptions}
+                        />
+                    ) : null}
+
                     {activeTab === 'upload' ? (
                         <UploadPanel
                             onUploadRequestActivityChange={
@@ -2598,6 +3023,7 @@ export default function KompenResponHubIndex({
                             <ActivityFilterPanel
                                 filters={filters}
                                 filterOptions={filterOptions}
+                                activityFilterOptions={activityFilterOptions}
                             />
                             {activityLogs?.data.length ? (
                                 <ActivityLogTable data={activityLogs} />
@@ -2611,6 +3037,12 @@ export default function KompenResponHubIndex({
 
                     {activeTab === 'students' || activeTab === 'details' ? (
                         <section className="flex flex-col gap-4">
+                            {isAdmin && studentOverview ? (
+                                <StudentOverviewPanel
+                                    overview={studentOverview}
+                                    onClose={() => setStudentOverview(null)}
+                                />
+                            ) : null}
                             {isAdmin ? (
                                 <div className="flex justify-end">
                                     <EditModeControl
@@ -2657,6 +3089,7 @@ export default function KompenResponHubIndex({
                                         data={students}
                                         isEditMode={isAdmin && isEditMode}
                                         onSelect={setSelectedStudent}
+                                        onOpenProfile={isAdmin ? openStudentOverview : undefined}
                                     />
                                 ) : details ? (
                                     <DetailTable
@@ -2668,6 +3101,9 @@ export default function KompenResponHubIndex({
                             ) : (
                                 <EmptyTableState isAdmin={isAdmin} />
                             )}
+                            {isStudentOverviewLoading ? (
+                                <p className="text-center text-xs font-semibold text-[#395886]/70">Memuat profil mahasiswa…</p>
+                            ) : null}
                         </section>
                     ) : null}
                 </div>
