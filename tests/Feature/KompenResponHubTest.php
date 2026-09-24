@@ -1,10 +1,14 @@
 <?php
 
+use App\Actions\KompenResponHub\BuildKompenResponHubExport;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
+use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Jobs\GenerateKompenResponHubExport;
 use App\Jobs\ProcessKompenResponHubImport;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
+use App\Models\KompenResponHubExportTask;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
@@ -106,18 +110,43 @@ test('the student API returns the complete kompen and respon payload for one stu
         ->assertJsonPath('data.details.0.jam_responsi', '2.0000');
 });
 
-test('students can download a landscape XLSX limited to the selected uploaded period', function () {
+test('an export without filters is queued and produces a landscape XLSX', function () {
+    Storage::fake('local');
+    Queue::fake();
     createStudent();
 
-    $this->get('/mahasiswa/downloads/students')
+    $this->post('/exports', [
+        'resource' => 'students',
+        'format' => 'xlsx',
+    ])
         ->assertRedirect()
-        ->assertSessionHasErrors('periode_semester');
+        ->assertSessionHas('success');
 
-    $response = $this->get('/mahasiswa/downloads/students?periode_semester=2026%2F2027%20Ganjil');
+    $task = KompenResponHubExportTask::query()->sole();
+
+    expect($task->filters)->toBe([])
+        ->and($task->status)->toBe(KompenResponHubExportTask::StatusQueued);
+
+    Queue::assertPushed(
+        GenerateKompenResponHubExport::class,
+        fn (GenerateKompenResponHubExport $job): bool => $job->exportTaskId === $task->id,
+    );
+
+    (new GenerateKompenResponHubExport($task->id))->handle(
+        app(BuildKompenResponHubExport::class),
+        app(RecordKompenResponHubActivity::class),
+    );
+
+    $task->refresh();
+    expect($task->status)->toBe(KompenResponHubExportTask::StatusCompleted);
+    $this->get("/exports/{$task->id}/download?token={$task->access_token}")
+        ->assertNotFound();
+    $response = $this->withCookie(config('session.cookie'), $task->request_session_id)
+        ->get("/exports/{$task->id}/download?token={$task->access_token}");
 
     $response
         ->assertOk()
-        ->assertDownload('kompen-dan-respon-2026-2027-ganjil.xlsx')
+        ->assertDownload("kompen-dan-respon-semua-periode-{$task->id}.xlsx")
         ->assertHeaderContains(
             'Content-Type',
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -132,7 +161,7 @@ test('students can download a landscape XLSX limited to the selected uploaded pe
         expect($worksheet->getPageSetup()->getOrientation())
             ->toBe(PageSetup::ORIENTATION_LANDSCAPE)
             ->and($worksheet->getCell('A1')->getValue())->toBe('Kompen dan Respon')
-            ->and($worksheet->getCell('B2')->getValue())->toBe('2026/2027 Ganjil')
+            ->and($worksheet->getCell('B2')->getValue())->toBe('Semua Periode')
             ->and($worksheet->getCell('B5')->getValue())->toBe('123456789')
             ->and($worksheet->getStyle('A5')->getNumberFormat()->getFormatCode())->toBe('#,##0')
             ->and($worksheet->getStyle('F5')->getNumberFormat()->getFormatCode())->toBe('#,##0.00');
@@ -141,7 +170,9 @@ test('students can download a landscape XLSX limited to the selected uploaded pe
     }
 });
 
-test('students can download a landscape PDF for detail kompen', function () {
+test('an export produces a landscape PDF for detail kompen', function () {
+    Storage::fake('local');
+    Queue::fake();
     $student = createStudent();
     KompenResponHubDetail::create([
         'kompen_respon_hub_student_id' => $student->id,
@@ -155,14 +186,36 @@ test('students can download a landscape PDF for detail kompen', function () {
         'jam_responsi' => 2,
     ]);
 
-    $response = $this->get('/mahasiswa/downloads/details/pdf?periode_semester=2026%2F2027%20Ganjil');
+    $this->post('/exports', [
+        'resource' => 'details',
+        'format' => 'pdf',
+        'periode_semester' => '2026/2027 Ganjil',
+    ])->assertRedirect();
+
+    $task = KompenResponHubExportTask::query()->sole();
+    (new GenerateKompenResponHubExport($task->id))->handle(
+        app(BuildKompenResponHubExport::class),
+        app(RecordKompenResponHubActivity::class),
+    );
+
+    $task->refresh();
+    expect($task->status)->toBe(KompenResponHubExportTask::StatusCompleted);
+    $response = $this->withCookie(config('session.cookie'), $task->request_session_id)
+        ->get("/exports/{$task->id}/download?token={$task->access_token}");
 
     $response
         ->assertOk()
-        ->assertDownload('detail-kompen-2026-2027-ganjil.pdf')
+        ->assertDownload("detail-kompen-2026-2027-ganjil-{$task->id}.pdf")
         ->assertHeaderContains('Content-Type', 'application/pdf');
 
-    expect($response->getContent())->toStartWith('%PDF-');
+    expect($response->streamedContent())->toStartWith('%PDF-');
+});
+
+test('a student cannot queue an export of warning letters', function () {
+    $this->post('/exports', [
+        'resource' => 'warnings',
+        'format' => 'xlsx',
+    ])->assertForbidden();
 });
 
 test('an authenticated admin can upload a valid workbook that replaces matching class data', function () {

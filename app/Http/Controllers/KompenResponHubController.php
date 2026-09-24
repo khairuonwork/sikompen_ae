@@ -7,11 +7,13 @@ use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
 use App\Http\Resources\KompenResponHubActivityLogResource;
 use App\Http\Resources\KompenResponHubDetailResource;
+use App\Http\Resources\KompenResponHubExportTaskResource;
 use App\Http\Resources\KompenResponHubImportAuditLogResource;
 use App\Http\Resources\KompenResponHubImportTaskResource;
 use App\Http\Resources\KompenResponHubStudentResource;
 use App\Http\Resources\KompenResponHubWarningLetterResource;
 use App\Models\KompenResponHubDetail;
+use App\Models\KompenResponHubExportTask;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
@@ -121,6 +123,14 @@ class KompenResponHubController extends Controller
                         ->get(),
                 )->resolve()
                 : [],
+            'exportTasks' => KompenResponHubExportTaskResource::collection(
+                KompenResponHubExportTask::query()
+                    ->where('request_session_id', $request->session()->getId())
+                    ->where('expires_at', '>', now())
+                    ->latest('id')
+                    ->limit(5)
+                    ->get(),
+            )->resolve(),
             'students' => $activeTab === 'students'
                 ? $this->resourcePaginator(
                     $this->dataQuery->students($filters)->paginate($this->perPage($filters))->withQueryString(),
@@ -149,6 +159,14 @@ class KompenResponHubController extends Controller
                 ? $this->resourcePaginator(
                     $this->dataQuery->temporaryWarningCandidates($filters)
                         ->paginate($this->perPage($filters), ['*'], 'candidate_page')
+                        ->withQueryString(),
+                    KompenResponHubStudentResource::class,
+                )
+                : null,
+            'fixedCandidates' => $isAdmin && $activeTab === 'warnings'
+                ? $this->resourcePaginator(
+                    $this->dataQuery->fixedWarningCandidates($filters)
+                        ->paginate($this->perPage($filters), ['*'], 'fixed_candidate_page')
                         ->withQueryString(),
                     KompenResponHubStudentResource::class,
                 )

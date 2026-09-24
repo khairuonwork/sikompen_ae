@@ -22,6 +22,7 @@ class KompenResponHubActivityLogResource extends JsonResource
             'subject_type' => $this->subject_type,
             'subject_reference' => $this->subject_reference,
             'nim' => $this->nim,
+            'subject_name' => $this->subject_name,
             'periode_semester' => $this->periode_semester,
             'kelas' => $this->kelas,
             'actor_type' => $this->actor_type,

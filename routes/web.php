@@ -3,7 +3,7 @@
 use App\Http\Controllers\AdminAuthenticationController;
 use App\Http\Controllers\KompenResponHubAdminSetupController;
 use App\Http\Controllers\KompenResponHubController;
-use App\Http\Controllers\KompenResponHubDownloadController;
+use App\Http\Controllers\KompenResponHubExportController;
 use App\Http\Controllers\KompenResponHubImportController;
 use App\Http\Controllers\KompenResponHubImportRollbackController;
 use App\Http\Controllers\KompenResponHubImportTaskController;
@@ -40,12 +40,13 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
     Route::get('kompen-respon', [KompenResponHubController::class, 'studentIndex'])
         ->name('kompen-respon-hub.index');
 
-    Route::prefix('mahasiswa/downloads')->name('student.kompen-respon.downloads.')->group(function (): void {
-        Route::get('students', [KompenResponHubDownloadController::class, 'students'])->name('students');
-        Route::get('students/pdf', [KompenResponHubDownloadController::class, 'studentsPdf'])->name('students.pdf');
-        Route::get('details', [KompenResponHubDownloadController::class, 'details'])->name('details');
-        Route::get('details/pdf', [KompenResponHubDownloadController::class, 'detailsPdf'])->name('details.pdf');
-    });
+    Route::post('exports', [KompenResponHubExportController::class, 'store'])
+        ->middleware('throttle:10,15')
+        ->name('kompen-respon.exports.store');
+    Route::get('exports/{exportTask}', [KompenResponHubExportController::class, 'show'])
+        ->name('kompen-respon.exports.show');
+    Route::get('exports/{exportTask}/download', [KompenResponHubExportController::class, 'download'])
+        ->name('kompen-respon.exports.download');
 
     Route::middleware('sikompen.admin')->prefix('admin')->name('admin.')->group(function (): void {
         Route::get('/', [KompenResponHubController::class, 'adminIndex'])
@@ -82,11 +83,9 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
         Route::put('kompen-respon/warnings/{warning}', [KompenResponHubLifecycleController::class, 'updateWarning'])
             ->middleware('throttle:20,1')
             ->name('kompen-respon.warnings.update');
-        Route::get('kompen-respon/downloads/warnings', [KompenResponHubDownloadController::class, 'warnings'])
-            ->name('kompen-respon.downloads.warnings');
-        Route::get('kompen-respon/downloads/warnings/pdf', [KompenResponHubDownloadController::class, 'warningsPdf'])
-            ->name('kompen-respon.downloads.warnings.pdf');
-
+        Route::delete('kompen-respon/warnings/{warning}', [KompenResponHubLifecycleController::class, 'destroyWarning'])
+            ->middleware('throttle:20,1')
+            ->name('kompen-respon.warnings.destroy');
         Route::middleware('sikompen.standalone')->group(function (): void {
             Route::get('settings', [KompenResponHubAdminSetupController::class, 'settings'])->name('settings');
             Route::post('settings/admin-setup', [KompenResponHubAdminSetupController::class, 'enable'])

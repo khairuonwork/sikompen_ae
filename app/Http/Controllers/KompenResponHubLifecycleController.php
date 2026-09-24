@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Http\Requests\DestroyKompenResponHubWarningLetterRequest;
 use App\Http\Requests\StoreKompenResponHubDetailOverrideRequest;
 use App\Http\Requests\StoreKompenResponHubPeriodCutoffRequest;
 use App\Http\Requests\StoreKompenResponHubStudentProgressRequest;
@@ -37,6 +38,7 @@ class KompenResponHubLifecycleController extends Controller
         ])->save();
 
         $this->activity->execute('cutoff.updated', 'period_cutoff', (string) $cutoff->id, $request->user('admin'), $request, period: $cutoff->periode_semester, beforeState: $before, afterState: $cutoff->only(['deadline_at', 'timezone']));
+        $this->synchronizeWarningClassification($cutoff, $request);
 
         return back()->with('success', 'Batas waktu periode berhasil disimpan.');
     }
@@ -63,7 +65,7 @@ class KompenResponHubLifecycleController extends Controller
             'updated_by_admin_id' => $request->user('admin')?->id,
         ])->save();
 
-        $this->activity->execute('progress.updated', 'student_progress', (string) $progress->id, $request->user('admin'), $request, $student->nim, $student->periode_semester, $student->kelas, $validated['reason'], $before, $progress->only(['kompensasi_dikerjakan_jam', 'responsi_dikerjakan_jam', 'last_worked_at', 'reason']));
+        $this->activity->execute('progress.updated', 'student_progress', (string) $progress->id, $request->user('admin'), $request, $student->nim, $student->periode_semester, $student->kelas, $validated['reason'], $before, $progress->only(['kompensasi_dikerjakan_jam', 'responsi_dikerjakan_jam', 'last_worked_at', 'reason']), subjectName: $student->nama_mahasiswa);
         $this->syncWarningResolution($student, $request);
 
         return back()->with('success', 'Progres pengerjaan mahasiswa berhasil diperbarui.');
@@ -86,7 +88,7 @@ class KompenResponHubLifecycleController extends Controller
             'updated_by_admin_id' => $request->user('admin')?->id,
         ])->save();
 
-        $this->activity->execute('summary.override_updated', 'student_summary_override', (string) $override->id, $request->user('admin'), $request, $student->nim, $student->periode_semester, $student->kelas, $validated['reason'], $before, $override->only(['total_kompensasi_jam', 'total_responsi_jam', 'reason']));
+        $this->activity->execute('summary.override_updated', 'student_summary_override', (string) $override->id, $request->user('admin'), $request, $student->nim, $student->periode_semester, $student->kelas, $validated['reason'], $before, $override->only(['total_kompensasi_jam', 'total_responsi_jam', 'reason']), subjectName: $student->nama_mahasiswa);
         $this->syncWarningResolution($student, $request);
 
         return back()->with('success', 'Koreksi Kompen dan Respon berhasil disimpan.');
@@ -106,7 +108,7 @@ class KompenResponHubLifecycleController extends Controller
         $overrideValues = collect($validated)->only(['tanggal', 'mata_kuliah', 'nama_dosen', 'jenis_pertemuan', 'presensi', 'menit_keterlambatan', 'keterangan', 'jam_kompensasi', 'jam_responsi'])->all();
         $override->fill(['override_values' => $overrideValues, 'reason' => $validated['reason'], 'updated_by_admin_id' => $request->user('admin')?->id])->save();
 
-        $this->activity->execute('detail.override_updated', 'detail_override', (string) $override->id, $request->user('admin'), $request, $detail->student?->nim, $detail->student?->periode_semester, $detail->student?->kelas, $validated['reason'], $before, $override->only(['override_values', 'reason']));
+        $this->activity->execute('detail.override_updated', 'detail_override', (string) $override->id, $request->user('admin'), $request, $detail->student?->nim, $detail->student?->periode_semester, $detail->student?->kelas, $validated['reason'], $before, $override->only(['override_values', 'reason']), subjectName: $detail->student?->nama_mahasiswa);
 
         return back()->with('success', 'Koreksi Detail Kompen berhasil disimpan.');
     }
@@ -131,11 +133,12 @@ class KompenResponHubLifecycleController extends Controller
             'resolution' => 'outstanding',
             'snapshot' => $this->studentSnapshot($student),
             'reason' => $validated['reason'],
+            'cancelled_at' => null,
             'created_by_admin_id' => $warning->created_by_admin_id ?? $request->user('admin')?->id,
             'updated_by_admin_id' => $request->user('admin')?->id,
         ])->save();
 
-        $this->activity->execute('warning.drafted', 'warning_letter', (string) $warning->id, $request->user('admin'), $request, $student->nim, $student->periode_semester, $student->kelas, $validated['reason'], $before, $warning->only(['classification', 'letter_status', 'resolution', 'snapshot', 'reason']));
+        $this->activity->execute('warning.drafted', 'warning_letter', (string) $warning->id, $request->user('admin'), $request, $student->nim, $student->periode_semester, $student->kelas, $validated['reason'], $before, $warning->only(['classification', 'letter_status', 'resolution', 'snapshot', 'reason']), subjectName: $student->nama_mahasiswa);
 
         return back()->with('success', 'Draft SP-1 berhasil dibuat.');
     }
@@ -152,9 +155,25 @@ class KompenResponHubLifecycleController extends Controller
             'updated_by_admin_id' => $request->user('admin')?->id,
         ])->save();
 
-        $this->activity->execute("warning.{$validated['letter_status']}", 'warning_letter', (string) $warning->id, $request->user('admin'), $request, $warning->nim, $warning->periode_semester, $warning->kelas, $validated['reason'], $before, $warning->only(['letter_status', 'resolution', 'reason', 'issued_at', 'cancelled_at']));
+        $this->activity->execute("warning.{$validated['letter_status']}", 'warning_letter', (string) $warning->id, $request->user('admin'), $request, $warning->nim, $warning->periode_semester, $warning->kelas, $validated['reason'], $before, $warning->only(['letter_status', 'resolution', 'reason', 'issued_at', 'cancelled_at']), subjectName: $warning->nama_mahasiswa);
 
         return back()->with('success', 'Status SP-1 berhasil diperbarui.');
+    }
+
+    public function destroyWarning(DestroyKompenResponHubWarningLetterRequest $request, KompenResponHubWarningLetter $warning): RedirectResponse
+    {
+        $validated = $request->validated();
+        $before = $warning->only(['letter_status', 'resolution', 'reason', 'cancelled_at']);
+        $warning->update([
+            'letter_status' => KompenResponHubWarningLetter::LetterStatusCancelled,
+            'reason' => $validated['reason'],
+            'cancelled_at' => now(),
+            'updated_by_admin_id' => $request->user('admin')?->id,
+        ]);
+
+        $this->activity->execute('warning.cancelled', 'warning_letter', (string) $warning->id, $request->user('admin'), $request, $warning->nim, $warning->periode_semester, $warning->kelas, $validated['reason'], $before, $warning->only(['letter_status', 'resolution', 'reason', 'cancelled_at']), subjectName: $warning->nama_mahasiswa);
+
+        return back()->with('success', 'SP-1 dibatalkan. Mahasiswa dapat dipilih kembali untuk membuat draft baru.');
     }
 
     /** @return array{nim: string, periode_semester: string, kelas: string} */
@@ -204,6 +223,40 @@ class KompenResponHubLifecycleController extends Controller
                     'Status penyelesaian diselaraskan dengan progres Kompen dan Responsi.',
                     $before,
                     $warning->only(['resolution', 'snapshot']),
+                    subjectName: $student->nama_mahasiswa,
+                );
+            });
+    }
+
+    private function synchronizeWarningClassification(
+        KompenResponHubPeriodCutoff $cutoff,
+        StoreKompenResponHubPeriodCutoffRequest $request,
+    ): void {
+        $classification = $cutoff->deadline_at->isPast() ? 'fixed' : 'temporary';
+
+        KompenResponHubWarningLetter::query()
+            ->where('cutoff_id', $cutoff->id)
+            ->where('classification', '!=', $classification)
+            ->each(function (KompenResponHubWarningLetter $warning) use ($classification, $cutoff, $request): void {
+                $before = $warning->only(['classification']);
+                $warning->update([
+                    'classification' => $classification,
+                    'updated_by_admin_id' => $request->user('admin')?->id,
+                ]);
+
+                $this->activity->execute(
+                    "warning.classification_{$classification}",
+                    'warning_letter',
+                    (string) $warning->id,
+                    $request->user('admin'),
+                    $request,
+                    $warning->nim,
+                    $cutoff->periode_semester,
+                    $warning->kelas,
+                    'Klasifikasi diselaraskan setelah batas waktu periode diperbaiki.',
+                    $before,
+                    $warning->only(['classification']),
+                    subjectName: $warning->nama_mahasiswa,
                 );
             });
     }

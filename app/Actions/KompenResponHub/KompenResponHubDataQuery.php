@@ -58,6 +58,24 @@ class KompenResponHubDataQuery
      */
     public function temporaryWarningCandidates(array $filters): Builder
     {
+        return $this->warningCandidates($filters, '>');
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return Builder<KompenResponHubStudent>
+     */
+    public function fixedWarningCandidates(array $filters): Builder
+    {
+        return $this->warningCandidates($filters, '<=');
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return Builder<KompenResponHubStudent>
+     */
+    private function warningCandidates(array $filters, string $deadlineOperator): Builder
+    {
         $studentTable = (new KompenResponHubStudent)->getTable();
         $cutoffTable = (new KompenResponHubPeriodCutoff)->getTable();
         $progressTable = (new KompenResponHubStudentProgress)->getTable();
@@ -71,11 +89,11 @@ class KompenResponHubDataQuery
         );
 
         return $this->students($filters)
-            ->whereExists(function (BaseQueryBuilder $query) use ($cutoffTable, $studentTable): void {
+            ->whereExists(function (BaseQueryBuilder $query) use ($cutoffTable, $studentTable, $deadlineOperator): void {
                 $query->selectRaw('1')
                     ->from($cutoffTable)
                     ->whereColumn("{$cutoffTable}.periode_semester", "{$studentTable}.periode_semester")
-                    ->where('deadline_at', '>', now());
+                    ->where('deadline_at', $deadlineOperator, now());
             })
             ->whereRaw("({$effectiveDebt}) > 0");
     }

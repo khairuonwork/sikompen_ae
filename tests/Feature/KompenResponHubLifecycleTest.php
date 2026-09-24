@@ -133,6 +133,62 @@ test('temporary candidates only include students with an open cutoff and remaini
     expect($candidateIds)->toContain($student->id);
 });
 
+test('fixed candidates include students with outstanding debt after the cutoff', function () {
+    $student = createLifecycleStudent();
+    KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $candidateIds = app(KompenResponHubDataQuery::class)
+        ->fixedWarningCandidates([])
+        ->pluck('id');
+
+    expect($candidateIds)->toContain($student->id);
+});
+
+test('an admin can cancel an SP and draft it again for the same student', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->addWeek(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/warnings', [
+        'student_id' => $student->id,
+        'reason' => 'Draft awal untuk verifikasi administrasi.',
+    ])->assertRedirect();
+
+    $warning = KompenResponHubWarningLetter::query()->sole();
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/warnings/{$warning->id}", [
+            'reason' => 'Data surat perlu diperbaiki sebelum diterbitkan.',
+        ])
+        ->assertRedirect();
+
+    expect($warning->fresh()->letter_status)
+        ->toBe(KompenResponHubWarningLetter::LetterStatusCancelled)
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'warning.cancelled')
+            ->where('subject_name', $student->nama_mahasiswa)
+            ->exists())
+        ->toBeTrue();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/warnings', [
+        'student_id' => $student->id,
+        'reason' => 'Draft baru setelah koreksi administrasi.',
+    ])->assertRedirect();
+
+    expect(KompenResponHubWarningLetter::query()->count())->toBe(1)
+        ->and($warning->fresh()->letter_status)
+        ->toBe(KompenResponHubWarningLetter::LetterStatusDraft)
+        ->and($warning->fresh()->cancelled_at)->toBeNull();
+});
+
 test('the scheduled command changes temporary warnings to fixed after the cutoff', function () {
     $student = createLifecycleStudent();
     $cutoff = KompenResponHubPeriodCutoff::create([

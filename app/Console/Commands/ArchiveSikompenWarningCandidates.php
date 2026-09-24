@@ -47,6 +47,7 @@ class ArchiveSikompenWarningCandidates extends Command
                                 $before,
                                 $warning->only(['classification']),
                                 ['cutoff_id' => $cutoff->id],
+                                $warning->nama_mahasiswa,
                             );
                         }
                     });
@@ -77,7 +78,7 @@ class ArchiveSikompenWarningCandidates extends Command
 
                             if ($warning->wasRecentlyCreated) {
                                 $createdCount++;
-                                $this->activity->execute('warning.archived', 'warning_letter', (string) $warning->id, null, null, $student->nim, $student->periode_semester, $student->kelas, metadata: ['cutoff_id' => $cutoff->id, 'snapshot' => $snapshot]);
+                                $this->activity->execute('warning.archived', 'warning_letter', (string) $warning->id, null, null, $student->nim, $student->periode_semester, $student->kelas, metadata: ['cutoff_id' => $cutoff->id, 'snapshot' => $snapshot], subjectName: $student->nama_mahasiswa);
                             }
                         }
                     });

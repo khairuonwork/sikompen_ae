@@ -26,12 +26,14 @@ class RecordKompenResponHubActivity
         ?array $beforeState = null,
         ?array $afterState = null,
         ?array $metadata = null,
+        ?string $subjectName = null,
     ): void {
         KompenResponHubActivityLog::create([
             'event_type' => $eventType,
             'subject_type' => $subjectType,
             'subject_reference' => $subjectReference,
             'nim' => $nim,
+            'subject_name' => $subjectName,
             'periode_semester' => $period,
             'kelas' => $class,
             'actor_type' => $actor === null ? 'system' : 'admin',

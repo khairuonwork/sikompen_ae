@@ -11,3 +11,7 @@ Artisan::command('inspire', function () {
 Schedule::command('sikompen:archive-warning-candidates')
     ->everyFifteenMinutes()
     ->withoutOverlapping();
+
+Schedule::command('sikompen:purge-exports')
+    ->hourly()
+    ->withoutOverlapping();

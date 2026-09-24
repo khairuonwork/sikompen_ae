@@ -33,6 +33,7 @@ services:
       - "9000"
     volumes:
       - sikompen_import_storage:/var/www/html/storage/app/private/kompen-respon-hub/imports
+      - sikompen_export_storage:/var/www/html/storage/app/private/kompen-respon-hub/exports
 
   web:
     build:
@@ -80,6 +81,7 @@ services:
         condition: service_healthy
     volumes:
       - sikompen_import_storage:/var/www/html/storage/app/private/kompen-respon-hub/imports
+      - sikompen_export_storage:/var/www/html/storage/app/private/kompen-respon-hub/exports
 
   scheduler:
     build:
@@ -136,3 +138,5 @@ volumes:
   sikompen_database_data:
   sikompen_import_storage:
     name: sikompen_import_storage
+  sikompen_export_storage:
+    name: sikompen_export_storage
