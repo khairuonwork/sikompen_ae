@@ -234,12 +234,12 @@ type KompenResponHubPageProps = {
 };
 
 const adminTabs = [
-    ['upload', 'Upload dokumen'],
+    ['upload', 'Upload Dokumen'],
     ['students', 'Kompen dan Respon'],
     ['details', 'Detail Kompen'],
-    ['imports', 'Log upload'],
-    ['warnings', 'Surat peringatan'],
-    ['activity', 'Riwayat aktivitas'],
+    ['imports', 'Log Upload'],
+    ['warnings', 'Surat Peringatan'],
+    ['activity', 'Riwayat Aktivitas'],
 ] as const;
 
 const studentTabs = [
@@ -1052,7 +1052,7 @@ function UploadPanel({
                                     type="file"
                                     accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                     required
-                                    className="cursor-pointer rounded-2xl border-[#8AAEE0] bg-white/90 py-2 text-sm text-[#395886] shadow-2xs transition-all duration-300 file:mr-4 file:rounded-xl file:border-0 file:bg-[#395886] file:px-3 file:py-1 file:text-xs file:font-bold file:text-white hover:file:bg-[#1E293B]"
+                                    className="h-12 cursor-pointer rounded-2xl border-[#8AAEE0] bg-white/90 p-1.5 text-sm text-[#395886] shadow-2xs transition-all duration-300 file:mr-3 file:h-9 file:rounded-xl file:border-0 file:bg-[#395886] file:px-3 file:text-xs file:font-bold file:text-white hover:file:bg-[#1E293B]"
                                 />
                                 <p className="text-[11px] leading-tight font-medium text-[#395886]/60">
                                     Maksimum 20 MB. Periode pada filter akan
@@ -2334,7 +2334,7 @@ function EmptyTableState({ isAdmin }: { isAdmin: boolean }): React.JSX.Element {
             </p>
             <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed font-medium text-[#395886]/70">
                 {isAdmin
-                    ? 'Unggah workbook XLSX melalui tab Upload dokumen atau sesuaikan filter yang digunakan.'
+                    ? 'Unggah workbook XLSX melalui tab Upload Dokumen atau sesuaikan filter yang digunakan.'
                     : 'Belum ada data yang sesuai dengan filter yang dipilih. Coba pilih periode lain atau atur ulang filter.'}
             </p>
         </div>
