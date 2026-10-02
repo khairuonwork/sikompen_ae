@@ -66,6 +66,9 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
         Route::delete('kompen-respon/imports/latest', [KompenResponHubImportRollbackController::class, 'destroy'])
             ->middleware('throttle:5,15')
             ->name('kompen-respon.imports.rollback');
+        Route::post('kompen-respon/imports/{import}/restore', [KompenResponHubImportRollbackController::class, 'restore'])
+            ->middleware('throttle:5,15')
+            ->name('kompen-respon.imports.restore');
         Route::get('kompen-respon/import-tasks/{importTask}', [KompenResponHubImportTaskController::class, 'show'])
             ->name('kompen-respon.import-tasks.show');
         Route::put('kompen-respon/cutoffs', [KompenResponHubLifecycleController::class, 'storeCutoff'])

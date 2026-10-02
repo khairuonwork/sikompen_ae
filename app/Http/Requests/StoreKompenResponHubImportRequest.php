@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\SafeSearchTerm;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreKompenResponHubImportRequest extends FormRequest
@@ -14,7 +15,7 @@ class StoreKompenResponHubImportRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'uploader_name' => ['required', 'string', 'max:100'],
+            'uploader_name' => ['required', 'string', 'max:100', new SafeSearchTerm],
             'file' => ['required', 'file', 'mimes:xlsx', 'max:20480'],
         ];
     }

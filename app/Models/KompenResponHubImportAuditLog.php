@@ -32,6 +32,8 @@ class KompenResponHubImportAuditLog extends Model
 
     public const EVENT_ROLLBACK = 'rollback';
 
+    public const EVENT_RESTORE = 'restore';
+
     protected $fillable = [
         'event_type',
         'source_import_id',

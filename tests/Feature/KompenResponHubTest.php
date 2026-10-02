@@ -88,7 +88,7 @@ test('the dashboard filters its summary and actions by class and level', functio
             ->where('filters.tingkat', 2)
             ->where('filters.kelas', '2AEA1')
             ->where('dashboard.summary.total_students', 1)
-            ->where('dashboard.attention.outstanding_after_cutoff', 1)
+            ->where('dashboard.summary.outstanding_students', 1)
             ->where('dashboard.worklist.fixed_candidates.0.nim', '987654321'),
         );
 });
@@ -472,6 +472,62 @@ test('an admin can roll back an incorrect workbook to the previous version for t
             ->exists())->toBeTrue();
 });
 
+test('an admin can make a selected archived workbook version active again', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'versi-awal.xlsx',
+            workbookContents(compensationHours: 1.5, responseHours: 2),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $selectedImport = KompenResponHubImport::query()->sole();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'versi-terbaru.xlsx',
+            workbookContents(compensationHours: 4, responseHours: 3),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/imports/{$selectedImport->id}/restore")
+        ->assertRedirect('/admin?tab=imports')
+        ->assertSessionHas('success', 'Versi versi-awal.xlsx kini menjadi data aktif untuk kelas 1AEA1.');
+
+    expect(KompenResponHubStudent::query()->sole())
+        ->kompen_respon_hub_import_id->toBe($selectedImport->id)
+        ->and(KompenResponHubStudent::query()->sole()->total_hutang_jam)->toBe('3.5000')
+        ->and(KompenResponHubImportAuditLog::query()->latest('id')->value('event_type'))->toBe(KompenResponHubImportAuditLog::EVENT_RESTORE)
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.version_restored')->exists())->toBeTrue();
+});
+
+test('an admin cannot restore a selected workbook when its period is locked', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createStudent();
+    $import = KompenResponHubImport::query()->findOrFail($student->kompen_respon_hub_import_id);
+    Storage::disk('local')->put($import->stored_path, workbookContents());
+    KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subDay(),
+        'timezone' => 'Asia/Jakarta',
+        'closed_at' => now(),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/imports/{$import->id}/restore")
+        ->assertRedirect('/admin?tab=imports')
+        ->assertSessionHas('error', 'Periode telah ditutup dan versi impor tidak dapat dipulihkan.');
+
+    expect(KompenResponHubStudent::query()->sole()->kompen_respon_hub_import_id)
+        ->toBe($import->id);
+});
+
 test('a rollback clears cached filter options', function () {
     Cache::forget(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_KEY);
     Storage::fake('local');
@@ -499,6 +555,48 @@ test('a rollback clears cached filter options', function () {
 test('a guest cannot delete the latest upload', function () {
     $this->delete('/admin/kompen-respon/imports/latest')
         ->assertRedirect('/admin/login');
+});
+
+test('a guest cannot restore a selected upload version', function () {
+    $import = KompenResponHubImport::create([
+        'periode_semester' => '2026/2027 Ganjil',
+        'original_filename' => 'guest-restore.xlsx',
+        'stored_path' => 'kompen-respon-hub/imports/guest-restore.xlsx',
+        'file_hash' => str_repeat('f', 64),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 0,
+        'imported_at' => now(),
+    ]);
+
+    $this->post("/admin/kompen-respon/imports/{$import->id}/restore")
+        ->assertRedirect('/admin/login');
+});
+
+test('search filters reject HTML syntax and treat SQL wildcards as plain text', function () {
+    createStudent();
+
+    $this->getJson('/api/kompen-respon/students?search=%3Cscript%3Ealert(1)%3C%2Fscript%3E')
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['search']);
+
+    $this->getJson('/api/kompen-respon/students?search=%25')
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
+});
+
+test('admin login and uploader name reject HTML syntax', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->post('/admin/login', [
+        'email' => '<script>alert(1)</script>',
+        'password' => 'invalid-password',
+    ])->assertSessionHasErrors(['email']);
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => '<script>alert(1)</script>',
+        'file' => UploadedFile::fake()->create('kompen-respon.xlsx'),
+    ])->assertSessionHasErrors(['uploader_name']);
 });
 
 test('an admin cannot delete an upload while another import is still active', function () {

@@ -15,7 +15,6 @@ use App\Http\Resources\KompenResponHubWarningLetterResource;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubExportTask;
-use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubPeriodCutoff;
@@ -132,13 +131,6 @@ class KompenResponHubController extends Controller
     {
         $filters = $this->filtersForRequest($request);
         $activeTab = $filters['tab'] ?? ($isAdmin ? 'dashboard' : 'students');
-        $hasActiveImportTask = $isAdmin && KompenResponHubImportTask::query()
-            ->whereIn('status', [
-                KompenResponHubImportTask::STATUS_QUEUED,
-                KompenResponHubImportTask::STATUS_PROCESSING,
-            ])
-            ->exists();
-
         if (! $isAdmin && in_array($activeTab, ['dashboard', 'upload', 'imports', 'warnings', 'activity'], true)) {
             $activeTab = 'students';
         }
@@ -226,9 +218,6 @@ class KompenResponHubController extends Controller
                     KompenResponHubActivityLogResource::class,
                 )
                 : null,
-            'canRollbackLatestImport' => $isAdmin
-                && ! $hasActiveImportTask
-                && KompenResponHubImport::query()->whereHas('students')->exists(),
         ]);
     }
 
@@ -266,7 +255,6 @@ class KompenResponHubController extends Controller
 
         return [
             'summary' => $this->dataQuery->dashboardSummary($filters),
-            'attention' => $this->dataQuery->dashboardAttention($filters),
             'worklist' => [
                 'fixed_candidates' => KompenResponHubStudentResource::collection($worklist['fixed']->get())->resolve(),
                 'warnings_to_follow_up' => KompenResponHubWarningLetterResource::collection($worklist['warnings']->get())->resolve(),

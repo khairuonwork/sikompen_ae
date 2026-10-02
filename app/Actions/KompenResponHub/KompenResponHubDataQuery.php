@@ -11,6 +11,7 @@ use App\Models\KompenResponHubStudentProgress;
 use App\Models\KompenResponHubStudentSummaryOverride;
 use App\Models\KompenResponHubWarningLetter;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Query\Builder as BaseQueryBuilder;
 use Illuminate\Support\Facades\Cache;
 
@@ -24,7 +25,11 @@ class KompenResponHubDataQuery
     public function importAuditLogs(array $filters = []): Builder
     {
         $query = KompenResponHubImportAuditLog::query()
-            ->with('sourceImport:id,quality_report')
+            ->with([
+                'sourceImport' => fn (BelongsTo $importQuery): BelongsTo => $importQuery
+                    ->select(['id', 'quality_report', 'student_count'])
+                    ->withCount('students'),
+            ])
             ->orderByDesc('occurred_at')
             ->orderByDesc('id');
 
@@ -59,8 +64,8 @@ class KompenResponHubDataQuery
 
         if (filled($filters['search'] ?? null)) {
             $query->where(function (Builder $warningQuery) use ($filters): void {
-                $warningQuery->where('nama_mahasiswa', 'like', "%{$filters['search']}%")
-                    ->orWhere('nim', 'like', "%{$filters['search']}%");
+                $warningQuery->where('nama_mahasiswa', 'like', $this->containsPattern((string) $filters['search']))
+                    ->orWhere('nim', 'like', $this->containsPattern((string) $filters['search']));
             });
         }
 
@@ -151,7 +156,7 @@ class KompenResponHubDataQuery
 
     /**
      * @param  array<string, mixed>  $filters
-     * @return array{total_students: int, outstanding_students: int, completed_students: int, outstanding_hours: float, warning_count: int, issued_warning_count: int, periods: list<array{periode_semester: string, deadline_at: string|null, closed_at: string|null, status: string}>}
+     * @return array{total_students: int, outstanding_students: int, completed_students: int, outstanding_hours: float, warning_count: int, issued_warning_count: int, nearest_cutoff: array{periode_semester: string, deadline_at: string, days_remaining: int}|null, periods: list<array{periode_semester: string, deadline_at: string|null, closed_at: string|null, status: string}>}
      */
     public function dashboardSummary(array $filters): array
     {
@@ -167,6 +172,11 @@ class KompenResponHubDataQuery
 
         $totalStudents = (int) ($summary->total_students ?? 0);
         $outstandingStudents = (int) ($summary->outstanding_students ?? 0);
+        $nearestCutoff = $this->cutoffsForFilters($filters)
+            ->whereNull('closed_at')
+            ->where('deadline_at', '>', now())
+            ->orderBy('deadline_at')
+            ->first(['periode_semester', 'deadline_at']);
 
         return [
             'total_students' => $totalStudents,
@@ -178,6 +188,11 @@ class KompenResponHubDataQuery
             'issued_warning_count' => $this->warnings($filters)
                 ->where('letter_status', KompenResponHubWarningLetter::LetterStatusIssued)
                 ->count(),
+            'nearest_cutoff' => $nearestCutoff === null ? null : [
+                'periode_semester' => $nearestCutoff->periode_semester,
+                'deadline_at' => $nearestCutoff->deadline_at->toIso8601String(),
+                'days_remaining' => max(0, (int) ceil(now()->diffInSeconds($nearestCutoff->deadline_at, false) / 86400)),
+            ],
             'periods' => $this->cutoffsForFilters($filters)
                 ->orderByDesc('deadline_at')
                 ->get(['periode_semester', 'deadline_at', 'closed_at'])
@@ -190,34 +205,6 @@ class KompenResponHubDataQuery
                         : ($cutoff->deadline_at->isPast() ? 'cutoff_passed' : 'open'),
                 ])
                 ->all(),
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $filters
-     * @return array{upcoming_cutoffs: list<array{periode_semester: string, deadline_at: string}>, outstanding_after_cutoff: int, draft_warnings: int}
-     */
-    public function dashboardAttention(array $filters): array
-    {
-        $now = now();
-
-        return [
-            'upcoming_cutoffs' => $this->cutoffsForFilters($filters)
-                ->whereNull('closed_at')
-                ->where('deadline_at', '>', $now)
-                ->where('deadline_at', '<=', $now->copy()->addDays(7))
-                ->orderBy('deadline_at')
-                ->limit(5)
-                ->get(['periode_semester', 'deadline_at'])
-                ->map(fn (KompenResponHubPeriodCutoff $cutoff): array => [
-                    'periode_semester' => $cutoff->periode_semester,
-                    'deadline_at' => $cutoff->deadline_at->toIso8601String(),
-                ])
-                ->all(),
-            'outstanding_after_cutoff' => $this->fixedWarningCandidates($filters)->count(),
-            'draft_warnings' => $this->warnings($filters)
-                ->where('letter_status', KompenResponHubWarningLetter::LetterStatusDraft)
-                ->count(),
         ];
     }
 
@@ -256,13 +243,13 @@ class KompenResponHubDataQuery
         }
 
         if (filled($filters['nama'] ?? null)) {
-            $query->where('nama_mahasiswa', 'like', "%{$filters['nama']}%");
+            $query->where('nama_mahasiswa', 'like', $this->containsPattern((string) $filters['nama']));
         }
 
         if (filled($filters['search'] ?? null)) {
             $query->where(function (Builder $query) use ($filters): void {
-                $query->where('nama_mahasiswa', 'like', "%{$filters['search']}%")
-                    ->orWhere('nim', 'like', "%{$filters['search']}%");
+                $query->where('nama_mahasiswa', 'like', $this->containsPattern((string) $filters['search']))
+                    ->orWhere('nim', 'like', $this->containsPattern((string) $filters['search']));
             });
         }
 
@@ -295,13 +282,13 @@ class KompenResponHubDataQuery
                 }
 
                 if (filled($filters['nama'] ?? null)) {
-                    $studentQuery->where('nama_mahasiswa', 'like', "%{$filters['nama']}%");
+                    $studentQuery->where('nama_mahasiswa', 'like', $this->containsPattern((string) $filters['nama']));
                 }
 
                 if (filled($filters['search'] ?? null)) {
                     $studentQuery->where(function (Builder $query) use ($filters): void {
-                        $query->where('nama_mahasiswa', 'like', "%{$filters['search']}%")
-                            ->orWhere('nim', 'like', "%{$filters['search']}%");
+                        $query->where('nama_mahasiswa', 'like', $this->containsPattern((string) $filters['search']))
+                            ->orWhere('nim', 'like', $this->containsPattern((string) $filters['search']));
                     });
                 }
             });
@@ -309,7 +296,7 @@ class KompenResponHubDataQuery
 
         foreach (['mata_kuliah', 'nama_dosen'] as $field) {
             if (filled($filters[$field] ?? null)) {
-                $query->where($field, 'like', "%{$filters[$field]}%");
+                $query->where($field, 'like', $this->containsPattern((string) $filters[$field]));
             }
         }
 
@@ -364,5 +351,10 @@ class KompenResponHubDataQuery
             $studentTable,
             $progressTable,
         );
+    }
+
+    private function containsPattern(string $value): string
+    {
+        return '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value).'%';
     }
 }
