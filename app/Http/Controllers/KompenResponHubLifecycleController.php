@@ -63,7 +63,7 @@ class KompenResponHubLifecycleController extends Controller
                 beforeState: $before,
                 afterState: $cutoff->only(['deadline_at', 'timezone']),
                 metadata: [
-                    'candidate_classification' => $classification,
+                    'warning_classification' => $classification,
                     'synchronized_warning_count' => $synchronizedWarningCount,
                 ],
             );
@@ -75,7 +75,7 @@ class KompenResponHubLifecycleController extends Controller
         });
 
         $synchronizationSummary = $result['synchronized_warning_count'] > 0
-            ? " {$result['synchronized_warning_count']} status kandidat/SP diselaraskan."
+            ? " {$result['synchronized_warning_count']} status SP diselaraskan."
             : '';
 
         return back()->with('success', "Batas waktu periode berhasil disimpan.{$synchronizationSummary}");
@@ -186,6 +186,7 @@ class KompenResponHubLifecycleController extends Controller
         $this->ensurePeriodIsOpen($student->periode_semester);
         $cutoff = KompenResponHubPeriodCutoff::query()->where('periode_semester', $student->periode_semester)->first();
         abort_if($cutoff === null, 422, 'Tetapkan batas waktu periode sebelum membuat SP.');
+        abort_unless($cutoff->deadline_at->isPast(), 422, 'SP hanya dapat dibuat setelah batas waktu periode terlewati.');
         abort_if($this->studentSnapshot($student)['sisa_hutang_jam'] <= 0, 422, 'SP tidak dapat dibuat karena mahasiswa tidak memiliki sisa jam.');
 
         $warning = KompenResponHubWarningLetter::query()->firstOrNew(['cutoff_id' => $cutoff->id, 'current_student_id' => $student->id]);
@@ -195,7 +196,7 @@ class KompenResponHubLifecycleController extends Controller
             'cutoff_id' => $cutoff->id,
             'current_student_id' => $student->id,
             'nama_mahasiswa' => $student->nama_mahasiswa,
-            'classification' => now()->greaterThanOrEqualTo($cutoff->deadline_at) ? 'fixed' : 'temporary',
+            'classification' => 'fixed',
             'letter_status' => KompenResponHubWarningLetter::LetterStatusDraft,
             'resolution' => 'outstanding',
             'snapshot' => $this->studentSnapshot($student),
@@ -242,7 +243,7 @@ class KompenResponHubLifecycleController extends Controller
 
         $this->activity->execute('warning.cancelled', 'warning_letter', (string) $warning->id, $request->user('admin'), $request, $warning->nim, $warning->periode_semester, $warning->kelas, $validated['reason'], $before, $warning->only(['letter_status', 'resolution', 'reason', 'cancelled_at']), subjectName: $warning->nama_mahasiswa);
 
-        return back()->with('success', 'SP dibatalkan. Data kembali ke daftar kandidat dan riwayat pembatalan tetap tersimpan.');
+        return back()->with('success', 'SP dibatalkan. Mahasiswa kembali ke daftar sisa jam setelah cutoff dan riwayat pembatalan tetap tersimpan.');
     }
 
     /** @return array{nim: string, periode_semester: string, kelas: string} */
@@ -325,7 +326,7 @@ class KompenResponHubLifecycleController extends Controller
                         $warning->nim,
                         $cutoff->periode_semester,
                         $warning->kelas,
-                        'Klasifikasi diselaraskan setelah batas waktu periode diperbaiki.',
+                        'Status SP diselaraskan setelah batas waktu periode diperbaiki.',
                         $before,
                         $warning->only(['classification']),
                         subjectName: $warning->nama_mahasiswa,

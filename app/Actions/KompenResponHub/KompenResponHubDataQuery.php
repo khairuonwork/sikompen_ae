@@ -44,7 +44,7 @@ class KompenResponHubDataQuery
             $query->whereIn('letter_status', [
                 KompenResponHubWarningLetter::LetterStatusDraft,
                 KompenResponHubWarningLetter::LetterStatusIssued,
-            ]);
+            ])->where('classification', 'fixed');
         }
 
         foreach (['nim', 'kelas', 'periode_semester'] as $field) {
@@ -64,32 +64,10 @@ class KompenResponHubDataQuery
     }
 
     /**
-     * Return students with remaining debt while their applicable period is
-     * still open. These records are candidates only: creating a draft SP-1
-     * remains an explicit administrative action.
-     *
-     * @param  array<string, mixed>  $filters
-     * @return Builder<KompenResponHubStudent>
-     */
-    public function temporaryWarningCandidates(array $filters): Builder
-    {
-        return $this->warningCandidates($filters, '>');
-    }
-
-    /**
      * @param  array<string, mixed>  $filters
      * @return Builder<KompenResponHubStudent>
      */
     public function fixedWarningCandidates(array $filters): Builder
-    {
-        return $this->warningCandidates($filters, '<=');
-    }
-
-    /**
-     * @param  array<string, mixed>  $filters
-     * @return Builder<KompenResponHubStudent>
-     */
-    private function warningCandidates(array $filters, string $deadlineOperator): Builder
     {
         $studentTable = (new KompenResponHubStudent)->getTable();
         $cutoffTable = (new KompenResponHubPeriodCutoff)->getTable();
@@ -99,11 +77,11 @@ class KompenResponHubDataQuery
         $effectiveDebt = $this->effectiveDebtExpression($studentTable);
 
         return $this->students($filters)
-            ->whereExists(function (BaseQueryBuilder $query) use ($cutoffTable, $studentTable, $deadlineOperator): void {
+            ->whereExists(function (BaseQueryBuilder $query) use ($cutoffTable, $studentTable): void {
                 $query->selectRaw('1')
                     ->from($cutoffTable)
                     ->whereColumn("{$cutoffTable}.periode_semester", "{$studentTable}.periode_semester")
-                    ->where('deadline_at', $deadlineOperator, now());
+                    ->where('deadline_at', '<=', now());
             })
             ->whereRaw("({$effectiveDebt}) > 0");
     }
@@ -192,10 +170,8 @@ class KompenResponHubDataQuery
             'completed_students' => $totalStudents - $outstandingStudents,
             'outstanding_hours' => round((float) ($summary->outstanding_hours ?? 0), 2),
             'warning_count' => $this->warnings($filters)
-                ->where('classification', 'fixed')
                 ->count(),
             'issued_warning_count' => $this->warnings($filters)
-                ->where('classification', 'fixed')
                 ->where('letter_status', KompenResponHubWarningLetter::LetterStatusIssued)
                 ->count(),
             'periods' => KompenResponHubPeriodCutoff::query()
@@ -214,14 +190,12 @@ class KompenResponHubDataQuery
         ];
     }
 
-    /** @return array{temporary: Builder<KompenResponHubStudent>, fixed: Builder<KompenResponHubStudent>, warnings: Builder<KompenResponHubWarningLetter>} */
+    /** @return array{fixed: Builder<KompenResponHubStudent>, warnings: Builder<KompenResponHubWarningLetter>} */
     public function adminWorklist(array $filters): array
     {
         return [
-            'temporary' => $this->temporaryWarningCandidates($filters)->limit(5),
             'fixed' => $this->fixedWarningCandidates($filters)->limit(5),
             'warnings' => $this->warnings($filters)
-                ->where('classification', 'fixed')
                 ->whereIn('letter_status', [KompenResponHubWarningLetter::LetterStatusDraft, KompenResponHubWarningLetter::LetterStatusIssued])
                 ->limit(5),
         ];

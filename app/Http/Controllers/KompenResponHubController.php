@@ -212,14 +212,6 @@ class KompenResponHubController extends Controller
                     KompenResponHubWarningLetterResource::class,
                 )
                 : null,
-            'temporaryCandidates' => $isAdmin && $activeTab === 'warnings'
-                ? $this->resourcePaginator(
-                    $this->dataQuery->temporaryWarningCandidates($filters)
-                        ->paginate($this->perPage($filters), ['*'], 'candidate_page')
-                        ->withQueryString(),
-                    KompenResponHubStudentResource::class,
-                )
-                : null,
             'fixedCandidates' => $isAdmin && $activeTab === 'warnings'
                 ? $this->resourcePaginator(
                     $this->dataQuery->fixedWarningCandidates($filters)
@@ -270,7 +262,6 @@ class KompenResponHubController extends Controller
         return [
             'summary' => $this->dataQuery->dashboardSummary($filters),
             'worklist' => [
-                'temporary_candidates' => KompenResponHubStudentResource::collection($worklist['temporary']->get())->resolve(),
                 'fixed_candidates' => KompenResponHubStudentResource::collection($worklist['fixed']->get())->resolve(),
                 'warnings_to_follow_up' => KompenResponHubWarningLetterResource::collection($worklist['warnings']->get())->resolve(),
             ],

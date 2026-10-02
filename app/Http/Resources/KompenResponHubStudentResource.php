@@ -36,7 +36,6 @@ class KompenResponHubStudentResource extends JsonResource
             'has_summary_override' => $this->summaryOverride !== null,
             'warning' => $this->latestWarning === null ? null : [
                 'id' => $this->latestWarning->id,
-                'classification' => $this->latestWarning->classification,
                 'letter_status' => $this->latestWarning->letter_status,
                 'resolution' => $this->latestWarning->resolution,
             ],
@@ -45,6 +44,10 @@ class KompenResponHubStudentResource extends JsonResource
 
     private function progressStatus(): string
     {
+        if (! $this->cutoff?->deadline_at?->isPast()) {
+            return 'none';
+        }
+
         if ((float) $this->effective_sisa_hutang_jam <= 0) {
             return 'completed';
         }
@@ -53,19 +56,7 @@ class KompenResponHubStudentResource extends JsonResource
             return 'warning_active';
         }
 
-        if ($this->cutoff?->closed_at !== null) {
-            return 'period_closed';
-        }
-
-        if ($this->cutoff?->deadline_at?->isPast()) {
-            return 'overdue';
-        }
-
-        if ((float) $this->effective_kompensasi_dikerjakan_jam > 0 || (float) $this->effective_responsi_dikerjakan_jam > 0) {
-            return 'in_progress';
-        }
-
-        return 'not_started';
+        return 'none';
     }
 
     private function hasActiveWarning(): bool

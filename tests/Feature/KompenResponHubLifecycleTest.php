@@ -67,7 +67,7 @@ test('the scheduled command archives only outstanding students after a cutoff', 
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'warning.archived')->exists())->toBeTrue();
 });
 
-test('an admin can prepare a manual SP-1 draft before the cutoff', function () {
+test('an admin cannot create an SP before the cutoff', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
     KompenResponHubPeriodCutoff::create([
@@ -81,11 +81,9 @@ test('an admin can prepare a manual SP-1 draft before the cutoff', function () {
             'student_id' => $student->id,
             'reason' => 'Verifikasi manual untuk kebutuhan surat peringatan.',
         ])
-        ->assertRedirect();
+        ->assertUnprocessable();
 
-    expect(KompenResponHubWarningLetter::query()->sole())
-        ->letter_status->toBe(KompenResponHubWarningLetter::LetterStatusDraft)
-        ->and(KompenResponHubWarningLetter::query()->sole()->classification)->toBe('temporary');
+    expect(KompenResponHubWarningLetter::query()->doesntExist())->toBeTrue();
 });
 
 test('updating a cutoff recalculates warning classification without cancelling an existing draft', function () {
@@ -115,13 +113,13 @@ test('updating a cutoff recalculates warning classification without cancelling a
             'deadline_at' => now('Asia/Jakarta')->addWeek()->format('Y-m-d\\TH:i'),
         ])
         ->assertRedirect()
-        ->assertSessionHas('success', 'Batas waktu periode berhasil disimpan. 1 status kandidat/SP diselaraskan.');
+        ->assertSessionHas('success', 'Batas waktu periode berhasil disimpan. 1 status SP diselaraskan.');
 
     expect($warning->fresh())
         ->classification->toBe('temporary')
         ->and($warning->fresh()->letter_status)->toBe(KompenResponHubWarningLetter::LetterStatusDraft)
-        ->and(app(KompenResponHubDataQuery::class)->temporaryWarningCandidates([])->pluck('id'))->toContain($student->id)
         ->and(app(KompenResponHubDataQuery::class)->fixedWarningCandidates([])->pluck('id'))->not->toContain($student->id)
+        ->and(app(KompenResponHubDataQuery::class)->warnings([])->doesntExist())->toBeTrue()
         ->and(KompenResponHubActivityLog::query()
             ->where('event_type', 'warning.classification_temporary')
             ->where('subject_name', $student->nama_mahasiswa)
@@ -133,7 +131,7 @@ test('completed progress resolves an existing warning without deleting its trace
     $student = createLifecycleStudent();
     KompenResponHubPeriodCutoff::create([
         'periode_semester' => $student->periode_semester,
-        'deadline_at' => now()->addWeek(),
+        'deadline_at' => now()->subMinute(),
         'timezone' => 'Asia/Jakarta',
     ]);
 
@@ -157,9 +155,13 @@ test('completed progress resolves an existing warning without deleting its trace
         ->resolution->toBe('completed')
         ->and(KompenResponHubWarningLetter::query()->sole()->snapshot['sisa_hutang_jam'])->toBe(0)
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'warning.resolution_updated')->exists())->toBeTrue();
+
+    $this->getJson('/api/kompen-respon/students')
+        ->assertOk()
+        ->assertJsonPath('data.0.progress_status', 'completed');
 });
 
-test('temporary candidates only include students with an open cutoff and remaining debt', function () {
+test('students have no status before the cutoff has passed', function () {
     $student = createLifecycleStudent();
     KompenResponHubPeriodCutoff::create([
         'periode_semester' => $student->periode_semester,
@@ -167,11 +169,9 @@ test('temporary candidates only include students with an open cutoff and remaini
         'timezone' => 'Asia/Jakarta',
     ]);
 
-    $candidateIds = app(KompenResponHubDataQuery::class)
-        ->temporaryWarningCandidates([])
-        ->pluck('id');
-
-    expect($candidateIds)->toContain($student->id);
+    $this->getJson('/api/kompen-respon/students')
+        ->assertOk()
+        ->assertJsonPath('data.0.progress_status', 'none');
 });
 
 test('fixed candidates include students with outstanding debt after the cutoff', function () {
@@ -194,7 +194,7 @@ test('an admin can cancel an SP and draft it again for the same student', functi
     $student = createLifecycleStudent();
     KompenResponHubPeriodCutoff::create([
         'periode_semester' => $student->periode_semester,
-        'deadline_at' => now()->addWeek(),
+        'deadline_at' => now()->subMinute(),
         'timezone' => 'Asia/Jakarta',
     ]);
 
@@ -282,7 +282,8 @@ test('an outstanding fixed draft SP is exposed as an active SP student status', 
 
     $this->getJson('/api/kompen-respon/students')
         ->assertOk()
-        ->assertJsonPath('data.0.progress_status', 'warning_active');
+        ->assertJsonPath('data.0.progress_status', 'warning_active')
+        ->assertJsonMissing(['classification' => 'fixed']);
 });
 
 test('an admin can close an elapsed period and its progress becomes locked', function () {

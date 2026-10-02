@@ -397,7 +397,6 @@ class KompenResponHubDownloadController extends Controller
             ['field' => 'nim', 'heading' => 'NIM', 'type' => 'text', 'width' => 16],
             ['field' => 'nama_mahasiswa', 'heading' => 'Nama Mahasiswa', 'type' => 'text', 'width' => 26],
             ['field' => 'kelas', 'heading' => 'Kelas', 'type' => 'text', 'width' => 12],
-            ['field' => 'classification', 'heading' => 'Indikator', 'type' => 'text', 'width' => 14],
             ['field' => 'letter_status', 'heading' => 'Status SP', 'type' => 'text', 'width' => 16],
             ['field' => 'resolution', 'heading' => 'Penyelesaian', 'type' => 'text', 'width' => 16],
             ['field' => 'snapshot.sisa_hutang_jam', 'heading' => 'Sisa[j]', 'type' => 'hours', 'width' => 13],

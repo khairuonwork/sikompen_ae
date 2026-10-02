@@ -23,7 +23,6 @@ class KompenResponHubWarningLetterResource extends JsonResource
             'nama_mahasiswa' => $this->nama_mahasiswa,
             'kelas' => $this->kelas,
             'periode_semester' => $this->periode_semester,
-            'classification' => $this->classification,
             'letter_status' => $this->letter_status,
             'resolution' => $this->resolution,
             'snapshot' => $this->snapshot,

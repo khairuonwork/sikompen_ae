@@ -53,7 +53,6 @@ test('the admin landing page provides a period-aware operational summary', funct
             ->where('activeTab', 'dashboard')
             ->where('dashboard.summary.total_students', 1)
             ->where('dashboard.summary.outstanding_students', 1)
-            ->has('dashboard.worklist.temporary_candidates')
             ->has('dashboard.worklist.fixed_candidates')
             ->has('dashboard.worklist.warnings_to_follow_up'),
         );
