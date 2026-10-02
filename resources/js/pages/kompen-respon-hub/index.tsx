@@ -241,7 +241,8 @@ type Dashboard = {
         periods: {
             periode_semester: string;
             deadline_at: string | null;
-            status: 'open' | 'closed';
+            closed_at: string | null;
+            status: 'open' | 'cutoff_passed' | 'locked';
         }[];
     };
     worklist: {
@@ -2614,7 +2615,7 @@ function DashboardPanel({
                             <CalendarClock className="size-4" /> Status periode
                         </CardTitle>
                         <CardDescription>
-                            Batas waktu menentukan apakah kandidat SP berada di daftar sementara atau arsip fixed.
+                            Batas waktu menentukan kandidat sementara atau pasti; periode terkunci hanya setelah ditutup oleh admin.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-2">
@@ -2626,8 +2627,17 @@ function DashboardPanel({
                                         {period.deadline_at ? new Date(period.deadline_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) : 'Batas waktu belum ditetapkan'}
                                     </p>
                                 </div>
-                                <span className={cn('rounded-full px-2.5 py-1 text-[10px] font-black uppercase', period.status === 'open' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700')}>
-                                    {period.status === 'open' ? 'Berjalan' : 'Ditutup'}
+                                <span className={cn(
+                                    'rounded-full px-2.5 py-1 text-[10px] font-black uppercase',
+                                    period.status === 'open' && 'bg-emerald-100 text-emerald-800',
+                                    period.status === 'cutoff_passed' && 'bg-amber-100 text-amber-800',
+                                    period.status === 'locked' && 'bg-slate-200 text-slate-700',
+                                )}>
+                                    {period.status === 'open'
+                                        ? 'Berjalan'
+                                        : period.status === 'cutoff_passed'
+                                          ? 'Lewat cutoff'
+                                          : 'Terkunci'}
                                 </span>
                             </div>
                         )) : (
