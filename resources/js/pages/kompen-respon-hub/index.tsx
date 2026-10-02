@@ -671,7 +671,7 @@ function ImportAuditLogTable({
                                     >
                                         {auditLog.event_type === 'upload'
                                             ? 'Upload'
-                                            : 'Rollback · Dihapus'}
+                                            : 'Rollback'}
                                     </span>
                                 </td>
                                 <td className="px-4 py-3.5 text-xs whitespace-nowrap text-[#395886]">
@@ -762,7 +762,7 @@ function RollbackLatestImportButton({
             {...rollbackLatestImport.form()}
             onBefore={() =>
                 window.confirm(
-                    'Hapus data dari unggahan terakhir? Data mahasiswa dan detail terkait tidak dapat dipulihkan.',
+                    'Rollback versi impor aktif? Data akan dikembalikan ke versi workbook sebelumnya per kelas. Kelas tanpa versi sebelumnya akan dibatalkan. Semua file dan riwayat upload tetap tersimpan.',
                 )
             }
         >
@@ -775,8 +775,8 @@ function RollbackLatestImportButton({
                 >
                     <RotateCcw className="mr-2 size-4" />
                     {processing
-                        ? 'Menghapus unggahan…'
-                        : 'Hapus unggahan terakhir'}
+                        ? 'Memulihkan versi…'
+                        : 'Rollback versi aktif'}
                 </Button>
             )}
         </Form>
@@ -3039,8 +3039,9 @@ export default function KompenResponHubIndex({
                                         Audit Impor
                                     </h2>
                                     <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
-                                        Riwayat upload dan penghapusan unggahan
-                                        terakhir.
+                                        Riwayat upload dan rollback versi aktif. Rollback
+                                        mengembalikan data ke workbook sebelumnya per
+                                        kelas tanpa menghapus file sumber.
                                     </p>
                                 </div>
                                 <RollbackLatestImportButton
