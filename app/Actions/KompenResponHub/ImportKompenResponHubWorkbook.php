@@ -222,6 +222,11 @@ class ImportKompenResponHubWorkbook
                     'detail' => sprintf('%d NIM unik pada %d kelas siap diimpor.', $uniqueStudentKeys, $preview['class_count']),
                 ],
                 [
+                    'label' => 'Keunikan detail',
+                    'status' => 'passed',
+                    'detail' => sprintf('%d detail tidak memiliki duplikasi baris.', $preview['detail_count']),
+                ],
+                [
                     'label' => 'Detail Kompen',
                     'status' => 'passed',
                     'detail' => sprintf('%d dari %d detail terhubung ke mahasiswa pada ringkasan.', $linkedDetails, $preview['detail_count']),
@@ -230,6 +235,11 @@ class ImportKompenResponHubWorkbook
                     'label' => 'Ringkasan hutang',
                     'status' => 'passed',
                     'detail' => sprintf('%d mahasiswa memiliki jam Kompen atau Responsi.', $studentsWithDebt),
+                ],
+                [
+                    'label' => 'Rekonsiliasi jam',
+                    'status' => 'passed',
+                    'detail' => 'Total Kompensasi dan Responsi setiap mahasiswa sama dengan akumulasi Detail Kompen.',
                 ],
             ],
         ];

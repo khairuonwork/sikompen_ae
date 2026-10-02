@@ -49,6 +49,10 @@ class KompenResponHubStudentResource extends JsonResource
             return 'completed';
         }
 
+        if ($this->hasActiveWarning()) {
+            return 'warning_active';
+        }
+
         if ($this->cutoff?->closed_at !== null) {
             return 'period_closed';
         }
@@ -62,5 +66,13 @@ class KompenResponHubStudentResource extends JsonResource
         }
 
         return 'not_started';
+    }
+
+    private function hasActiveWarning(): bool
+    {
+        return $this->latestWarning !== null
+            && $this->latestWarning->classification === 'fixed'
+            && $this->latestWarning->resolution === 'outstanding'
+            && in_array($this->latestWarning->letter_status, ['draft', 'issued'], true);
     }
 }

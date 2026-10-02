@@ -82,6 +82,16 @@ class RestoreKompenResponHubImportVersion
                     );
                 }
 
+                $restoredImports = KompenResponHubImport::query()
+                    ->whereKey(array_values(array_unique($previousImportsByClass)))
+                    ->orderBy('id')
+                    ->get(['id', 'original_filename'])
+                    ->map(fn (KompenResponHubImport $import): array => [
+                        'id' => $import->id,
+                        'original_filename' => $import->original_filename,
+                    ])
+                    ->all();
+
                 KompenResponHubImportAuditLog::create([
                     'event_type' => KompenResponHubImportAuditLog::EVENT_ROLLBACK,
                     'source_import_id' => $lockedTarget->id,
@@ -92,18 +102,12 @@ class RestoreKompenResponHubImportVersion
                     'class_count' => $lockedTarget->class_count,
                     'student_count' => $lockedTarget->student_count,
                     'detail_count' => $lockedTarget->detail_count,
+                    'metadata' => [
+                        'restored' => $restoredImports !== [],
+                        'restored_imports' => $restoredImports,
+                    ],
                     'occurred_at' => now(),
                 ]);
-
-                $restoredImports = KompenResponHubImport::query()
-                    ->whereKey(array_values(array_unique($previousImportsByClass)))
-                    ->orderBy('id')
-                    ->get(['id', 'original_filename'])
-                    ->map(fn (KompenResponHubImport $import): array => [
-                        'id' => $import->id,
-                        'original_filename' => $import->original_filename,
-                    ])
-                    ->all();
 
                 return [
                     'rolled_back_import_id' => $lockedTarget->id,

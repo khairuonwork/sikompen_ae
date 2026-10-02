@@ -264,7 +264,7 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
         ->and($import->uploader_name)->toBe('Khairul Anwar')
         ->and($import->uploader_email)->toBe($admin->email)
         ->and($import->quality_report['status'])->toBe('passed')
-        ->and($import->quality_report['checks'])->toHaveCount(4)
+        ->and($import->quality_report['checks'])->toHaveCount(6)
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.completed')->exists())->toBeTrue();
 
     $this->actingAs($admin, 'admin')->get('/admin?tab=imports')
@@ -389,6 +389,7 @@ test('an admin can roll back an initial import while keeping its source workbook
         ->and($auditLog->actor_email)->toBe($admin->email)
         ->and($auditLog->student_count)->toBe(1)
         ->and($auditLog->detail_count)->toBe(0)
+        ->and($auditLog->metadata['restored'])->toBeFalse()
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.rolled_back')->exists())->toBeTrue();
 });
 
@@ -434,6 +435,8 @@ test('an admin can roll back an incorrect workbook to the previous version for t
     expect($auditLog->event_type)->toBe(KompenResponHubImportAuditLog::EVENT_ROLLBACK)
         ->and($auditLog->source_import_id)->toBe($incorrectImport->id)
         ->and($auditLog->actor_email)->toBe($admin->email)
+        ->and($auditLog->metadata['restored'])->toBeTrue()
+        ->and($auditLog->metadata['restored_imports'][0]['id'])->toBe($previousImport->id)
         ->and(KompenResponHubActivityLog::query()
             ->where('event_type', 'import.rolled_back')
             ->where('subject_reference', (string) $incorrectImport->id)
@@ -546,6 +549,62 @@ test('an invalid academic year marks the queued import as failed', function () {
         ->and($importTask->error_message)->toContain('Tahun ajaran wajib berformat');
 });
 
+test('an import is rejected when summary hours do not match detail totals', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(detailCompensationHours: 1),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Total Kompensasi 1.5000 jam tidak sama')
+        ->and(KompenResponHubImport::query()->doesntExist())->toBeTrue()
+        ->and(KompenResponHubStudent::query()->doesntExist())->toBeTrue();
+});
+
+test('an import is rejected when a detail name differs from its summary identity', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(detailName: 'Rina Berbeda'),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Nama mahasiswa harus sama');
+});
+
+test('an import is rejected when it contains an identical detail twice', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(duplicateDetail: true),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Detail duplikat dengan baris 2 ditemukan.');
+});
+
 test('an admin can import a legacy workbook with its period in one cell', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
@@ -634,6 +693,10 @@ function workbookContents(
     int $level = 1,
     float $compensationHours = 1.5,
     float $responseHours = 2,
+    ?float $detailCompensationHours = null,
+    ?float $detailResponseHours = null,
+    ?string $detailName = null,
+    bool $duplicateDetail = false,
 ): string {
     $totalHours = $compensationHours + $responseHours;
     $workbook = new Spreadsheet;
@@ -652,9 +715,31 @@ function workbookContents(
 
     $details = $workbook->createSheet();
     $details->setTitle('Detail Kompen');
+    $detailRow = [
+        1,
+        $classCode,
+        '123456789',
+        $detailName ?? 'Rina Utami',
+        'Algoritma',
+        'Ibu Sari',
+        '2026-09-01',
+        'Luring',
+        'Terlambat',
+        15,
+        'Macet',
+        $detailCompensationHours ?? $compensationHours,
+        $detailResponseHours ?? $responseHours,
+    ];
+    $detailRows = [$detailRow];
+    if ($duplicateDetail) {
+        $duplicateRow = $detailRow;
+        $duplicateRow[0] = 2;
+        $detailRows[] = $duplicateRow;
+    }
+
     $details->fromArray([
         ['NO.', 'KELAS', 'NIM', 'NAMA MAHASISWA', 'MATA KULIAH', 'NAMA DOSEN', 'TANGGAL', 'JENIS PERTEMUAN', 'PRESENSI', 'MENIT KETERLAMBATAN', 'KETERANGAN', 'JAM KOMPENSASI', 'JAM RESPONSI'],
-        [1, $classCode, '123456789', 'Rina Utami', 'Algoritma', 'Ibu Sari', '2026-09-01', 'Luring', 'Terlambat', 15, 'Macet', $compensationHours, $responseHours],
+        ...$detailRows,
     ]);
 
     $writer = new Xlsx($workbook);

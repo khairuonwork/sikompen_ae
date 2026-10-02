@@ -29,6 +29,7 @@ class KompenResponHubImportAuditLogResource extends JsonResource
             'class_count' => $this->class_count,
             'student_count' => $this->student_count,
             'detail_count' => $this->detail_count,
+            'metadata' => $this->metadata,
             'quality_report' => $this->when(
                 $this->relationLoaded('sourceImport') && $this->sourceImport !== null,
                 $this->sourceImport?->quality_report,

@@ -259,6 +259,32 @@ test('the dashboard only counts active SP records that are fixed', function () {
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'warning.classification_fixed')->exists())->toBeTrue();
 });
 
+test('an outstanding fixed draft SP is exposed as an active SP student status', function () {
+    $student = createLifecycleStudent();
+    $cutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    KompenResponHubWarningLetter::create([
+        'cutoff_id' => $cutoff->id,
+        'current_student_id' => $student->id,
+        'nim' => $student->nim,
+        'periode_semester' => $student->periode_semester,
+        'kelas' => $student->kelas,
+        'nama_mahasiswa' => $student->nama_mahasiswa,
+        'classification' => 'fixed',
+        'letter_status' => KompenResponHubWarningLetter::LetterStatusDraft,
+        'resolution' => 'outstanding',
+        'snapshot' => ['sisa_hutang_jam' => 3.5],
+    ]);
+
+    $this->getJson('/api/kompen-respon/students')
+        ->assertOk()
+        ->assertJsonPath('data.0.progress_status', 'warning_active');
+});
+
 test('an admin can close an elapsed period and its progress becomes locked', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
