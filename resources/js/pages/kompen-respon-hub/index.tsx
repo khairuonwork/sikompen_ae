@@ -249,6 +249,14 @@ type Dashboard = {
             status: 'open' | 'cutoff_passed' | 'locked';
         }[];
     };
+    attention: {
+        upcoming_cutoffs: {
+            periode_semester: string;
+            deadline_at: string;
+        }[];
+        outstanding_after_cutoff: number;
+        draft_warnings: number;
+    };
     worklist: {
         fixed_candidates: Student[];
         warnings_to_follow_up: Warning[];
@@ -2525,6 +2533,14 @@ function DashboardPanel({
     filters: Filters;
     filterOptions: FilterOptions;
 }): React.JSX.Element {
+    const warningQuery = {
+        tab: 'warnings',
+        ...(filters.tingkat ? { tingkat: filters.tingkat } : {}),
+        ...(filters.kelas ? { kelas: filters.kelas } : {}),
+        ...(filters.periode_semester
+            ? { periode_semester: filters.periode_semester }
+            : {}),
+    };
     const cards = [
         {
             label: 'Mahasiswa terpantau',
@@ -2556,7 +2572,7 @@ function DashboardPanel({
         <section className="grid gap-5">
             <Form
                 {...adminIndex.form()}
-                className="flex flex-col gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm sm:flex-row sm:items-end"
+                className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(160px,1fr)_minmax(120px,0.7fr)_minmax(140px,0.8fr)_auto_auto] md:items-end"
             >
                 <input name="tab" type="hidden" value="dashboard" />
                 <div className="grid flex-1 gap-1.5">
@@ -2580,12 +2596,64 @@ function DashboardPanel({
                         ))}
                     </select>
                 </div>
+                <div className="grid gap-1.5">
+                    <Label
+                        htmlFor="dashboard-level"
+                        className="text-xs font-bold text-[#395886]"
+                    >
+                        Tingkat
+                    </Label>
+                    <select
+                        id="dashboard-level"
+                        name="tingkat"
+                        defaultValue={filters.tingkat?.toString() ?? ''}
+                        className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                    >
+                        <option value="">Semua tingkat</option>
+                        {filterOptions.tingkat.map((level) => (
+                            <option key={level} value={level}>
+                                Tingkat {level}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div className="grid gap-1.5">
+                    <Label
+                        htmlFor="dashboard-class"
+                        className="text-xs font-bold text-[#395886]"
+                    >
+                        Kelas
+                    </Label>
+                    <select
+                        id="dashboard-class"
+                        name="kelas"
+                        defaultValue={filters.kelas ?? ''}
+                        className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                    >
+                        <option value="">Semua kelas</option>
+                        {filterOptions.kelas.map((classCode) => (
+                            <option key={classCode} value={classCode}>
+                                {classCode}
+                            </option>
+                        ))}
+                    </select>
+                </div>
                 <Button
                     type="submit"
                     className="rounded-xl bg-[#395886] text-xs font-bold"
                 >
                     <Search className="mr-1.5 size-4" />
                     Terapkan
+                </Button>
+                <Button
+                    asChild
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]"
+                >
+                    <Link href={adminIndex.url({ query: { tab: 'dashboard' } })}>
+                        Reset
+                    </Link>
                 </Button>
             </Form>
 
@@ -2675,14 +2743,90 @@ function DashboardPanel({
                             description="Draft atau surat aktif pada periode terpilih."
                         />
                         <Button asChild variant="outline" className="mt-1 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
-                            <Link href={adminIndex.url({ query: { tab: 'warnings', ...(filters.periode_semester ? { periode_semester: filters.periode_semester } : {}) } })}>
+                            <Link href={adminIndex.url({ query: warningQuery })}>
                                 Buka Surat Peringatan
                             </Link>
                         </Button>
                     </CardContent>
                 </Card>
             </div>
+
+            <Card className="border-white/80 bg-white/85 shadow-sm">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base text-[#395886]">
+                        <ShieldAlert className="size-4" /> Perlu tindakan
+                    </CardTitle>
+                    <CardDescription>
+                        Ringkasan tindak lanjut berdasarkan filter dashboard saat ini.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-3">
+                    <DashboardAttentionItem
+                        title="Cutoff mendekat"
+                        count={dashboard.attention.upcoming_cutoffs.length}
+                        description={
+                            dashboard.attention.upcoming_cutoffs.length
+                                ? dashboard.attention.upcoming_cutoffs
+                                      .map(
+                                          (cutoff) =>
+                                              `${cutoff.periode_semester} · ${new Date(cutoff.deadline_at).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })}`,
+                                      )
+                                      .join(', ')
+                                : 'Tidak ada cutoff dalam tujuh hari ke depan.'
+                        }
+                    />
+                    <DashboardAttentionItem
+                        title="Sisa jam setelah cutoff"
+                        count={dashboard.attention.outstanding_after_cutoff}
+                        description="Mahasiswa yang perlu diproses untuk SP."
+                        href={adminIndex.url({ query: warningQuery })}
+                    />
+                    <DashboardAttentionItem
+                        title="Draft SP belum diterbitkan"
+                        count={dashboard.attention.draft_warnings}
+                        description="Tinjau draft sebelum menerbitkan SP."
+                        href={adminIndex.url({ query: warningQuery })}
+                    />
+                </CardContent>
+            </Card>
         </section>
+    );
+}
+
+function DashboardAttentionItem({
+    title,
+    count,
+    description,
+    href,
+}: {
+    title: string;
+    count: number;
+    description: string;
+    href?: string;
+}): React.JSX.Element {
+    const content = (
+        <>
+            <div>
+                <p className="text-sm font-bold text-[#395886]">{title}</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-[#395886]/65">
+                    {description}
+                </p>
+            </div>
+            <span className="rounded-xl bg-[#395886] px-2.5 py-1 text-xs font-black tabular-nums text-white">
+                {count}
+            </span>
+        </>
+    );
+
+    const className =
+        'flex items-start justify-between gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 px-4 py-3 transition-colors';
+
+    return href ? (
+        <Link href={href} className={`${className} hover:bg-[#B1C9EF]/35`}>
+            {content}
+        </Link>
+    ) : (
+        <div className={className}>{content}</div>
     );
 }
 
