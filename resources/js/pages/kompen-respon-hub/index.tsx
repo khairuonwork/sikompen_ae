@@ -25,7 +25,8 @@ import {
     CalendarClock,
     ClipboardList,
 } from 'lucide-react';
-import { type DragEvent, useEffect, useState } from 'react';
+import { type DragEvent, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import {
     adminStudentOverview,
 } from '@/actions/App/Http/Controllers/KompenResponHubController';
@@ -98,7 +99,7 @@ type Student = {
     effective_kompensasi_dikerjakan_jam: string;
     effective_responsi_dikerjakan_jam: string;
     effective_sisa_hutang_jam: string;
-    progress_status: 'not_started' | 'in_progress' | 'completed' | 'overdue' | 'period_closed';
+    progress_status: 'not_started' | 'in_progress' | 'completed' | 'overdue' | 'period_closed' | 'warning_active';
     last_worked_at: string | null;
     has_summary_override: boolean;
     warning: Warning | null;
@@ -176,6 +177,10 @@ type ImportAuditLog = {
     quality_report?: {
         status: 'passed';
         checks: { label: string; status: 'passed'; detail: string }[];
+    } | null;
+    metadata: {
+        restored?: boolean;
+        restored_imports?: { id: number; original_filename: string }[];
     } | null;
     occurred_at: string;
 };
@@ -518,6 +523,7 @@ function ProgressStatusBadge({
         completed: 'Selesai',
         overdue: 'Lewat cutoff',
         period_closed: 'Periode ditutup',
+        warning_active: 'SP aktif',
     };
     const tones: Record<Student['progress_status'], string> = {
         not_started: 'bg-slate-100 text-slate-700',
@@ -525,6 +531,7 @@ function ProgressStatusBadge({
         completed: 'bg-emerald-100 text-emerald-800',
         overdue: 'bg-rose-100 text-rose-800',
         period_closed: 'bg-slate-200 text-slate-800',
+        warning_active: 'bg-rose-100 text-rose-800',
     };
 
     return <span className={cn('inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-black', tones[status])}>{labels[status]}</span>;
@@ -693,7 +700,14 @@ function ImportAuditLogTable({
                                     {auditLog.periode_semester}
                                 </td>
                                 <td className="max-w-64 truncate px-4 py-3.5 font-mono text-xs font-semibold text-[#395886]">
-                                    {auditLog.original_filename}
+                                    <p>{auditLog.original_filename}</p>
+                                    {auditLog.event_type === 'rollback' ? (
+                                        <p className="mt-1 whitespace-normal font-sans text-[11px] font-medium text-[#395886]/70">
+                                            {auditLog.metadata?.restored
+                                                ? `Dipulihkan ke: ${auditLog.metadata.restored_imports?.map((importItem) => importItem.original_filename).join(', ')}`
+                                                : 'Tidak ada versi sebelumnya; data aktif dibatalkan.'}
+                                        </p>
+                                    ) : null}
                                 </td>
                                 <td className="px-4 py-3.5">
                                     {auditLog.can_download_file &&
@@ -833,6 +847,7 @@ function ImportProgressPanel({
     initialImportTasks: ImportTask[];
 }): React.JSX.Element | null {
     const [importTasks, setImportTasks] = useState(initialImportTasks);
+    const notifiedFailedTaskIds = useRef<Set<number>>(new Set());
     const activeTaskIds = importTasks
         .filter(
             (importTask) =>
@@ -882,6 +897,21 @@ function ImportProgressPanel({
                 if (!isMounted) {
                     return;
                 }
+
+                updatedTasks
+                    .filter((task) => task.status === 'failed')
+                    .forEach((task) => {
+                        if (notifiedFailedTaskIds.current.has(task.id)) {
+                            return;
+                        }
+
+                        notifiedFailedTaskIds.current.add(task.id);
+                        toast.error('Impor perlu diperbaiki', {
+                            description:
+                                task.error_message ??
+                                'Periksa keterangan pada proses impor.',
+                        });
+                    });
 
                 setImportTasks((currentTasks) =>
                     currentTasks.map(
@@ -2041,14 +2071,20 @@ function WarningPanel({
                             {selectedCutoff ? (
                                 <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/50 p-3">
                                     <p className="mr-auto text-xs font-semibold text-[#395886]/75">
-                                        {selectedCutoff.closed_at
-                                            ? `Periode ditutup pada ${new Date(selectedCutoff.closed_at).toLocaleString('id-ID', { timeZone: selectedCutoff.timezone })}.`
-                                            : 'Tutup periode setelah batas waktu lewat untuk mengunci perubahan.'}
+                            {selectedCutoff.closed_at
+                                ? `Periode ditutup pada ${new Date(selectedCutoff.closed_at).toLocaleString('id-ID', { timeZone: selectedCutoff.timezone })}.`
+                                            : new Date(selectedCutoff.deadline_at).getTime() > Date.now()
+                                              ? `Penutupan tersedia setelah ${new Date(selectedCutoff.deadline_at).toLocaleString('id-ID', { timeZone: selectedCutoff.timezone })}.`
+                                              : 'Tutup periode untuk mengunci perubahan manual dan impor baru.'}
                                     </p>
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        disabled={selectedCutoff.closed_at !== null}
+                                        disabled={
+                                            selectedCutoff.closed_at !== null ||
+                                            new Date(selectedCutoff.deadline_at).getTime() >
+                                                Date.now()
+                                        }
                                         onClick={() => {
                                             if (window.confirm('Tutup periode ini? Perubahan manual dan impor baru akan dikunci.')) {
                                                 router.post(closeCutoff.url(selectedCutoff.id));
@@ -2332,7 +2368,7 @@ function WarningPanel({
 function activityDescription(log: ActivityLog): string {
     const descriptions: Record<string, string> = {
         'import.completed': 'Workbook berhasil diimpor',
-        'import.rolled_back': 'Impor terakhir dihapus',
+        'import.rolled_back': 'Versi impor sebelumnya dipulihkan',
         'progress.updated': 'Progres pengerjaan diperbarui',
         'summary.override_updated': 'Total Kompen dan Responsi dikoreksi',
         'detail.override_updated': 'Detail Kompen dikoreksi',
