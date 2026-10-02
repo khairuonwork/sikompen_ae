@@ -169,7 +169,7 @@ class KompenResponHubDataQuery
 
     /**
      * @param  array<string, mixed>  $filters
-     * @return array{total_students: int, outstanding_students: int, completed_students: int, outstanding_hours: float, warning_count: int, issued_warning_count: int, periods: list<array{periode_semester: string, deadline_at: string|null, status: string}>}
+     * @return array{total_students: int, outstanding_students: int, completed_students: int, outstanding_hours: float, warning_count: int, issued_warning_count: int, periods: list<array{periode_semester: string, deadline_at: string|null, closed_at: string|null, status: string}>}
      */
     public function dashboardSummary(array $filters): array
     {
@@ -201,11 +201,14 @@ class KompenResponHubDataQuery
             'periods' => KompenResponHubPeriodCutoff::query()
                 ->when(filled($filters['periode_semester'] ?? null), fn (Builder $query): Builder => $query->where('periode_semester', $filters['periode_semester']))
                 ->orderByDesc('deadline_at')
-                ->get(['periode_semester', 'deadline_at'])
+                ->get(['periode_semester', 'deadline_at', 'closed_at'])
                 ->map(fn (KompenResponHubPeriodCutoff $cutoff): array => [
                     'periode_semester' => $cutoff->periode_semester,
                     'deadline_at' => $cutoff->deadline_at?->toIso8601String(),
-                    'status' => $cutoff->deadline_at->isPast() ? 'closed' : 'open',
+                    'closed_at' => $cutoff->closed_at?->toIso8601String(),
+                    'status' => $cutoff->closed_at !== null
+                        ? 'locked'
+                        : ($cutoff->deadline_at->isPast() ? 'cutoff_passed' : 'open'),
                 ])
                 ->all(),
         ];

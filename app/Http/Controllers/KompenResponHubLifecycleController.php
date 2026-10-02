@@ -21,6 +21,7 @@ use App\Models\KompenResponHubStudentSummaryOverride;
 use App\Models\KompenResponHubWarningLetter;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 
 class KompenResponHubLifecycleController extends Controller
 {
@@ -34,19 +35,50 @@ class KompenResponHubLifecycleController extends Controller
         $validated = $request->validated();
         abort_unless(KompenResponHubStudent::query()->where('periode_semester', $validated['periode_semester'])->exists(), 422, 'Periode belum memiliki data mahasiswa.');
 
-        $cutoff = KompenResponHubPeriodCutoff::query()->firstOrNew(['periode_semester' => $validated['periode_semester']]);
-        abort_if($cutoff->closed_at !== null, 422, 'Periode telah ditutup dan tidak dapat diubah.');
-        $before = $cutoff->exists ? $cutoff->only(['deadline_at', 'timezone']) : null;
-        $cutoff->fill([
-            'deadline_at' => CarbonImmutable::createFromFormat('Y-m-d\\TH:i', $validated['deadline_at'], 'Asia/Jakarta')->utc(),
-            'timezone' => 'Asia/Jakarta',
-            'updated_by_admin_id' => $request->user('admin')?->id,
-        ])->save();
+        /** @var array{cutoff: KompenResponHubPeriodCutoff, synchronized_warning_count: int} $result */
+        $result = DB::connection(config('kompen-respon-hub.database_connection'))->transaction(function () use ($request, $validated): array {
+            $cutoff = KompenResponHubPeriodCutoff::query()
+                ->where('periode_semester', $validated['periode_semester'])
+                ->lockForUpdate()
+                ->firstOrNew();
+            abort_if($cutoff->closed_at !== null, 422, 'Periode telah ditutup dan tidak dapat diubah.');
+            $before = $cutoff->exists ? $cutoff->only(['deadline_at', 'timezone']) : null;
+            $cutoff->fill([
+                'periode_semester' => $validated['periode_semester'],
+                'deadline_at' => CarbonImmutable::createFromFormat('Y-m-d\\TH:i', $validated['deadline_at'], 'Asia/Jakarta')->utc(),
+                'timezone' => 'Asia/Jakarta',
+                'updated_by_admin_id' => $request->user('admin')?->id,
+            ])->save();
 
-        $this->activity->execute('cutoff.updated', 'period_cutoff', (string) $cutoff->id, $request->user('admin'), $request, period: $cutoff->periode_semester, beforeState: $before, afterState: $cutoff->only(['deadline_at', 'timezone']));
-        $this->synchronizeWarningClassification($cutoff, $request);
+            $synchronizedWarningCount = $this->synchronizeWarningClassification($cutoff, $request);
+            $classification = $this->candidateClassification($cutoff);
 
-        return back()->with('success', 'Batas waktu periode berhasil disimpan.');
+            $this->activity->execute(
+                'cutoff.updated',
+                'period_cutoff',
+                (string) $cutoff->id,
+                $request->user('admin'),
+                $request,
+                period: $cutoff->periode_semester,
+                beforeState: $before,
+                afterState: $cutoff->only(['deadline_at', 'timezone']),
+                metadata: [
+                    'candidate_classification' => $classification,
+                    'synchronized_warning_count' => $synchronizedWarningCount,
+                ],
+            );
+
+            return [
+                'cutoff' => $cutoff,
+                'synchronized_warning_count' => $synchronizedWarningCount,
+            ];
+        });
+
+        $synchronizationSummary = $result['synchronized_warning_count'] > 0
+            ? " {$result['synchronized_warning_count']} status kandidat/SP diselaraskan."
+            : '';
+
+        return back()->with('success', "Batas waktu periode berhasil disimpan.{$synchronizationSummary}");
     }
 
     public function closeCutoff(
@@ -268,34 +300,45 @@ class KompenResponHubLifecycleController extends Controller
     private function synchronizeWarningClassification(
         KompenResponHubPeriodCutoff $cutoff,
         StoreKompenResponHubPeriodCutoffRequest $request,
-    ): void {
-        $classification = $cutoff->deadline_at->isPast() ? 'fixed' : 'temporary';
+    ): int {
+        $classification = $this->candidateClassification($cutoff);
+        $synchronizedWarningCount = 0;
 
         KompenResponHubWarningLetter::query()
             ->where('cutoff_id', $cutoff->id)
             ->where('classification', '!=', $classification)
-            ->each(function (KompenResponHubWarningLetter $warning) use ($classification, $cutoff, $request): void {
-                $before = $warning->only(['classification']);
-                $warning->update([
-                    'classification' => $classification,
-                    'updated_by_admin_id' => $request->user('admin')?->id,
-                ]);
+            ->chunkById(200, function ($warnings) use ($classification, $cutoff, $request, &$synchronizedWarningCount): void {
+                foreach ($warnings as $warning) {
+                    $before = $warning->only(['classification']);
+                    $warning->update([
+                        'classification' => $classification,
+                        'updated_by_admin_id' => $request->user('admin')?->id,
+                    ]);
+                    $synchronizedWarningCount++;
 
-                $this->activity->execute(
-                    "warning.classification_{$classification}",
-                    'warning_letter',
-                    (string) $warning->id,
-                    $request->user('admin'),
-                    $request,
-                    $warning->nim,
-                    $cutoff->periode_semester,
-                    $warning->kelas,
-                    'Klasifikasi diselaraskan setelah batas waktu periode diperbaiki.',
-                    $before,
-                    $warning->only(['classification']),
-                    subjectName: $warning->nama_mahasiswa,
-                );
+                    $this->activity->execute(
+                        "warning.classification_{$classification}",
+                        'warning_letter',
+                        (string) $warning->id,
+                        $request->user('admin'),
+                        $request,
+                        $warning->nim,
+                        $cutoff->periode_semester,
+                        $warning->kelas,
+                        'Klasifikasi diselaraskan setelah batas waktu periode diperbaiki.',
+                        $before,
+                        $warning->only(['classification']),
+                        subjectName: $warning->nama_mahasiswa,
+                    );
+                }
             });
+
+        return $synchronizedWarningCount;
+    }
+
+    private function candidateClassification(KompenResponHubPeriodCutoff $cutoff): string
+    {
+        return $cutoff->deadline_at->isPast() ? 'fixed' : 'temporary';
     }
 
     private function ensurePeriodIsOpen(?string $period): void

@@ -88,6 +88,46 @@ test('an admin can prepare a manual SP-1 draft before the cutoff', function () {
         ->and(KompenResponHubWarningLetter::query()->sole()->classification)->toBe('temporary');
 });
 
+test('updating a cutoff recalculates warning classification without cancelling an existing draft', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $cutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+    $warning = KompenResponHubWarningLetter::create([
+        'cutoff_id' => $cutoff->id,
+        'current_student_id' => $student->id,
+        'nim' => $student->nim,
+        'periode_semester' => $student->periode_semester,
+        'kelas' => $student->kelas,
+        'nama_mahasiswa' => $student->nama_mahasiswa,
+        'classification' => 'fixed',
+        'letter_status' => KompenResponHubWarningLetter::LetterStatusDraft,
+        'resolution' => 'outstanding',
+        'snapshot' => ['sisa_hutang_jam' => 3.5],
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->put('/admin/kompen-respon/cutoffs', [
+            'periode_semester' => $student->periode_semester,
+            'deadline_at' => now('Asia/Jakarta')->addWeek()->format('Y-m-d\\TH:i'),
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Batas waktu periode berhasil disimpan. 1 status kandidat/SP diselaraskan.');
+
+    expect($warning->fresh())
+        ->classification->toBe('temporary')
+        ->and($warning->fresh()->letter_status)->toBe(KompenResponHubWarningLetter::LetterStatusDraft)
+        ->and(app(KompenResponHubDataQuery::class)->temporaryWarningCandidates([])->pluck('id'))->toContain($student->id)
+        ->and(app(KompenResponHubDataQuery::class)->fixedWarningCandidates([])->pluck('id'))->not->toContain($student->id)
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'warning.classification_temporary')
+            ->where('subject_name', $student->nama_mahasiswa)
+            ->exists())->toBeTrue();
+});
+
 test('completed progress resolves an existing warning without deleting its trace', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
