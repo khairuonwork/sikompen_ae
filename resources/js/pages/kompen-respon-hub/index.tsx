@@ -35,7 +35,7 @@ import {
     downloadTemplate,
     store,
 } from '@/actions/App/Http/Controllers/KompenResponHubImportController';
-import { destroy as rollbackLatestImport } from '@/actions/App/Http/Controllers/KompenResponHubImportRollbackController';
+import { restore as restoreImportVersion } from '@/actions/App/Http/Controllers/KompenResponHubImportRollbackController';
 import { show as importTaskStatus } from '@/actions/App/Http/Controllers/KompenResponHubImportTaskController';
 import { destroy as logout } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
 import { settings as adminSettings } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
@@ -163,9 +163,11 @@ type Cutoff = {
 
 type ImportAuditLog = {
     id: number;
-    event_type: 'upload' | 'rollback';
+    event_type: 'upload' | 'rollback' | 'restore';
     source_import_id: number | null;
     can_download_file: boolean;
+    can_restore_version: boolean;
+    version_status: 'active' | 'partially_active' | 'archived' | 'unavailable';
     actor_name: string | null;
     actor_email: string | null;
     periode_semester: string;
@@ -180,6 +182,8 @@ type ImportAuditLog = {
     metadata: {
         restored?: boolean;
         restored_imports?: { id: number; original_filename: string }[];
+        displaced_imports?: { id: number; original_filename: string }[];
+        restored_classes?: string[];
     } | null;
     occurred_at: string;
 };
@@ -242,20 +246,17 @@ type Dashboard = {
         outstanding_hours: number;
         warning_count: number;
         issued_warning_count: number;
+        nearest_cutoff: {
+            periode_semester: string;
+            deadline_at: string;
+            days_remaining: number;
+        } | null;
         periods: {
             periode_semester: string;
             deadline_at: string | null;
             closed_at: string | null;
             status: 'open' | 'cutoff_passed' | 'locked';
         }[];
-    };
-    attention: {
-        upcoming_cutoffs: {
-            periode_semester: string;
-            deadline_at: string;
-        }[];
-        outstanding_after_cutoff: number;
-        draft_warnings: number;
     };
     worklist: {
         fixed_candidates: Student[];
@@ -301,7 +302,6 @@ type KompenResponHubPageProps = {
     cutoffs: Cutoff[];
     activeImportTasks: ImportTask[];
     exportTasks: ExportTask[];
-    canRollbackLatestImport: boolean;
 };
 
 const adminTabs = [
@@ -641,6 +641,7 @@ function ImportAuditLogTable({
 }): React.JSX.Element {
     const headings = [
         'Aksi',
+        'Status Versi',
         'Waktu',
         'Admin Pelaksana',
         'Periode',
@@ -650,12 +651,13 @@ function ImportAuditLogTable({
         'Mahasiswa',
         'Detail',
         'Validasi',
+        'Pulihkan',
     ];
 
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-all duration-300">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1130px] text-sm">
+                <table className="w-full min-w-[1320px] text-sm">
                     <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
                             {headings.map((heading) => (
@@ -682,7 +684,33 @@ function ImportAuditLogTable({
                                     >
                                         {auditLog.event_type === 'upload'
                                             ? 'Upload'
-                                            : 'Rollback'}
+                                            : auditLog.event_type === 'restore'
+                                              ? 'Pemulihan'
+                                              : 'Rollback'}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-3.5 whitespace-nowrap">
+                                    <span
+                                        className={cn(
+                                            'rounded-full px-2.5 py-1 text-[10px] font-black tracking-wider uppercase',
+                                            auditLog.version_status === 'active' &&
+                                                'border border-emerald-200 bg-emerald-100 text-emerald-800',
+                                            auditLog.version_status === 'partially_active' &&
+                                                'border border-amber-200 bg-amber-100 text-amber-800',
+                                            auditLog.version_status === 'archived' &&
+                                                'border border-slate-200 bg-slate-100 text-slate-700',
+                                            auditLog.version_status === 'unavailable' &&
+                                                'border border-rose-200 bg-rose-100 text-rose-800',
+                                        )}
+                                    >
+                                        {auditLog.version_status === 'active'
+                                            ? 'Aktif'
+                                            : auditLog.version_status ===
+                                                'partially_active'
+                                              ? 'Sebagian aktif'
+                                              : auditLog.version_status === 'archived'
+                                                ? 'Arsip'
+                                                : 'File tidak tersedia'}
                                     </span>
                                 </td>
                                 <td className="px-4 py-3.5 text-xs whitespace-nowrap text-[#395886]">
@@ -709,6 +737,11 @@ function ImportAuditLogTable({
                                             {auditLog.metadata?.restored
                                                 ? `Dipulihkan ke: ${auditLog.metadata.restored_imports?.map((importItem) => importItem.original_filename).join(', ')}`
                                                 : 'Tidak ada versi sebelumnya; data aktif dibatalkan.'}
+                                        </p>
+                                    ) : null}
+                                    {auditLog.event_type === 'restore' ? (
+                                        <p className="mt-1 whitespace-normal font-sans text-[11px] font-medium text-[#395886]/70">
+                                            Menggantikan: {auditLog.metadata?.displaced_imports?.map((importItem) => importItem.original_filename).join(', ') || 'tidak ada versi aktif sebelumnya'}
                                         </p>
                                     ) : null}
                                 </td>
@@ -760,6 +793,42 @@ function ImportAuditLogTable({
                                         <span className="text-xs text-[#395886]/40 italic">Tidak tersedia untuk unggahan lama</span>
                                     )}
                                 </td>
+                                <td className="px-4 py-3.5">
+                                    {auditLog.can_restore_version &&
+                                    auditLog.source_import_id !== null ? (
+                                        <Form
+                                            {...restoreImportVersion.form(
+                                                auditLog.source_import_id,
+                                            )}
+                                            onBefore={() =>
+                                                window.confirm(
+                                                    `Jadikan ${auditLog.original_filename} sebagai data aktif? Hanya kelas yang ada di file ini yang akan diganti.`,
+                                                )
+                                            }
+                                        >
+                                            {({ processing }) => (
+                                                <Button
+                                                    type="submit"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={processing}
+                                                    className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                                                >
+                                                    <RotateCcw className="mr-1.5 size-3.5" />
+                                                    {processing
+                                                        ? 'Memulihkan…'
+                                                        : 'Jadikan aktif'}
+                                                </Button>
+                                            )}
+                                        </Form>
+                                    ) : (
+                                        <span className="text-xs text-[#395886]/40 italic">
+                                            {auditLog.version_status === 'active'
+                                                ? 'Sedang aktif'
+                                                : '—'}
+                                        </span>
+                                    )}
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -767,37 +836,6 @@ function ImportAuditLogTable({
             </div>
             <Pager data={data} />
         </section>
-    );
-}
-
-function RollbackLatestImportButton({
-    canRollbackLatestImport,
-}: {
-    canRollbackLatestImport: boolean;
-}): React.JSX.Element {
-    return (
-        <Form
-            {...rollbackLatestImport.form()}
-            onBefore={() =>
-                window.confirm(
-                    'Rollback versi impor aktif? Data akan dikembalikan ke versi workbook sebelumnya per kelas. Kelas tanpa versi sebelumnya akan dibatalkan. Semua file dan riwayat upload tetap tersimpan.',
-                )
-            }
-        >
-            {({ processing }) => (
-                <Button
-                    type="submit"
-                    variant="destructive"
-                    disabled={!canRollbackLatestImport || processing}
-                    className="rounded-2xl border-rose-300 bg-rose-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-300 hover:bg-rose-700 active:scale-95 disabled:opacity-50"
-                >
-                    <RotateCcw className="mr-2 size-4" />
-                    {processing
-                        ? 'Memulihkan versi…'
-                        : 'Rollback versi aktif'}
-                </Button>
-            )}
-        </Form>
     );
 }
 
@@ -1148,6 +1186,10 @@ function UploadPanel({
 }: {
     onUploadRequestActivityChange: (isActive: boolean) => void;
 }): React.JSX.Element {
+    const [selectedFilename, setSelectedFilename] = useState<string | null>(
+        null,
+    );
+
     return (
         <Card className="group mx-auto w-full max-w-3xl overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-all duration-500 hover:shadow-[0_15px_35px_rgba(57,88,134,0.15)]">
             <CardHeader className="border-b border-[#F0F3FA] pb-6">
@@ -1164,6 +1206,7 @@ function UploadPanel({
                 resetOnSuccess
                 onStart={() => onUploadRequestActivityChange(true)}
                 onFinish={() => onUploadRequestActivityChange(false)}
+                onSuccess={() => setSelectedFilename(null)}
             >
                 {({ errors, processing, progress }) => (
                     <>
@@ -1208,8 +1251,20 @@ function UploadPanel({
                                     type="file"
                                     accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                     required
+                                    onChange={(event) =>
+                                        setSelectedFilename(
+                                            event.currentTarget.files?.[0]
+                                                ?.name ?? null,
+                                        )
+                                    }
                                     className="h-12 cursor-pointer rounded-2xl border-[#8AAEE0] bg-white/90 p-1.5 text-sm text-[#395886] shadow-2xs transition-all duration-300 file:mr-3 file:h-9 file:rounded-xl file:border-0 file:bg-[#395886] file:px-3 file:text-xs file:font-bold file:text-white hover:file:bg-[#1E293B]"
                                 />
+                                <p className="rounded-xl bg-[#F0F3FA]/70 px-3 py-2 text-[11px] font-medium text-[#395886]/75">
+                                    Nama file dicatat di Log Upload:{' '}
+                                    <span className="font-mono font-bold text-[#395886]">
+                                        {selectedFilename ?? 'Belum ada file dipilih'}
+                                    </span>
+                                </p>
                                 <p className="text-[11px] leading-tight font-medium text-[#395886]/60">
                                     Maksimum 20 MB. Periode pada filter akan
                                     muncul otomatis setelah data berhasil
@@ -1959,7 +2014,7 @@ function WarningPanel({
         <section className="grid gap-4">
             <Form
                 {...adminIndex.form()}
-                className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(220px,1fr)_minmax(180px,auto)_minmax(180px,auto)_auto]"
+                className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(220px,1fr)_minmax(150px,0.7fr)_minmax(180px,0.85fr)_auto] md:items-end"
             >
                 <input name="tab" type="hidden" value="warnings" />
                 <Input
@@ -2345,28 +2400,31 @@ function WarningPanel({
     );
 }
 
-function activityDescription(log: ActivityLog): string {
+function activityLabel(eventType: string): string {
     const descriptions: Record<string, string> = {
-        'import.completed': 'Workbook berhasil diimpor',
-        'import.rolled_back': 'Versi impor sebelumnya dipulihkan',
-        'progress.updated': 'Progres pengerjaan diperbarui',
-        'summary.override_updated': 'Total Kompen dan Responsi dikoreksi',
-        'detail.override_updated': 'Detail Kompen dikoreksi',
-        'cutoff.updated': 'Batas waktu periode diperbarui',
+        'import.completed': 'Impor selesai',
+        'import.rolled_back': 'Rollback impor',
+        'import.version_restored': 'Versi impor dipulihkan',
+        'progress.updated': 'Progres diperbarui',
+        'summary.override_updated': 'Koreksi total jam',
+        'detail.override_updated': 'Koreksi detail',
+        'cutoff.updated': 'Cutoff diperbarui',
+        'period.closed': 'Periode ditutup',
         'warning.drafted': 'Draft SP dibuat',
         'warning.issued': 'SP diterbitkan',
         'warning.cancelled': 'SP dibatalkan',
-        'warning.archived': 'Data SP diselaraskan setelah cutoff',
-        'warning.classification_fixed': 'Status SP diselaraskan setelah cutoff',
-        'warning.classification_temporary':
-            'Status SP diselaraskan setelah perubahan cutoff',
-        'warning.resolution_updated': 'Status penyelesaian SP diperbarui',
-        'export.completed': 'File ekspor selesai dibuat',
+        'warning.archived': 'SP diarsipkan',
+        'warning.classification_fixed': 'Status SP diselaraskan',
+        'warning.classification_temporary': 'Status SP diselaraskan',
+        'warning.resolution_updated': 'Penyelesaian SP diperbarui',
+        'export.completed': 'Ekspor selesai',
     };
 
-    return (
-        descriptions[log.event_type] ?? log.event_type.replaceAll('.', ' · ')
-    );
+    return descriptions[eventType] ?? 'Aktivitas sistem';
+}
+
+function activityDescription(log: ActivityLog): string {
+    return activityLabel(log.event_type);
 }
 
 function ActivityFilterPanel({
@@ -2381,7 +2439,7 @@ function ActivityFilterPanel({
     return (
         <Form
             {...adminIndex.form()}
-            className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(160px,1fr)_minmax(180px,1fr)_minmax(180px,1fr)_auto_auto] md:items-end"
+            className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(190px,1fr)_minmax(170px,0.85fr)_minmax(170px,0.85fr)_auto_auto] md:items-end"
         >
             <input name="tab" type="hidden" value="activity" />
             <div className="grid flex-1 gap-1.5">
@@ -2418,7 +2476,7 @@ function ActivityFilterPanel({
                     <option value="">Semua aktivitas</option>
                     {activityFilterOptions.event_types.map((eventType) => (
                         <option key={eventType} value={eventType}>
-                            {eventType.replaceAll('.', ' · ')}
+                            {activityLabel(eventType)}
                         </option>
                     ))}
                 </select>
@@ -2566,6 +2624,16 @@ function DashboardPanel({
             detail: `${dashboard.summary.issued_warning_count} telah diterbitkan`,
             icon: ShieldAlert,
         },
+        {
+            label: 'Cutoff terdekat',
+            value: dashboard.summary.nearest_cutoff
+                ? `${dashboard.summary.nearest_cutoff.days_remaining} hari`
+                : '—',
+            detail: dashboard.summary.nearest_cutoff
+                ? `${dashboard.summary.nearest_cutoff.periode_semester} · ${new Date(dashboard.summary.nearest_cutoff.deadline_at).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })}`
+                : 'Belum ada cutoff mendatang',
+            icon: CalendarClock,
+        },
     ];
 
     return (
@@ -2657,7 +2725,7 @@ function DashboardPanel({
                 </Button>
             </Form>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 {cards.map((card) => {
                     const Icon = card.icon;
 
@@ -2669,7 +2737,9 @@ function DashboardPanel({
                                         {card.label}
                                     </p>
                                     <p className="mt-2 text-3xl font-black tabular-nums text-[#395886]">
-                                        {number(String(card.value))}
+                                        {typeof card.value === 'number'
+                                            ? number(String(card.value))
+                                            : card.value}
                                     </p>
                                     <p className="mt-1 text-[11px] text-[#395886]/60">
                                         {card.detail}
@@ -2751,82 +2821,7 @@ function DashboardPanel({
                 </Card>
             </div>
 
-            <Card className="border-white/80 bg-white/85 shadow-sm">
-                <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-base text-[#395886]">
-                        <ShieldAlert className="size-4" /> Perlu tindakan
-                    </CardTitle>
-                    <CardDescription>
-                        Ringkasan tindak lanjut berdasarkan filter dashboard saat ini.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-3">
-                    <DashboardAttentionItem
-                        title="Cutoff mendekat"
-                        count={dashboard.attention.upcoming_cutoffs.length}
-                        description={
-                            dashboard.attention.upcoming_cutoffs.length
-                                ? dashboard.attention.upcoming_cutoffs
-                                      .map(
-                                          (cutoff) =>
-                                              `${cutoff.periode_semester} · ${new Date(cutoff.deadline_at).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })}`,
-                                      )
-                                      .join(', ')
-                                : 'Tidak ada cutoff dalam tujuh hari ke depan.'
-                        }
-                    />
-                    <DashboardAttentionItem
-                        title="Sisa jam setelah cutoff"
-                        count={dashboard.attention.outstanding_after_cutoff}
-                        description="Mahasiswa yang perlu diproses untuk SP."
-                        href={adminIndex.url({ query: warningQuery })}
-                    />
-                    <DashboardAttentionItem
-                        title="Draft SP belum diterbitkan"
-                        count={dashboard.attention.draft_warnings}
-                        description="Tinjau draft sebelum menerbitkan SP."
-                        href={adminIndex.url({ query: warningQuery })}
-                    />
-                </CardContent>
-            </Card>
         </section>
-    );
-}
-
-function DashboardAttentionItem({
-    title,
-    count,
-    description,
-    href,
-}: {
-    title: string;
-    count: number;
-    description: string;
-    href?: string;
-}): React.JSX.Element {
-    const content = (
-        <>
-            <div>
-                <p className="text-sm font-bold text-[#395886]">{title}</p>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-[#395886]/65">
-                    {description}
-                </p>
-            </div>
-            <span className="rounded-xl bg-[#395886] px-2.5 py-1 text-xs font-black tabular-nums text-white">
-                {count}
-            </span>
-        </>
-    );
-
-    const className =
-        'flex items-start justify-between gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 px-4 py-3 transition-colors';
-
-    return href ? (
-        <Link href={href} className={`${className} hover:bg-[#B1C9EF]/35`}>
-            {content}
-        </Link>
-    ) : (
-        <div className={className}>{content}</div>
     );
 }
 
@@ -2926,6 +2921,29 @@ function OverviewValue({
     );
 }
 
+function TableGuide({
+    title,
+    items,
+}: {
+    title: string;
+    items: string[];
+}): React.JSX.Element {
+    return (
+        <details className="group rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 px-4 py-3 text-xs text-[#395886]">
+            <summary className="cursor-pointer list-none font-bold marker:hidden">
+                <span className="inline-flex items-center gap-2">
+                    <ListFilter className="size-3.5" /> {title}
+                </span>
+            </summary>
+            <ul className="mt-3 grid list-disc gap-1.5 pl-5 leading-relaxed text-[#395886]/75">
+                {items.map((item) => (
+                    <li key={item}>{item}</li>
+                ))}
+            </ul>
+        </details>
+    );
+}
+
 function EmptyTableState({ isAdmin }: { isAdmin: boolean }): React.JSX.Element {
     return (
         <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-12 text-center text-sm backdrop-blur-xl transition-all duration-300">
@@ -2961,7 +2979,6 @@ export default function KompenResponHubIndex({
     cutoffs,
     activeImportTasks,
     exportTasks,
-    canRollbackLatestImport,
 }: KompenResponHubPageProps): React.JSX.Element {
     const indexAction = isAdmin ? adminIndex : studentIndex;
     const tabs = isAdmin ? adminTabs : studentTabs;
@@ -3195,17 +3212,22 @@ export default function KompenResponHubIndex({
                                         Audit Impor
                                     </h2>
                                     <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
-                                        Riwayat upload dan rollback versi aktif. Rollback
-                                        mengembalikan data ke workbook sebelumnya per
-                                        kelas tanpa menghapus file sumber.
+                                        Pilih versi unggahan pada tabel untuk menjadikannya
+                                        data aktif. Hanya kelas yang ada di versi tersebut
+                                        yang akan dipulihkan; file sumber dan audit tetap
+                                        tersimpan.
                                     </p>
                                 </div>
-                                <RollbackLatestImportButton
-                                    canRollbackLatestImport={
-                                        canRollbackLatestImport
-                                    }
-                                />
                             </div>
+                            <TableGuide
+                                title="Panduan Log Upload"
+                                items={[
+                                    'Aksi menunjukkan unggahan, rollback, atau pemulihan versi.',
+                                    'Status versi menunjukkan apakah workbook masih dipakai sebagai data aktif.',
+                                    'Detail adalah jumlah baris Detail Kompen yang dibaca dari workbook, bukan catatan tambahan.',
+                                    'Jadikan aktif hanya mengganti kelas yang termuat pada file yang dipilih.',
+                                ]}
+                            />
                             {imports?.data.length ? (
                                 <ImportAuditLogTable data={imports} />
                             ) : (
@@ -3274,6 +3296,26 @@ export default function KompenResponHubIndex({
                                 isAdmin={isAdmin}
                                 filters={filters}
                                 filterOptions={filterOptions}
+                            />
+                            <TableGuide
+                                title={
+                                    activeTab === 'students'
+                                        ? 'Panduan Kompen dan Respon'
+                                        : 'Panduan Detail Kompen'
+                                }
+                                items={
+                                    activeTab === 'students'
+                                        ? [
+                                              'T, S, I, dan B adalah jam Terlambat, Sakit, Izin, dan Bolos dari data sumber.',
+                                              'Kompen dan Responsi adalah total kewajiban; nilai selesai dan sisa mengikuti koreksi admin bila ada.',
+                                              'Status hanya tampil setelah cutoff: Selesai bila sisa jam nol, atau SP aktif bila surat masih berjalan.',
+                                          ]
+                                        : [
+                                              'Setiap baris mewakili satu kejadian perkuliahan yang menghasilkan jam Kompen atau Responsi.',
+                                              'Terlambat memakai satuan menit; Kompen dan Responsi memakai satuan jam.',
+                                              'Keterangan menyimpan konteks kejadian dari workbook atau koreksi admin.',
+                                          ]
+                                }
                             />
                             {isAdmin &&
                             isEditMode &&
