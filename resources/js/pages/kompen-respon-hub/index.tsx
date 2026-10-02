@@ -99,7 +99,7 @@ type Student = {
     effective_kompensasi_dikerjakan_jam: string;
     effective_responsi_dikerjakan_jam: string;
     effective_sisa_hutang_jam: string;
-    progress_status: 'not_started' | 'in_progress' | 'completed' | 'overdue' | 'period_closed' | 'warning_active';
+    progress_status: 'none' | 'completed' | 'warning_active';
     last_worked_at: string | null;
     has_summary_override: boolean;
     warning: Warning | null;
@@ -130,7 +130,6 @@ type Warning = {
     nama_mahasiswa: string;
     kelas: string;
     periode_semester: string;
-    classification: 'temporary' | 'fixed';
     letter_status: 'not_created' | 'draft' | 'issued' | 'cancelled';
     resolution: 'outstanding' | 'completed' | 'needs_review';
     snapshot: { sisa_hutang_jam: number };
@@ -251,7 +250,6 @@ type Dashboard = {
         }[];
     };
     worklist: {
-        temporary_candidates: Student[];
         fixed_candidates: Student[];
         warnings_to_follow_up: Warning[];
     };
@@ -290,7 +288,6 @@ type KompenResponHubPageProps = {
     details: Pagination<Detail> | null;
     imports: Pagination<ImportAuditLog> | null;
     warnings: Pagination<Warning> | null;
-    temporaryCandidates: Pagination<Student> | null;
     fixedCandidates: Pagination<Student> | null;
     activityLogs: Pagination<ActivityLog> | null;
     cutoffs: Cutoff[];
@@ -518,21 +515,19 @@ function ProgressStatusBadge({
     status: Student['progress_status'];
 }): React.JSX.Element {
     const labels: Record<Student['progress_status'], string> = {
-        not_started: 'Belum mulai',
-        in_progress: 'Sedang dikerjakan',
         completed: 'Selesai',
-        overdue: 'Lewat cutoff',
-        period_closed: 'Periode ditutup',
         warning_active: 'SP aktif',
+        none: '',
     };
     const tones: Record<Student['progress_status'], string> = {
-        not_started: 'bg-slate-100 text-slate-700',
-        in_progress: 'bg-blue-100 text-blue-800',
         completed: 'bg-emerald-100 text-emerald-800',
-        overdue: 'bg-rose-100 text-rose-800',
-        period_closed: 'bg-slate-200 text-slate-800',
         warning_active: 'bg-rose-100 text-rose-800',
+        none: '',
     };
+
+    if (status === 'none') {
+        return null;
+    }
 
     return <span className={cn('inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-black', tones[status])}>{labels[status]}</span>;
 }
@@ -1771,7 +1766,6 @@ function WarningStatusBadge({
                           : 'bg-[#B1C9EF]/40 text-[#395886]',
             )}
         >
-            {warning.classification === 'fixed' ? 'Fixed · ' : 'Temporary · '}
             {label}
         </span>
     );
@@ -1779,33 +1773,27 @@ function WarningStatusBadge({
 
 function WarningCandidateTable({
     data,
-    classification,
     selectedStudentId,
     onSelect,
 }: {
     data: Pagination<Student>;
-    classification: 'temporary' | 'fixed';
     selectedStudentId: number | null;
     onSelect: (student: Student) => void;
 }): React.JSX.Element {
-    const isTemporary = classification === 'temporary';
-
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
             <div className="flex flex-col justify-between gap-2 border-b border-[#F0F3FA] px-5 py-4 sm:flex-row sm:items-center">
                 <div>
                     <h2 className="text-base font-extrabold text-[#395886]">
-                        {isTemporary ? 'Kandidat sementara' : 'Kandidat pasti'}
+                        Mahasiswa belum memiliki SP
                     </h2>
                     <p className="mt-0.5 text-xs text-[#395886]/70">
-                        {isTemporary
-                            ? 'Mahasiswa dengan sisa jam pada periode yang batas waktunya belum lewat.'
-                            : 'Mahasiswa dengan sisa jam setelah batas waktu periode terlewati.'}{' '}
-                        Pilih satu untuk membuat atau membuat ulang draft SP.
+                        Sisa jam masih ada setelah cutoff. Pilih mahasiswa untuk
+                        membuat atau memperbarui draft SP.
                     </p>
                 </div>
                 <span className="w-fit rounded-full bg-[#B1C9EF]/40 px-3 py-1 text-xs font-bold text-[#395886]">
-                    {isTemporary ? 'Temporary' : 'Fixed'}
+                    Setelah cutoff
                 </span>
             </div>
             <div className="overflow-x-auto">
@@ -1935,7 +1923,6 @@ function WarningPanel({
     filterOptions,
     filters,
     warnings,
-    temporaryCandidates,
     fixedCandidates,
     selectedWarning,
     onSelectWarning,
@@ -1945,7 +1932,6 @@ function WarningPanel({
     filterOptions: FilterOptions;
     filters: Filters;
     warnings: Pagination<Warning> | null;
-    temporaryCandidates: Pagination<Student> | null;
     fixedCandidates: Pagination<Student> | null;
     selectedWarning: Warning | null;
     onSelectWarning: (warning: Warning) => void;
@@ -2114,11 +2100,11 @@ function WarningPanel({
                 </Form>
                 <div className="grid content-start gap-2 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm">
                     <h2 className="text-lg font-extrabold text-[#395886]">
-                        Tambah SP manual
+                        Buat SP manual
                     </h2>
                     <p className="text-xs leading-relaxed text-[#395886]/70">
-                        Pilih mahasiswa pada tabel kandidat. Form pembuatan
-                        draft akan muncul setelah satu kandidat dipilih.
+                        Pilih mahasiswa dengan sisa jam setelah cutoff. Form
+                        pembuatan draft akan muncul setelah dipilih.
                     </p>
                 </div>
             </div>
@@ -2131,7 +2117,7 @@ function WarningPanel({
                         <>
                             <div>
                                 <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
-                                    Kandidat dipilih
+                                    Mahasiswa dipilih
                                 </p>
                                 <p className="mt-1 text-sm font-extrabold text-[#395886]">
                                     {selectedStudent.nama_mahasiswa} ·{' '}
@@ -2184,30 +2170,16 @@ function WarningPanel({
                     )}
                 </Form>
             ) : null}
-            {temporaryCandidates?.data.length ? (
-                <WarningCandidateTable
-                    data={temporaryCandidates}
-                    classification="temporary"
-                    selectedStudentId={selectedStudent?.id ?? null}
-                    onSelect={setSelectedStudent}
-                />
-            ) : (
-                <div className="rounded-3xl border border-dashed border-[#8AAEE0] bg-white/80 p-6 text-center text-xs font-semibold text-[#395886]/70">
-                    Tidak ada kandidat sementara. Tambahkan batas waktu untuk
-                    periode yang masih berjalan atau periksa sisa jam mahasiswa.
-                </div>
-            )}
             {fixedCandidates?.data.length ? (
                 <WarningCandidateTable
                     data={fixedCandidates}
-                    classification="fixed"
                     selectedStudentId={selectedStudent?.id ?? null}
                     onSelect={setSelectedStudent}
                 />
             ) : (
                 <div className="rounded-3xl border border-dashed border-[#8AAEE0] bg-white/80 p-6 text-center text-xs font-semibold text-[#395886]/70">
-                    Kandidat pasti akan muncul di sini setelah batas waktu
-                    periode terlewati dan masih ada sisa jam.
+                    Tidak ada mahasiswa dengan sisa jam setelah cutoff pada
+                    filter yang dipilih.
                 </div>
             )}
             <div className="flex flex-col justify-between gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm sm:flex-row sm:items-center">
@@ -2216,8 +2188,8 @@ function WarningPanel({
                         Arsip dan status SP
                     </h2>
                     <p className="mt-0.5 text-xs text-[#395886]/70">
-                        Fixed dibuat saat batas waktu terlewati; draft dan
-                        penerbitan SP tetap dikendalikan admin.
+                        Draft dan penerbitan SP setelah cutoff tetap
+                        dikendalikan admin.
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -2316,7 +2288,7 @@ function WarningPanel({
                             className="grid gap-3 rounded-2xl border border-rose-200 bg-rose-50/50 p-4"
                             onBefore={() =>
                                 window.confirm(
-                                    'Batalkan SP ini? Riwayat audit tetap tersimpan dan mahasiswa kembali ke daftar kandidat.',
+                                    'Batalkan SP ini? Riwayat audit tetap tersimpan dan mahasiswa kembali ke daftar sisa jam setelah cutoff.',
                                 )
                             }
                         >
@@ -2376,10 +2348,10 @@ function activityDescription(log: ActivityLog): string {
         'warning.drafted': 'Draft SP dibuat',
         'warning.issued': 'SP diterbitkan',
         'warning.cancelled': 'SP dibatalkan',
-        'warning.archived': 'Kandidat SP diarsipkan sebagai fixed',
-        'warning.classification_fixed': 'Kandidat SP dipindahkan ke fixed',
+        'warning.archived': 'Data SP diselaraskan setelah cutoff',
+        'warning.classification_fixed': 'Status SP diselaraskan setelah cutoff',
         'warning.classification_temporary':
-            'Kandidat SP dikembalikan ke temporary',
+            'Status SP diselaraskan setelah perubahan cutoff',
         'warning.resolution_updated': 'Status penyelesaian SP diperbarui',
         'export.completed': 'File ekspor selesai dibuat',
     };
@@ -2573,7 +2545,7 @@ function DashboardPanel({
             icon: CheckCircle2,
         },
         {
-            label: 'SP aktif (fixed)',
+            label: 'SP aktif',
             value: dashboard.summary.warning_count,
             detail: `${dashboard.summary.issued_warning_count} telah diterbitkan`,
             icon: ShieldAlert,
@@ -2651,7 +2623,7 @@ function DashboardPanel({
                             <CalendarClock className="size-4" /> Status periode
                         </CardTitle>
                         <CardDescription>
-                            Batas waktu menentukan kandidat sementara atau pasti; periode terkunci hanya setelah ditutup oleh admin.
+                            Batas waktu menentukan kapan SP dapat dibuat. Periode terkunci hanya setelah ditutup oleh admin.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-2">
@@ -2693,14 +2665,9 @@ function DashboardPanel({
                     </CardHeader>
                     <CardContent className="grid gap-3">
                         <DashboardWorklistLink
-                            title="Kandidat sementara"
-                            count={dashboard.worklist.temporary_candidates.length}
-                            description="Masih memiliki sisa jam sebelum batas waktu."
-                        />
-                        <DashboardWorklistLink
-                            title="Kandidat pasti"
+                            title="Belum memiliki SP"
                             count={dashboard.worklist.fixed_candidates.length}
-                            description="Lewat batas waktu dan perlu peninjauan SP."
+                            description="Masih memiliki sisa jam setelah cutoff."
                         />
                         <DashboardWorklistLink
                             title="SP perlu ditindaklanjuti"
@@ -2845,7 +2812,6 @@ export default function KompenResponHubIndex({
     details,
     imports,
     warnings,
-    temporaryCandidates,
     fixedCandidates,
     activityLogs,
     cutoffs,
@@ -3112,7 +3078,6 @@ export default function KompenResponHubIndex({
                             filterOptions={filterOptions}
                             filters={filters}
                             warnings={warnings}
-                            temporaryCandidates={temporaryCandidates}
                             fixedCandidates={fixedCandidates}
                             selectedWarning={selectedWarning}
                             onSelectWarning={setSelectedWarning}
