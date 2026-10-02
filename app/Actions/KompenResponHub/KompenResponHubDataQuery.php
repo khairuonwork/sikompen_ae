@@ -53,6 +53,10 @@ class KompenResponHubDataQuery
             }
         }
 
+        if (filled($filters['tingkat'] ?? null)) {
+            $query->whereHas('student', fn (Builder $studentQuery): Builder => $studentQuery->where('tingkat', $filters['tingkat']));
+        }
+
         if (filled($filters['search'] ?? null)) {
             $query->where(function (Builder $warningQuery) use ($filters): void {
                 $warningQuery->where('nama_mahasiswa', 'like', "%{$filters['search']}%")
@@ -174,8 +178,7 @@ class KompenResponHubDataQuery
             'issued_warning_count' => $this->warnings($filters)
                 ->where('letter_status', KompenResponHubWarningLetter::LetterStatusIssued)
                 ->count(),
-            'periods' => KompenResponHubPeriodCutoff::query()
-                ->when(filled($filters['periode_semester'] ?? null), fn (Builder $query): Builder => $query->where('periode_semester', $filters['periode_semester']))
+            'periods' => $this->cutoffsForFilters($filters)
                 ->orderByDesc('deadline_at')
                 ->get(['periode_semester', 'deadline_at', 'closed_at'])
                 ->map(fn (KompenResponHubPeriodCutoff $cutoff): array => [
@@ -187,6 +190,34 @@ class KompenResponHubDataQuery
                         : ($cutoff->deadline_at->isPast() ? 'cutoff_passed' : 'open'),
                 ])
                 ->all(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array{upcoming_cutoffs: list<array{periode_semester: string, deadline_at: string}>, outstanding_after_cutoff: int, draft_warnings: int}
+     */
+    public function dashboardAttention(array $filters): array
+    {
+        $now = now();
+
+        return [
+            'upcoming_cutoffs' => $this->cutoffsForFilters($filters)
+                ->whereNull('closed_at')
+                ->where('deadline_at', '>', $now)
+                ->where('deadline_at', '<=', $now->copy()->addDays(7))
+                ->orderBy('deadline_at')
+                ->limit(5)
+                ->get(['periode_semester', 'deadline_at'])
+                ->map(fn (KompenResponHubPeriodCutoff $cutoff): array => [
+                    'periode_semester' => $cutoff->periode_semester,
+                    'deadline_at' => $cutoff->deadline_at->toIso8601String(),
+                ])
+                ->all(),
+            'outstanding_after_cutoff' => $this->fixedWarningCandidates($filters)->count(),
+            'draft_warnings' => $this->warnings($filters)
+                ->where('letter_status', KompenResponHubWarningLetter::LetterStatusDraft)
+                ->count(),
         ];
     }
 
@@ -295,6 +326,31 @@ class KompenResponHubDataQuery
         }
 
         return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return Builder<KompenResponHubPeriodCutoff>
+     */
+    private function cutoffsForFilters(array $filters): Builder
+    {
+        $query = KompenResponHubPeriodCutoff::query();
+
+        if (filled($filters['periode_semester'] ?? null)) {
+            $query->where('periode_semester', $filters['periode_semester']);
+        }
+
+        if ($this->hasStudentFilters($filters)) {
+            $query->whereIn(
+                'periode_semester',
+                $this->students($filters)
+                    ->reorder()
+                    ->select('periode_semester')
+                    ->distinct(),
+            );
+        }
+
+        return $query;
     }
 
     private function effectiveDebtExpression(string $studentTable): string

@@ -242,6 +242,11 @@ class KompenResponHubController extends Controller
     private function filtersForRequest(KompenResponHubTableRequest $request): array
     {
         $filters = $request->validated();
+
+        if (filled($filters['tingkat'] ?? null)) {
+            $filters['tingkat'] = (int) $filters['tingkat'];
+        }
+
         $studentNim = $this->proxyAccess->studentNim($request);
 
         if ($studentNim !== null) {
@@ -261,6 +266,7 @@ class KompenResponHubController extends Controller
 
         return [
             'summary' => $this->dataQuery->dashboardSummary($filters),
+            'attention' => $this->dataQuery->dashboardAttention($filters),
             'worklist' => [
                 'fixed_candidates' => KompenResponHubStudentResource::collection($worklist['fixed']->get())->resolve(),
                 'warnings_to_follow_up' => KompenResponHubWarningLetterResource::collection($worklist['warnings']->get())->resolve(),

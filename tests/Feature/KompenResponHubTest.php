@@ -12,6 +12,7 @@ use App\Models\KompenResponHubExportTask;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
+use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -61,6 +62,35 @@ test('the admin landing page provides a period-aware operational summary', funct
         ->assertOk()
         ->assertJsonPath('data.summary.nim', $student->nim)
         ->assertJsonPath('data.source.total_kompensasi_jam', '1.5000');
+});
+
+test('the dashboard filters its summary and actions by class and level', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $firstStudent = createStudent();
+    $secondStudent = $firstStudent->replicate();
+    $secondStudent->fill([
+        'nim' => '987654321',
+        'nama_mahasiswa' => 'Dani Pratama',
+        'kelas' => '2AEA1',
+        'tingkat' => 2,
+    ])->save();
+
+    KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $firstStudent->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tingkat=2&kelas=2AEA1')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('filters.tingkat', 2)
+            ->where('filters.kelas', '2AEA1')
+            ->where('dashboard.summary.total_students', 1)
+            ->where('dashboard.attention.outstanding_after_cutoff', 1)
+            ->where('dashboard.worklist.fixed_candidates.0.nim', '987654321'),
+        );
 });
 
 test('the dynamic filters only expose uploaded periods and filter their records', function () {
