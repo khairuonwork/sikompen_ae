@@ -41,6 +41,8 @@ class ImportKompenResponHubWorkbook
 
         $result = DB::connection(config('kompen-respon-hub.database_connection'))
             ->transaction(function () use ($payload, $preview, $period, $originalFilename, $storedPath, $fileHash, $uploadedByAdminId, $uploaderName, $uploaderEmail): array {
+                $replacedImports = $this->currentImportsByClass($period, $preview['classes']);
+
                 $import = KompenResponHubImport::create([
                     'uploaded_by_admin_id' => $uploadedByAdminId,
                     'uploader_name' => $uploaderName,
@@ -53,61 +55,15 @@ class ImportKompenResponHubWorkbook
                     'student_count' => $preview['student_count'],
                     'detail_count' => $preview['detail_count'],
                     'quality_report' => $this->qualityReport($payload),
+                    'replaced_imports' => $replacedImports,
                     'imported_at' => now(),
                 ]);
 
-                KompenResponHubStudent::query()
-                    ->where('periode_semester', $period)
-                    ->whereIn('kelas', $preview['classes'])
-                    ->delete();
-
-                $studentIds = [];
-                foreach ($payload['students'] as $studentAttributes) {
-                    $student = KompenResponHubStudent::create([
-                        ...$studentAttributes,
-                        'kompen_respon_hub_import_id' => $import->id,
-                        'periode_semester' => $period,
-                    ]);
-
-                    $studentIds["{$student->kelas}:{$student->nim}"] = $student->id;
-                }
-
-                foreach ($payload['details'] as $detailAttributes) {
-                    $studentKey = "{$detailAttributes['kelas']}:{$detailAttributes['nim']}";
-                    $sourceKey = hash('sha256', json_encode($detailAttributes, JSON_THROW_ON_ERROR));
-
-                    DB::connection(config('kompen-respon-hub.database_connection'))
-                        ->table('sikompen_detail_kompen')
-                        ->insert([
-                            'kompen_respon_hub_student_id' => $studentIds[$studentKey],
-                            'source_key' => $sourceKey,
-                            'tanggal' => $detailAttributes['tanggal'],
-                            'mata_kuliah' => $detailAttributes['mata_kuliah'],
-                            'nama_dosen' => $detailAttributes['nama_dosen'],
-                            'jenis_pertemuan' => $detailAttributes['jenis_pertemuan'],
-                            'presensi' => $detailAttributes['presensi'],
-                            'menit_keterlambatan' => $detailAttributes['menit_keterlambatan'],
-                            'keterangan' => $detailAttributes['keterangan'],
-                            'jam_kompensasi' => $detailAttributes['jam_kompensasi'],
-                            'jam_responsi' => $detailAttributes['jam_responsi'],
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
-                }
-
-                foreach ($payload['students'] as $studentAttributes) {
-                    $studentKey = "{$studentAttributes['kelas']}:{$studentAttributes['nim']}";
-                    $identity = [
-                        'nim' => $studentAttributes['nim'],
-                        'periode_semester' => $period,
-                        'kelas' => $studentAttributes['kelas'],
-                    ];
-                    $currentStudentId = $studentIds[$studentKey];
-
-                    KompenResponHubStudentProgress::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
-                    KompenResponHubStudentSummaryOverride::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
-                    KompenResponHubWarningLetter::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
-                }
+                $this->replaceActiveData(
+                    $payload,
+                    $period,
+                    array_fill_keys($preview['classes'], $import->id),
+                );
 
                 KompenResponHubImportAuditLog::create([
                     'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
@@ -137,6 +93,97 @@ class ImportKompenResponHubWorkbook
         );
 
         return $result;
+    }
+
+    /**
+     * Replace live rows for the supplied workbook classes and retain lifecycle
+     * references for matching student identities.
+     *
+     * @param  array{preview: array{periode_semester: ?string, classes: list<string>, class_count: int, student_count: int, detail_count: int}, students: list<array<string, mixed>>, details: list<array<string, mixed>>}  $payload
+     * @param  array<string, int>  $importIdsByClass
+     */
+    public function replaceActiveData(
+        array $payload,
+        string $period,
+        array $importIdsByClass,
+        bool $deleteCurrentData = true,
+    ): void {
+        $classes = $payload['preview']['classes'];
+
+        if (array_diff($classes, array_keys($importIdsByClass)) !== []) {
+            throw new \LogicException('Versi impor tidak memiliki sumber untuk semua kelas yang akan dipulihkan.');
+        }
+
+        if ($deleteCurrentData) {
+            KompenResponHubStudent::query()
+                ->where('periode_semester', $period)
+                ->whereIn('kelas', $classes)
+                ->delete();
+        }
+
+        $studentIds = [];
+        foreach ($payload['students'] as $studentAttributes) {
+            $class = (string) $studentAttributes['kelas'];
+            $student = KompenResponHubStudent::create([
+                ...$studentAttributes,
+                'kompen_respon_hub_import_id' => $importIdsByClass[$class],
+                'periode_semester' => $period,
+            ]);
+
+            $studentIds["{$student->kelas}:{$student->nim}"] = $student->id;
+        }
+
+        foreach ($payload['details'] as $detailAttributes) {
+            $studentKey = "{$detailAttributes['kelas']}:{$detailAttributes['nim']}";
+            $sourceKey = hash('sha256', json_encode($detailAttributes, JSON_THROW_ON_ERROR));
+
+            DB::connection(config('kompen-respon-hub.database_connection'))
+                ->table('sikompen_detail_kompen')
+                ->insert([
+                    'kompen_respon_hub_student_id' => $studentIds[$studentKey],
+                    'source_key' => $sourceKey,
+                    'tanggal' => $detailAttributes['tanggal'],
+                    'mata_kuliah' => $detailAttributes['mata_kuliah'],
+                    'nama_dosen' => $detailAttributes['nama_dosen'],
+                    'jenis_pertemuan' => $detailAttributes['jenis_pertemuan'],
+                    'presensi' => $detailAttributes['presensi'],
+                    'menit_keterlambatan' => $detailAttributes['menit_keterlambatan'],
+                    'keterangan' => $detailAttributes['keterangan'],
+                    'jam_kompensasi' => $detailAttributes['jam_kompensasi'],
+                    'jam_responsi' => $detailAttributes['jam_responsi'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+        }
+
+        foreach ($payload['students'] as $studentAttributes) {
+            $studentKey = "{$studentAttributes['kelas']}:{$studentAttributes['nim']}";
+            $identity = [
+                'nim' => $studentAttributes['nim'],
+                'periode_semester' => $period,
+                'kelas' => $studentAttributes['kelas'],
+            ];
+            $currentStudentId = $studentIds[$studentKey];
+
+            KompenResponHubStudentProgress::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
+            KompenResponHubStudentSummaryOverride::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
+            KompenResponHubWarningLetter::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
+        }
+    }
+
+    /** @param list<string> $classes
+     * @return array<string, int>
+     */
+    private function currentImportsByClass(string $period, array $classes): array
+    {
+        return KompenResponHubStudent::query()
+            ->where('periode_semester', $period)
+            ->whereIn('kelas', $classes)
+            ->get(['kelas', 'kompen_respon_hub_import_id'])
+            ->mapWithKeys(fn (KompenResponHubStudent $student): array => [
+                $student->kelas => $student->kompen_respon_hub_import_id,
+            ])
+            ->all();
     }
 
     /**

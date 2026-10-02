@@ -236,7 +236,7 @@ class KompenResponHubController extends Controller
                 : null,
             'canRollbackLatestImport' => $isAdmin
                 && ! $hasActiveImportTask
-                && KompenResponHubImport::query()->exists(),
+                && KompenResponHubImport::query()->whereHas('students')->exists(),
         ]);
     }
 

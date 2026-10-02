@@ -349,7 +349,7 @@ test('a completed import clears cached filter options', function () {
         ->assertJsonPath('periode_semester', ['2026/2027 Gasal']);
 });
 
-test('an admin can delete only the latest upload and its related data is removed', function () {
+test('an admin can roll back an initial import while keeping its source workbook and audit trail', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
     $olderStudent = createStudent('2025/2026 Gasal');
@@ -375,12 +375,12 @@ test('an admin can delete only the latest upload and its related data is removed
         ->delete('/admin/kompen-respon/imports/latest')
         ->assertRedirect('/admin?tab=imports');
 
-    expect(KompenResponHubImport::query()->find($latestImport->id))->toBeNull()
+    expect(KompenResponHubImport::query()->find($latestImport->id))->not->toBeNull()
         ->and(KompenResponHubStudent::query()->find($latestStudent->id))->toBeNull()
         ->and(KompenResponHubDetail::query()->where('kompen_respon_hub_student_id', $latestStudent->id)->exists())->toBeFalse()
         ->and(KompenResponHubStudent::query()->find($olderStudent->id))->not->toBeNull();
 
-    Storage::disk('local')->assertMissing($latestImport->stored_path);
+    Storage::disk('local')->assertExists($latestImport->stored_path);
 
     $auditLog = KompenResponHubImportAuditLog::query()->latest('id')->firstOrFail();
     expect($auditLog->event_type)->toBe(KompenResponHubImportAuditLog::EVENT_ROLLBACK)
@@ -390,6 +390,54 @@ test('an admin can delete only the latest upload and its related data is removed
         ->and($auditLog->student_count)->toBe(1)
         ->and($auditLog->detail_count)->toBe(0)
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.rolled_back')->exists())->toBeTrue();
+});
+
+test('an admin can roll back an incorrect workbook to the previous version for the same class', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'versi-awal.xlsx',
+            workbookContents(compensationHours: 1.5, responseHours: 2),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $previousImport = KompenResponHubImport::query()->sole();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'versi-keliru.xlsx',
+            workbookContents(compensationHours: 9.25, responseHours: 4.5),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $incorrectImport = KompenResponHubImport::query()->latest('id')->firstOrFail();
+    expect($incorrectImport->replaced_imports)->toBe(['1AEA1' => $previousImport->id])
+        ->and(KompenResponHubStudent::query()->sole()->total_hutang_jam)->toBe('13.7500');
+
+    $this->actingAs($admin, 'admin')
+        ->delete('/admin/kompen-respon/imports/latest')
+        ->assertRedirect('/admin?tab=imports');
+
+    $restoredStudent = KompenResponHubStudent::query()->sole();
+    expect($restoredStudent->kompen_respon_hub_import_id)->toBe($previousImport->id)
+        ->and($restoredStudent->total_hutang_jam)->toBe('3.5000')
+        ->and(KompenResponHubImport::query()->find($incorrectImport->id))->not->toBeNull();
+
+    Storage::disk('local')->assertExists($previousImport->stored_path);
+    Storage::disk('local')->assertExists($incorrectImport->stored_path);
+
+    $auditLog = KompenResponHubImportAuditLog::query()->latest('id')->firstOrFail();
+    expect($auditLog->event_type)->toBe(KompenResponHubImportAuditLog::EVENT_ROLLBACK)
+        ->and($auditLog->source_import_id)->toBe($incorrectImport->id)
+        ->and($auditLog->actor_email)->toBe($admin->email)
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'import.rolled_back')
+            ->where('subject_reference', (string) $incorrectImport->id)
+            ->exists())->toBeTrue();
 });
 
 test('a rollback clears cached filter options', function () {
@@ -584,7 +632,10 @@ function workbookContents(
     string $academicYear = '2026/2027',
     string $classCode = '1AEA1',
     int $level = 1,
+    float $compensationHours = 1.5,
+    float $responseHours = 2,
 ): string {
+    $totalHours = $compensationHours + $responseHours;
     $workbook = new Spreadsheet;
     $summary = $workbook->getActiveSheet();
     $summary->setTitle('Kompen dan Respon');
@@ -595,7 +646,7 @@ function workbookContents(
     $summary->setCellValue('H2', $level);
     $summary->fromArray([
         ['NO.', 'NIM', 'NAMA MAHASISWA', 'T[J]', 'S[J]', 'I[J]', 'B[J]', 'KOMPENSASI[J]', 'RESPONSI[J]', 'TOTAL[J]', 'KOMPENSASI DIKERJAKAN[J]', 'SISA KOMPEN[J]'],
-        [1, '123456789', 'Rina Utami', 0.5, 0, 0, 0, 1.5, 2, 3.5, 0, 3.5],
+        [1, '123456789', 'Rina Utami', 0.5, 0, 0, 0, $compensationHours, $responseHours, $totalHours, 0, $totalHours],
     ], null, 'A3');
     $summary->setCellValue('A6', 'TEMPLATE BLOK KELAS BARU — SALIN LALU GANTI KODE');
 
@@ -603,7 +654,7 @@ function workbookContents(
     $details->setTitle('Detail Kompen');
     $details->fromArray([
         ['NO.', 'KELAS', 'NIM', 'NAMA MAHASISWA', 'MATA KULIAH', 'NAMA DOSEN', 'TANGGAL', 'JENIS PERTEMUAN', 'PRESENSI', 'MENIT KETERLAMBATAN', 'KETERANGAN', 'JAM KOMPENSASI', 'JAM RESPONSI'],
-        [1, $classCode, '123456789', 'Rina Utami', 'Algoritma', 'Ibu Sari', '2026-09-01', 'Luring', 'Terlambat', 15, 'Macet', 1.5, 2],
+        [1, $classCode, '123456789', 'Rina Utami', 'Algoritma', 'Ibu Sari', '2026-09-01', 'Luring', 'Terlambat', 15, 'Macet', $compensationHours, $responseHours],
     ]);
 
     $writer = new Xlsx($workbook);
