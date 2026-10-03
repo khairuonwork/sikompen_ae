@@ -154,7 +154,7 @@ export function FilterPanel({
                 </Select>
                 <Button
                     type="submit"
-                    className="grow rounded-2xl bg-[#395886] text-xs font-bold text-white shadow-md transition-all duration-300 hover:bg-[#1E293B] active:scale-95"
+                    className="grow rounded-2xl bg-[#395886] text-xs font-bold text-white shadow-md transition-all duration-300 hover:bg-[#1E293B] hover:text-white active:scale-95"
                 >
                     <Search className="mr-1.5 size-4" />
                     Terapkan

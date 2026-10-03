@@ -1,4 +1,4 @@
-import { Head, Link } from "@inertiajs/react";
+import { Head, Link, router } from "@inertiajs/react";
 import {
     AlertCircle,
     ArrowLeft,
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
 import { index as studentIndex } from "@/routes/student/kompen-respon";
 import { DashboardPanel, StudentOverviewPanel } from "@/features/kompen-respon-hub/dashboard/dashboard-panel";
+import { GlobalStudentSearch } from "@/features/kompen-respon-hub/dashboard/global-student-search";
 import { DetailCorrectionPanel } from "@/features/kompen-respon-hub/detail-kompen/detail-correction-panel";
 import { DetailTable } from "@/features/kompen-respon-hub/detail-kompen/detail-table";
 import { ExportProgressPanel } from "@/features/kompen-respon-hub/export/export-progress-panel";
@@ -78,12 +79,16 @@ export default function KompenResponHubIndex({
     const [isStudentOverviewLoading, setIsStudentOverviewLoading] =
         useState(false);
 
-    async function openStudentOverview(student: Student): Promise<void> {
+    async function loadStudentOverview(studentId: number): Promise<void> {
         setIsStudentOverviewLoading(true);
 
         try {
-            const response = await fetch(adminStudentOverview.url(student.id), {
-                headers: { Accept: "application/json" },
+            const response = await fetch(adminStudentOverview.url(studentId), {
+                credentials: "same-origin",
+                headers: {
+                    Accept: "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
             });
 
             if (!response.ok) {
@@ -101,6 +106,26 @@ export default function KompenResponHubIndex({
         } finally {
             setIsStudentOverviewLoading(false);
         }
+    }
+
+    function openStudentOverview(studentId: number): void {
+        if (activeTab !== "students") {
+            router.get(
+                adminIndex.url({ query: { tab: "students" } }),
+                {},
+                {
+                    preserveScroll: true,
+                    preserveState: true,
+                    onSuccess: () => {
+                        void loadStudentOverview(studentId);
+                    },
+                },
+            );
+
+            return;
+        }
+
+        void loadStudentOverview(studentId);
     }
 
     return (
@@ -138,7 +163,13 @@ export default function KompenResponHubIndex({
                                 </p>
                             </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
+                            {isAdmin ? (
+                                <GlobalStudentSearch
+                                    isProfileLoading={isStudentOverviewLoading}
+                                    onSelectStudent={openStudentOverview}
+                                />
+                            ) : null}
                             <Button
                                 type="button"
                                 variant="outline"
@@ -433,7 +464,7 @@ export default function KompenResponHubIndex({
                                         onSelect={setSelectedStudent}
                                         onOpenProfile={
                                             isAdmin
-                                                ? openStudentOverview
+                                                ? (student) => openStudentOverview(student.id)
                                                 : undefined
                                         }
                                     />

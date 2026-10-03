@@ -141,7 +141,7 @@ export function ExportProgressPanel({
                             <Button
                                 asChild
                                 size="sm"
-                                className="rounded-xl bg-[#395886] text-xs font-bold"
+                                className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
                             >
                                 <a
                                     href={downloadExport.url(task.id, {

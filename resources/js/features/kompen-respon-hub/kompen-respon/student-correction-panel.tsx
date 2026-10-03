@@ -95,7 +95,7 @@ export function StudentCorrectionPanel({
                             <Button
                                 disabled={processing}
                                 type="submit"
-                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
                             >
                                 <Save className="mr-2 size-4" />
                                 Simpan progres
@@ -149,7 +149,7 @@ export function StudentCorrectionPanel({
                             <Button
                                 disabled={processing}
                                 type="submit"
-                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
                             >
                                 <Save className="mr-2 size-4" />
                                 Simpan koreksi

@@ -260,6 +260,12 @@ export function WarningPanel({
     const [selectedCutoffPeriod, setSelectedCutoffPeriod] = useState(
         filters.periode_semester ?? "",
     );
+    const [selectedFilterClass, setSelectedFilterClass] = useState(
+        filters.kelas ?? "",
+    );
+    const [selectedFilterPeriod, setSelectedFilterPeriod] = useState(
+        filters.periode_semester ?? "",
+    );
     const selectedCutoff = cutoffs.find(
         (cutoff) => cutoff.periode_semester === selectedCutoffPeriod,
     );
@@ -271,40 +277,76 @@ export function WarningPanel({
                 className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(220px,1fr)_minmax(150px,0.7fr)_minmax(180px,0.85fr)_auto] md:items-end"
             >
                 <input name="tab" type="hidden" value="warnings" />
+                <input name="kelas" type="hidden" value={selectedFilterClass} />
+                <input
+                    name="periode_semester"
+                    type="hidden"
+                    value={selectedFilterPeriod}
+                />
                 <Input
                     name="search"
                     defaultValue={filters.search}
                     maxLength={100}
                     placeholder="Cari nama atau NIM"
-                    className="rounded-xl border-[#8AAEE0] bg-white"
+                    className="h-10 rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886]"
                 />
-                <select
-                    name="kelas"
-                    defaultValue={filters.kelas ?? ""}
-                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                <Select
+                    value={selectedFilterClass || "all"}
+                    onValueChange={(value) =>
+                        setSelectedFilterClass(value === "all" ? "" : value)
+                    }
                 >
-                    <option value="">Semua kelas</option>
-                    {filterOptions.kelas.map((kelas) => (
-                        <option key={kelas} value={kelas}>
-                            {kelas}
-                        </option>
-                    ))}
-                </select>
-                <select
-                    name="periode_semester"
-                    defaultValue={filters.periode_semester ?? ""}
-                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                    <SelectTrigger className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
+                        <SelectValue placeholder="Semua kelas" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl text-xs font-semibold">
+                        <SelectItem
+                            value="all"
+                            className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                        >
+                            Semua kelas
+                        </SelectItem>
+                        {filterOptions.kelas.map((kelas) => (
+                            <SelectItem
+                                key={kelas}
+                                value={kelas}
+                                className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                            >
+                                {kelas}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select
+                    value={selectedFilterPeriod || "all"}
+                    onValueChange={(value) =>
+                        setSelectedFilterPeriod(value === "all" ? "" : value)
+                    }
                 >
-                    <option value="">Semua periode</option>
-                    {filterOptions.periode_semester.map((period) => (
-                        <option key={period} value={period}>
-                            {period}
-                        </option>
-                    ))}
-                </select>
+                    <SelectTrigger className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
+                        <SelectValue placeholder="Semua periode" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl text-xs font-semibold">
+                        <SelectItem
+                            value="all"
+                            className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                        >
+                            Semua periode
+                        </SelectItem>
+                        {filterOptions.periode_semester.map((period) => (
+                            <SelectItem
+                                key={period}
+                                value={period}
+                                className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                            >
+                                {period}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 <Button
                     type="submit"
-                    className="rounded-xl bg-[#395886] text-xs font-bold"
+                    className="rounded-2xl bg-[#395886] text-xs font-bold text-white shadow-md transition-all duration-300 hover:bg-[#1E293B] hover:text-white active:scale-95"
                 >
                     <Search className="mr-1.5 size-4" />
                     Terapkan
@@ -369,7 +411,7 @@ export function WarningPanel({
                                     selectedCutoff?.closed_at !== null
                                 }
                                 type="submit"
-                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
                             >
                                 <Clock3 className="mr-2 size-4" />
                                 Simpan batas waktu
@@ -478,7 +520,7 @@ export function WarningPanel({
                                 <Button
                                     disabled={processing}
                                     type="submit"
-                                    className="rounded-xl bg-[#395886] text-xs font-bold"
+                                    className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
                                 >
                                     <ShieldAlert className="mr-2 size-4" />
                                     Buat draft SP
@@ -604,7 +646,7 @@ export function WarningPanel({
                                     <Button
                                         disabled={processing}
                                         type="submit"
-                                        className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                                        className="w-fit rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
                                     >
                                         <Save className="mr-2 size-4" />
                                         Simpan status

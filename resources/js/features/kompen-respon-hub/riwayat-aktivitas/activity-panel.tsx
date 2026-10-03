@@ -1,7 +1,15 @@
 import { Form, Link } from "@inertiajs/react";
 import { Search } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
 import type { ActivityLog, FilterOptions, Filters, Pagination } from "../shared/types";
 import { Pager } from "../shared/components/pagination";
@@ -42,12 +50,37 @@ export function ActivityFilterPanel({
     filterOptions: FilterOptions;
     activityFilterOptions: { event_types: string[]; actor_emails: string[] };
 }): React.JSX.Element {
+    const [selectedPeriod, setSelectedPeriod] = useState(
+        filters.periode_semester ?? "",
+    );
+    const [selectedEvent, setSelectedEvent] = useState(
+        filters.activity_event ?? "",
+    );
+    const [selectedActor, setSelectedActor] = useState(
+        filters.activity_actor ?? "",
+    );
+
     return (
         <Form
             {...adminIndex.form()}
             className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(190px,1fr)_minmax(170px,0.85fr)_minmax(170px,0.85fr)_auto_auto] md:items-end"
         >
             <input name="tab" type="hidden" value="activity" />
+            <input
+                name="periode_semester"
+                type="hidden"
+                value={selectedPeriod}
+            />
+            <input
+                name="activity_event"
+                type="hidden"
+                value={selectedEvent}
+            />
+            <input
+                name="activity_actor"
+                type="hidden"
+                value={selectedActor}
+            />
             <div className="grid flex-1 gap-1.5">
                 <Label
                     htmlFor="activity-period"
@@ -55,19 +88,36 @@ export function ActivityFilterPanel({
                 >
                     Periode aktivitas
                 </Label>
-                <select
-                    id="activity-period"
-                    name="periode_semester"
-                    defaultValue={filters.periode_semester ?? ""}
-                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                <Select
+                    value={selectedPeriod || "all"}
+                    onValueChange={(value) =>
+                        setSelectedPeriod(value === "all" ? "" : value)
+                    }
                 >
-                    <option value="">Semua periode</option>
-                    {filterOptions.periode_semester.map((period) => (
-                        <option key={period} value={period}>
-                            {period}
-                        </option>
-                    ))}
-                </select>
+                    <SelectTrigger
+                        id="activity-period"
+                        className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white"
+                    >
+                        <SelectValue placeholder="Semua periode" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl text-xs font-semibold">
+                        <SelectItem
+                            value="all"
+                            className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                        >
+                            Semua periode
+                        </SelectItem>
+                        {filterOptions.periode_semester.map((period) => (
+                            <SelectItem
+                                key={period}
+                                value={period}
+                                className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                            >
+                                {period}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="grid gap-1.5">
                 <Label
@@ -76,19 +126,36 @@ export function ActivityFilterPanel({
                 >
                     Jenis aktivitas
                 </Label>
-                <select
-                    id="activity-event"
-                    name="activity_event"
-                    defaultValue={filters.activity_event ?? ""}
-                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                <Select
+                    value={selectedEvent || "all"}
+                    onValueChange={(value) =>
+                        setSelectedEvent(value === "all" ? "" : value)
+                    }
                 >
-                    <option value="">Semua aktivitas</option>
-                    {activityFilterOptions.event_types.map((eventType) => (
-                        <option key={eventType} value={eventType}>
-                            {activityLabel(eventType)}
-                        </option>
-                    ))}
-                </select>
+                    <SelectTrigger
+                        id="activity-event"
+                        className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white"
+                    >
+                        <SelectValue placeholder="Semua aktivitas" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl text-xs font-semibold">
+                        <SelectItem
+                            value="all"
+                            className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                        >
+                            Semua aktivitas
+                        </SelectItem>
+                        {activityFilterOptions.event_types.map((eventType) => (
+                            <SelectItem
+                                key={eventType}
+                                value={eventType}
+                                className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                            >
+                                {activityLabel(eventType)}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="grid gap-1.5">
                 <Label
@@ -97,23 +164,40 @@ export function ActivityFilterPanel({
                 >
                     Admin pelaksana
                 </Label>
-                <select
-                    id="activity-actor"
-                    name="activity_actor"
-                    defaultValue={filters.activity_actor ?? ""}
-                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                <Select
+                    value={selectedActor || "all"}
+                    onValueChange={(value) =>
+                        setSelectedActor(value === "all" ? "" : value)
+                    }
                 >
-                    <option value="">Semua admin</option>
-                    {activityFilterOptions.actor_emails.map((email) => (
-                        <option key={email} value={email}>
-                            {email}
-                        </option>
-                    ))}
-                </select>
+                    <SelectTrigger
+                        id="activity-actor"
+                        className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white"
+                    >
+                        <SelectValue placeholder="Semua admin" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl text-xs font-semibold">
+                        <SelectItem
+                            value="all"
+                            className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                        >
+                            Semua admin
+                        </SelectItem>
+                        {activityFilterOptions.actor_emails.map((email) => (
+                            <SelectItem
+                                key={email}
+                                value={email}
+                                className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                            >
+                                {email}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
             <Button
                 type="submit"
-                className="rounded-xl bg-[#395886] text-xs font-bold"
+                className="rounded-2xl bg-[#395886] text-xs font-bold text-white shadow-md transition-all duration-300 hover:bg-[#1E293B] hover:text-white active:scale-95"
             >
                 <Search className="mr-1.5 size-4" />
                 Terapkan
@@ -122,7 +206,7 @@ export function ActivityFilterPanel({
                 asChild
                 type="button"
                 variant="outline"
-                className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]"
+                className="rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]"
             >
                 <Link href={adminIndex.url({ query: { tab: "activity" } })}>
                     Reset

@@ -71,8 +71,18 @@ export type ActivityLog = {
     actor_name: string | null;
     actor_email?: string | null;
     reason: string | null;
+    before_state: ActivityState;
+    after_state: ActivityState;
+    metadata: Record<string, unknown> | null;
     occurred_at: string;
 };
+
+export type ActivityState = Record<string, unknown> | null;
+
+export type StudentSearchResult = Pick<
+    Student,
+    "id" | "nim" | "nama_mahasiswa" | "kelas" | "tingkat" | "periode_semester"
+>;
 
 export type Cutoff = {
     id: number;

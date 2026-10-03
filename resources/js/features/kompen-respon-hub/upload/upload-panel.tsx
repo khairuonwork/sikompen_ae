@@ -122,7 +122,7 @@ export function UploadPanel({
                             <Button
                                 type="submit"
                                 disabled={processing}
-                                className="rounded-2xl bg-[#395886] px-6 py-2.5 text-xs font-bold text-white shadow-md transition-all duration-300 hover:bg-[#1E293B] hover:shadow-xl active:scale-95"
+                                className="rounded-2xl bg-[#395886] px-6 py-2.5 text-xs font-bold text-white shadow-md transition-all duration-300 hover:bg-[#1E293B] hover:text-white hover:shadow-xl active:scale-95"
                             >
                                 <UploadCloud className="mr-2 size-4" />
                                 {processing

@@ -27,7 +27,7 @@ import type {
     Filters,
     StudentOverview,
 } from "../shared/types";
-import { activityDescription } from "../riwayat-aktivitas/activity-panel";
+import { StudentActivityHistory } from "./student-activity-history";
 
 export function DashboardPanel({
     dashboard,
@@ -155,7 +155,7 @@ export function DashboardPanel({
                 </div>
                 <Button
                     type="submit"
-                    className="rounded-xl bg-[#395886] text-xs font-bold"
+                    className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
                 >
                     <Search className="mr-1.5 size-4" />
                     Terapkan
@@ -365,7 +365,7 @@ export function StudentOverviewPanel({
                     <X className="mr-1.5 size-4" /> Tutup
                 </Button>
             </div>
-            <div className="grid gap-4 p-5 xl:grid-cols-[1fr_1fr_1.2fr]">
+            <div className="grid gap-4 p-5 xl:grid-cols-2">
                 <div className="rounded-2xl border border-[#D5DEEF] p-4">
                     <p className="text-xs font-black tracking-wide text-[#395886] uppercase">
                         Data efektif
@@ -425,43 +425,12 @@ export function StudentOverviewPanel({
                             : ""}
                     </p>
                 </div>
-                <div className="rounded-2xl border border-[#D5DEEF] p-4">
-                    <p className="text-xs font-black tracking-wide text-[#395886] uppercase">
-                        Jejak perubahan terakhir
-                    </p>
-                    <div className="mt-3 grid gap-2">
-                        {overview.activities.length ? (
-                            overview.activities.slice(0, 4).map((activity) => (
-                                <div
-                                    key={activity.id}
-                                    className="border-l-2 border-[#8AAEE0] pl-3 text-xs"
-                                >
-                                    <p className="font-semibold text-[#395886]">
-                                        {activityDescription(activity)}
-                                    </p>
-                                    <p className="text-[11px] text-[#395886]/65">
-                                        {new Date(
-                                            activity.occurred_at,
-                                        ).toLocaleString("id-ID", {
-                                            timeZone: "Asia/Jakarta",
-                                        })}
-                                        {activity.reason
-                                            ? ` · ${activity.reason}`
-                                            : ""}
-                                    </p>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="text-xs text-[#395886]/65">
-                                Belum ada perubahan manual yang tercatat.
-                            </p>
-                        )}
-                    </div>
-                    <p className="mt-4 text-[11px] text-[#395886]/65">
-                        {overview.details.length} detail Kompen ·{" "}
-                        {overview.warnings.length} riwayat SP
-                    </p>
-                </div>
+            </div>
+            <div className="border-t border-[#D5DEEF] px-5 py-4">
+                <p className="mb-3 text-[11px] text-[#395886]/65">
+                    {overview.details.length} detail Kompen · {overview.warnings.length} riwayat SP
+                </p>
+                <StudentActivityHistory activities={overview.activities} />
             </div>
         </section>
     );
