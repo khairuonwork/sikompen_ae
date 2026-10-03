@@ -70,6 +70,12 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('si-admin-proxy', function (Request $request): Limit {
             return Limit::perMinute(120)->by($request->ip());
         });
+
+        RateLimiter::for('sikompen-data', function (Request $request): Limit {
+            $sessionId = $request->hasSession() ? $request->session()->getId() : 'no-session';
+
+            return Limit::perMinute(30)->by(Str::transliterate("{$sessionId}|{$request->ip()}"));
+        });
     }
 
     /**

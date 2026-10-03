@@ -3,7 +3,7 @@
 use App\Http\Controllers\KompenResponHubController;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('kompen-respon')->middleware(['web', 'sikompen.proxy-session', 'throttle:60,1'])->group(function (): void {
+Route::prefix('kompen-respon')->middleware(['web', 'sikompen.proxy-session', 'throttle:sikompen-data'])->group(function (): void {
     Route::get('filter-options', [KompenResponHubController::class, 'filterOptions'])
         ->name('api.kompen-respon.filter-options');
     Route::get('students', [KompenResponHubController::class, 'students'])

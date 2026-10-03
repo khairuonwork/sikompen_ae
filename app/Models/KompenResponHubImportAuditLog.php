@@ -42,6 +42,7 @@ class KompenResponHubImportAuditLog extends Model
         'class_count',
         'student_count',
         'detail_count',
+        'metadata',
         'occurred_at',
     ];
 
@@ -52,6 +53,7 @@ class KompenResponHubImportAuditLog extends Model
             'class_count' => 'integer',
             'student_count' => 'integer',
             'detail_count' => 'integer',
+            'metadata' => 'array',
             'occurred_at' => 'datetime',
         ];
     }

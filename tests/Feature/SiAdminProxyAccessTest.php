@@ -2,6 +2,8 @@
 
 use App\Actions\SiAdminProxy\SiAdminProxySignature;
 use App\Models\KompenResponHubAdmin;
+use App\Models\KompenResponHubImport;
+use App\Models\KompenResponHubStudent;
 use App\Providers\AppServiceProvider;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
@@ -64,6 +66,33 @@ test('the Si-Admin gateway sends mahasiswa to the student page', function (): vo
         ->get('/si-admin/access')
         ->assertRedirect(route('student.kompen-respon.index'))
         ->assertSessionHas('si_admin_proxy.role', 'mahasiswa');
+});
+
+test('a proxy mahasiswa can only read and export their own NIM', function (): void {
+    $import = KompenResponHubImport::create([
+        'periode_semester' => '2026/2027 Ganjil',
+        'original_filename' => 'source.xlsx',
+        'stored_path' => 'kompen-respon-hub/imports/source.xlsx',
+        'file_hash' => str_repeat('a', 64),
+        'class_count' => 1,
+        'student_count' => 2,
+        'detail_count' => 0,
+        'imported_at' => now(),
+    ]);
+    $ownStudent = KompenResponHubStudent::create(studentAttributes($import->id, '123456789', '1AEA1'));
+    $otherStudent = KompenResponHubStudent::create(studentAttributes($import->id, '987654321', '1AEB1'));
+
+    $this->withHeaders(siAdminProxyHeaders('mahasiswa', studentNim: $ownStudent->nim))
+        ->get('/si-admin/access')
+        ->assertRedirect(route('student.kompen-respon.index'));
+
+    $this->getJson('/api/kompen-respon/students')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.nim', $ownStudent->nim);
+
+    $this->getJson("/api/kompen-respon/students/{$otherStudent->id}")
+        ->assertNotFound();
 });
 
 test('a proxy superuser cannot open a local admin setup window', function (): void {
@@ -168,7 +197,7 @@ test('the proxy access endpoint is hidden until the integration is enabled', fun
 });
 
 /** @return array<string, string> */
-function siAdminProxyHeaders(string $role, ?int $timestamp = null, ?string $nonce = null): array
+function siAdminProxyHeaders(string $role, ?int $timestamp = null, ?string $nonce = null, ?string $studentNim = null): array
 {
     $attributes = [
         'email' => 'superuser@si-admin.test',
@@ -176,6 +205,7 @@ function siAdminProxyHeaders(string $role, ?int $timestamp = null, ?string $nonc
         'nonce' => $nonce ?? Str::lower(Str::random(32)),
         'path' => '/si-admin/access',
         'role' => $role,
+        'student_nim' => $role === 'mahasiswa' ? ($studentNim ?? '123456789') : '',
         'timestamp' => $timestamp ?? now()->getTimestamp(),
         'user_id' => 'si-admin-123',
     ];
@@ -187,7 +217,30 @@ function siAdminProxyHeaders(string $role, ?int $timestamp = null, ?string $nonc
         'X-Si-Admin-Nonce' => $attributes['nonce'],
         'X-Si-Admin-Role' => $attributes['role'],
         'X-Si-Admin-Signature' => $signature,
+        'X-Si-Admin-Student-Nim' => $attributes['student_nim'],
         'X-Si-Admin-Timestamp' => (string) $attributes['timestamp'],
         'X-Si-Admin-User-Id' => $attributes['user_id'],
+    ];
+}
+
+/** @return array<string, int|string|float> */
+function studentAttributes(int $importId, string $nim, string $kelas): array
+{
+    return [
+        'kompen_respon_hub_import_id' => $importId,
+        'nim' => $nim,
+        'periode_semester' => '2026/2027 Ganjil',
+        'nama_mahasiswa' => $nim === '123456789' ? 'Rina Utami' : 'Dani Pratama',
+        'kelas' => $kelas,
+        'tingkat' => 1,
+        'total_jam_terlambat' => 0,
+        'total_jam_sakit' => 0,
+        'total_jam_izin' => 0,
+        'total_jam_bolos' => 0,
+        'total_kompensasi_jam' => 1.5,
+        'total_responsi_jam' => 0,
+        'total_hutang_jam' => 1.5,
+        'kompensasi_dikerjakan_jam' => 0,
+        'sisa_hutang_jam' => 1.5,
     ];
 }

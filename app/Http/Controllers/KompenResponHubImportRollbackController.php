@@ -3,19 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
+use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Actions\KompenResponHub\RestoreKompenResponHubImportVersion;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
+use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImport;
-use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class KompenResponHubImportRollbackController extends Controller
 {
-    public function destroy(SiAdminProxyAccess $access): RedirectResponse
-    {
+    public function destroy(
+        SiAdminProxyAccess $access,
+        RecordKompenResponHubActivity $activity,
+        RestoreKompenResponHubImportVersion $restoreImportVersion,
+    ): RedirectResponse {
         $actor = $access->actor(request());
 
         $hasActiveImportTask = KompenResponHubImportTask::query()
@@ -27,51 +30,69 @@ class KompenResponHubImportRollbackController extends Controller
 
         if ($hasActiveImportTask) {
             return to_route('admin.kompen-respon.index', ['tab' => 'imports'])
-                ->with('error', 'Tunggu proses upload yang sedang berjalan selesai sebelum menghapus unggahan terakhir.');
+                ->with('error', 'Tunggu proses upload yang sedang berjalan selesai sebelum menjalankan rollback.');
         }
 
-        /** @var array{stored_path: string, original_filename: string}|null $rollback */
-        $rollback = DB::connection(config('kompen-respon-hub.database_connection'))
-            ->transaction(function () use ($actor): ?array {
-                $latestImport = KompenResponHubImport::query()
-                    ->lockForUpdate()
-                    ->latest('imported_at')
-                    ->latest('id')
-                    ->first();
+        $latestImport = KompenResponHubImport::query()
+            ->whereHas('students')
+            ->latest('imported_at')
+            ->latest('id')
+            ->first();
 
-                if ($latestImport === null) {
-                    return null;
-                }
-
-                KompenResponHubImportAuditLog::create([
-                    'event_type' => KompenResponHubImportAuditLog::EVENT_ROLLBACK,
-                    'source_import_id' => $latestImport->id,
-                    'actor_email' => $actor['email'],
-                    'periode_semester' => $latestImport->periode_semester,
-                    'original_filename' => $latestImport->original_filename,
-                    'class_count' => $latestImport->class_count,
-                    'student_count' => $latestImport->student_count,
-                    'detail_count' => $latestImport->detail_count,
-                    'occurred_at' => now(),
-                ]);
-
-                $latestImport->delete();
-
-                return [
-                    'stored_path' => $latestImport->stored_path,
-                    'original_filename' => $latestImport->original_filename,
-                ];
-            });
-
-        if ($rollback === null) {
+        if ($latestImport === null) {
             return to_route('admin.kompen-respon.index', ['tab' => 'imports'])
-                ->with('error', 'Belum ada unggahan yang dapat dihapus.');
+                ->with('error', 'Belum ada versi impor aktif yang dapat di-rollback.');
         }
 
-        Cache::forget(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_KEY);
-        Storage::disk('local')->delete($rollback['stored_path']);
+        try {
+            $rollback = $restoreImportVersion->execute(
+                $latestImport,
+                $actor['email'],
+                $actor['email'],
+            );
+        } catch (\LogicException $exception) {
+            return to_route('admin.kompen-respon.index', ['tab' => 'imports'])
+                ->with('error', $exception->getMessage());
+        }
+
+        Cache::forever(
+            KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_VERSION_KEY,
+            (int) Cache::get(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_VERSION_KEY, 1) + 1,
+        );
+        $admin = is_int($actor['id'])
+            ? KompenResponHubAdmin::query()->find($actor['id'])
+            : null;
+        $restoredFilenames = collect($rollback['restored_imports'])
+            ->pluck('original_filename')
+            ->implode(', ');
+
+        $activity->execute(
+            'import.rolled_back',
+            'import',
+            (string) $rollback['rolled_back_import_id'],
+            $admin,
+            request(),
+            null,
+            $rollback['periode_semester'],
+            null,
+            $rollback['restored']
+                ? 'Versi impor aktif dikembalikan ke workbook sebelumnya.'
+                : 'Impor awal dibatalkan karena belum ada versi sebelumnya.',
+            afterState: [
+                'restored' => $rollback['restored'],
+                'restored_imports' => $rollback['restored_imports'],
+            ],
+            metadata: [
+                'restored_import_filenames' => $restoredFilenames,
+            ],
+        );
 
         return to_route('admin.kompen-respon.index', ['tab' => 'imports'])
-            ->with('success', "Unggahan terakhir {$rollback['original_filename']} beserta data terkait telah dihapus.");
+            ->with(
+                'success',
+                $rollback['restored']
+                    ? "Rollback selesai. Data aktif dikembalikan ke versi {$restoredFilenames}."
+                    : 'Rollback selesai. Impor awal dibatalkan; file dan riwayat upload tetap tersimpan.',
+            );
     }
 }

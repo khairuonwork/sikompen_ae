@@ -5,7 +5,7 @@ namespace App\Actions\SiAdminProxy;
 class SiAdminProxySignature
 {
     /**
-     * @param  array{email: string, method: string, nonce: string, path: string, role: string, timestamp: int, user_id: string}  $attributes
+     * @param  array{email: string, method: string, nonce: string, path: string, role: string, student_nim: string, timestamp: int, user_id: string}  $attributes
      */
     public function create(array $attributes): string
     {
@@ -13,7 +13,7 @@ class SiAdminProxySignature
     }
 
     /**
-     * @param  array{email: string, method: string, nonce: string, path: string, role: string, timestamp: int, user_id: string}  $attributes
+     * @param  array{email: string, method: string, nonce: string, path: string, role: string, student_nim: string, timestamp: int, user_id: string}  $attributes
      */
     public function canonicalRequest(array $attributes): string
     {
@@ -25,6 +25,7 @@ class SiAdminProxySignature
             $attributes['user_id'],
             $attributes['email'],
             $attributes['role'],
+            $attributes['student_nim'],
         ]);
     }
 

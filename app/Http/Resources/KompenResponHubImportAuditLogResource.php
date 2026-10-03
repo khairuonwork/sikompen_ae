@@ -20,8 +20,7 @@ class KompenResponHubImportAuditLogResource extends JsonResource
             'id' => $this->id,
             'event_type' => $this->event_type,
             'source_import_id' => $this->source_import_id,
-            'can_download_file' => $this->event_type === KompenResponHubImportAuditLog::EVENT_UPLOAD
-                && $this->relationLoaded('sourceImport')
+            'can_download_file' => $this->relationLoaded('sourceImport')
                 && $this->sourceImport !== null,
             'actor_name' => $this->actor_name,
             'actor_email' => $this->actor_email,
@@ -30,6 +29,11 @@ class KompenResponHubImportAuditLogResource extends JsonResource
             'class_count' => $this->class_count,
             'student_count' => $this->student_count,
             'detail_count' => $this->detail_count,
+            'metadata' => $this->metadata,
+            'quality_report' => $this->when(
+                $this->relationLoaded('sourceImport') && $this->sourceImport !== null,
+                $this->sourceImport?->quality_report,
+            ),
             'occurred_at' => $this->occurred_at->toIso8601String(),
         ];
     }

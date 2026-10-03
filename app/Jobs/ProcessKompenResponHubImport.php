@@ -4,6 +4,8 @@ namespace App\Jobs;
 
 use App\Actions\KompenResponHub\ImportKompenResponHubWorkbook;
 use App\Actions\KompenResponHub\ParseKompenResponHubWorkbook;
+use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImportTask;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -26,6 +28,7 @@ class ProcessKompenResponHubImport implements ShouldQueue
     public function handle(
         ParseKompenResponHubWorkbook $parser,
         ImportKompenResponHubWorkbook $importer,
+        RecordKompenResponHubActivity $activity,
     ): void {
         $importTask = KompenResponHubImportTask::query()->find($this->importTaskId);
 
@@ -82,6 +85,24 @@ class ProcessKompenResponHubImport implements ShouldQueue
             (int) $importTask->uploaded_by_admin_id,
             $importTask->uploader_name,
             $importTask->uploader_email,
+        );
+
+        $activity->execute(
+            'import.completed',
+            'import',
+            (string) $result['import_id'],
+            KompenResponHubAdmin::query()->find($importTask->uploaded_by_admin_id),
+            null,
+            null,
+            $result['periode_semester'],
+            null,
+            'Workbook berhasil diimpor.',
+            metadata: [
+                'class_count' => $result['class_count'],
+                'student_count' => $result['student_count'],
+                'detail_count' => $result['detail_count'],
+                'original_filename' => $importTask->original_filename,
+            ],
         );
 
         $this->updateProgress(

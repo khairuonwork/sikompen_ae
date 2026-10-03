@@ -2,46 +2,142 @@
 
 namespace App\Actions\KompenResponHub;
 
+use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImportAuditLog;
+use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
+use App\Models\KompenResponHubStudentProgress;
+use App\Models\KompenResponHubStudentSummaryOverride;
+use App\Models\KompenResponHubWarningLetter;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as BaseQueryBuilder;
 use Illuminate\Support\Facades\Cache;
 
 class KompenResponHubDataQuery
 {
     public const FILTER_OPTIONS_CACHE_KEY = 'sikompen:filter-options:v2';
 
+    public const FILTER_OPTIONS_CACHE_VERSION_KEY = 'sikompen:filter-options:version';
+
     /** @return Builder<KompenResponHubImportAuditLog> */
-    public function importAuditLogs(): Builder
+    public function importAuditLogs(array $filters = []): Builder
     {
-        return KompenResponHubImportAuditLog::query()
-            ->with('sourceImport:id')
+        $query = KompenResponHubImportAuditLog::query()
+            ->with('sourceImport:id,quality_report')
             ->orderByDesc('occurred_at')
             ->orderByDesc('id');
+
+        if (filled($filters['periode_semester'] ?? null)) {
+            $query->where('periode_semester', $filters['periode_semester']);
+        }
+
+        return $query;
+    }
+
+    /** @return Builder<KompenResponHubWarningLetter> */
+    public function warnings(array $filters, bool $includeCancelled = false): Builder
+    {
+        $query = KompenResponHubWarningLetter::query()->with('student');
+
+        if (! $includeCancelled) {
+            $query->whereIn('letter_status', [
+                KompenResponHubWarningLetter::LetterStatusDraft,
+                KompenResponHubWarningLetter::LetterStatusIssued,
+            ])->where('classification', 'fixed');
+        }
+
+        foreach (['nim', 'kelas', 'periode_semester'] as $field) {
+            if (filled($filters[$field] ?? null)) {
+                $query->where($field, $filters[$field]);
+            }
+        }
+
+        if (filled($filters['tingkat'] ?? null)) {
+            $query->whereHas('student', fn (Builder $studentQuery): Builder => $studentQuery->where('tingkat', $filters['tingkat']));
+        }
+
+        if (filled($filters['search'] ?? null)) {
+            $query->where(function (Builder $warningQuery) use ($filters): void {
+                $warningQuery->where('nama_mahasiswa', 'like', "%{$filters['search']}%")
+                    ->orWhere('nim', 'like', "%{$filters['search']}%");
+            });
+        }
+
+        return $query->orderByDesc('id');
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return Builder<KompenResponHubStudent>
+     */
+    public function fixedWarningCandidates(array $filters): Builder
+    {
+        $studentTable = (new KompenResponHubStudent)->getTable();
+        $cutoffTable = (new KompenResponHubPeriodCutoff)->getTable();
+        $progressTable = (new KompenResponHubStudentProgress)->getTable();
+        $summaryOverrideTable = (new KompenResponHubStudentSummaryOverride)->getTable();
+
+        $effectiveDebt = $this->effectiveDebtExpression($studentTable);
+
+        return $this->students($filters)
+            ->whereExists(function (BaseQueryBuilder $query) use ($cutoffTable, $studentTable): void {
+                $query->selectRaw('1')
+                    ->from($cutoffTable)
+                    ->whereColumn("{$cutoffTable}.periode_semester", "{$studentTable}.periode_semester")
+                    ->where('deadline_at', '<=', now());
+            })
+            ->whereRaw("({$effectiveDebt}) > 0");
+    }
+
+    /** @return Builder<KompenResponHubActivityLog> */
+    public function activityLogs(array $filters): Builder
+    {
+        $query = KompenResponHubActivityLog::query();
+
+        if (filled($filters['periode_semester'] ?? null)) {
+            $query->where('periode_semester', $filters['periode_semester']);
+        }
+
+        if (filled($filters['activity_event'] ?? null)) {
+            $query->where('event_type', $filters['activity_event']);
+        }
+
+        if (filled($filters['activity_actor'] ?? null)) {
+            $query->where('actor_email', $filters['activity_actor']);
+        }
+
+        return $query->orderByDesc('occurred_at')->orderByDesc('id');
     }
 
     /** @return array{tingkat: list<int>, kelas: list<string>, periode_semester: list<string>} */
-    public function filterOptions(): array
+    public function filterOptions(array $filters = []): array
     {
+        $students = KompenResponHubStudent::query();
+
+        if (filled($filters['nim'] ?? null)) {
+            $students->where('nim', $filters['nim']);
+        }
+
+        $cacheVersion = Cache::get(self::FILTER_OPTIONS_CACHE_VERSION_KEY, 1);
         $filterOptions = Cache::remember(
-            self::FILTER_OPTIONS_CACHE_KEY,
+            self::FILTER_OPTIONS_CACHE_KEY.":{$cacheVersion}:".hash('sha256', (string) ($filters['nim'] ?? 'all')),
             now()->addMinutes(30),
-            fn (): array => [
-                'tingkat' => KompenResponHubStudent::query()
+            fn () => [
+                'tingkat' => (clone $students)
                     ->distinct()
                     ->orderBy('tingkat')
                     ->pluck('tingkat')
                     ->map(fn (int $tingkat): int => $tingkat)
                     ->values()
                     ->all(),
-                'kelas' => KompenResponHubStudent::query()
+                'kelas' => (clone $students)
                     ->distinct()
                     ->orderBy('kelas')
                     ->pluck('kelas')
                     ->values()
                     ->all(),
-                'periode_semester' => KompenResponHubStudent::query()
+                'periode_semester' => (clone $students)
                     ->distinct()
                     ->orderByDesc('periode_semester')
                     ->pluck('periode_semester')
@@ -55,11 +151,103 @@ class KompenResponHubDataQuery
 
     /**
      * @param  array<string, mixed>  $filters
+     * @return array{total_students: int, outstanding_students: int, completed_students: int, outstanding_hours: float, warning_count: int, issued_warning_count: int, periods: list<array{periode_semester: string, deadline_at: string|null, closed_at: string|null, status: string}>}
+     */
+    public function dashboardSummary(array $filters): array
+    {
+        $studentTable = (new KompenResponHubStudent)->getTable();
+        $effectiveDebt = $this->effectiveDebtExpression($studentTable);
+        $summary = $this->students($filters)
+            ->reorder()
+            ->toBase()
+            ->selectRaw('COUNT(*) as total_students')
+            ->selectRaw("SUM(CASE WHEN ({$effectiveDebt}) > 0 THEN 1 ELSE 0 END) as outstanding_students")
+            ->selectRaw("SUM(CASE WHEN ({$effectiveDebt}) > 0 THEN ({$effectiveDebt}) ELSE 0 END) as outstanding_hours")
+            ->first();
+
+        $totalStudents = (int) ($summary->total_students ?? 0);
+        $outstandingStudents = (int) ($summary->outstanding_students ?? 0);
+
+        return [
+            'total_students' => $totalStudents,
+            'outstanding_students' => $outstandingStudents,
+            'completed_students' => $totalStudents - $outstandingStudents,
+            'outstanding_hours' => round((float) ($summary->outstanding_hours ?? 0), 2),
+            'warning_count' => $this->warnings($filters)
+                ->count(),
+            'issued_warning_count' => $this->warnings($filters)
+                ->where('letter_status', KompenResponHubWarningLetter::LetterStatusIssued)
+                ->count(),
+            'periods' => $this->cutoffsForFilters($filters)
+                ->orderByDesc('deadline_at')
+                ->get(['periode_semester', 'deadline_at', 'closed_at'])
+                ->map(fn (KompenResponHubPeriodCutoff $cutoff): array => [
+                    'periode_semester' => $cutoff->periode_semester,
+                    'deadline_at' => $cutoff->deadline_at?->toIso8601String(),
+                    'closed_at' => $cutoff->closed_at?->toIso8601String(),
+                    'status' => $cutoff->closed_at !== null
+                        ? 'locked'
+                        : ($cutoff->deadline_at->isPast() ? 'cutoff_passed' : 'open'),
+                ])
+                ->all(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array{upcoming_cutoffs: list<array{periode_semester: string, deadline_at: string}>, outstanding_after_cutoff: int, draft_warnings: int}
+     */
+    public function dashboardAttention(array $filters): array
+    {
+        $now = now();
+
+        return [
+            'upcoming_cutoffs' => $this->cutoffsForFilters($filters)
+                ->whereNull('closed_at')
+                ->where('deadline_at', '>', $now)
+                ->where('deadline_at', '<=', $now->copy()->addDays(7))
+                ->orderBy('deadline_at')
+                ->limit(5)
+                ->get(['periode_semester', 'deadline_at'])
+                ->map(fn (KompenResponHubPeriodCutoff $cutoff): array => [
+                    'periode_semester' => $cutoff->periode_semester,
+                    'deadline_at' => $cutoff->deadline_at->toIso8601String(),
+                ])
+                ->all(),
+            'outstanding_after_cutoff' => $this->fixedWarningCandidates($filters)->count(),
+            'draft_warnings' => $this->warnings($filters)
+                ->where('letter_status', KompenResponHubWarningLetter::LetterStatusDraft)
+                ->count(),
+        ];
+    }
+
+    /** @return array{fixed: Builder<KompenResponHubStudent>, warnings: Builder<KompenResponHubWarningLetter>} */
+    public function adminWorklist(array $filters): array
+    {
+        return [
+            'fixed' => $this->fixedWarningCandidates($filters)->limit(5),
+            'warnings' => $this->warnings($filters)
+                ->whereIn('letter_status', [KompenResponHubWarningLetter::LetterStatusDraft, KompenResponHubWarningLetter::LetterStatusIssued])
+                ->limit(5),
+        ];
+    }
+
+    /** @return array{event_types: list<string>, actor_emails: list<string>} */
+    public function activityFilterOptions(): array
+    {
+        return [
+            'event_types' => KompenResponHubActivityLog::query()->distinct()->orderBy('event_type')->pluck('event_type')->all(),
+            'actor_emails' => KompenResponHubActivityLog::query()->whereNotNull('actor_email')->distinct()->orderBy('actor_email')->pluck('actor_email')->all(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
      * @return Builder<KompenResponHubStudent>
      */
     public function students(array $filters): Builder
     {
-        $query = KompenResponHubStudent::query();
+        $query = KompenResponHubStudent::query()->with(['progress', 'summaryOverride', 'latestWarning', 'cutoff']);
 
         foreach (['nim', 'kelas', 'periode_semester', 'tingkat'] as $field) {
             if (filled($filters[$field] ?? null)) {
@@ -92,7 +280,7 @@ class KompenResponHubDataQuery
     public function details(array $filters): Builder
     {
         $query = KompenResponHubDetail::query()
-            ->with('student')
+            ->with(['student.progress', 'student.summaryOverride', 'override'])
             ->where(function (Builder $query): void {
                 $query->where('jam_kompensasi', '>', 0)
                     ->orWhere('jam_responsi', '>', 0);
@@ -138,5 +326,43 @@ class KompenResponHubDataQuery
         }
 
         return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return Builder<KompenResponHubPeriodCutoff>
+     */
+    private function cutoffsForFilters(array $filters): Builder
+    {
+        $query = KompenResponHubPeriodCutoff::query();
+
+        if (filled($filters['periode_semester'] ?? null)) {
+            $query->where('periode_semester', $filters['periode_semester']);
+        }
+
+        if ($this->hasStudentFilters($filters)) {
+            $query->whereIn(
+                'periode_semester',
+                $this->students($filters)
+                    ->reorder()
+                    ->select('periode_semester')
+                    ->distinct(),
+            );
+        }
+
+        return $query;
+    }
+
+    private function effectiveDebtExpression(string $studentTable): string
+    {
+        $progressTable = (new KompenResponHubStudentProgress)->getTable();
+        $summaryOverrideTable = (new KompenResponHubStudentSummaryOverride)->getTable();
+
+        return sprintf(
+            'COALESCE((SELECT total_kompensasi_jam FROM %1$s WHERE current_student_id = %2$s.id LIMIT 1), %2$s.total_kompensasi_jam) + COALESCE((SELECT total_responsi_jam FROM %1$s WHERE current_student_id = %2$s.id LIMIT 1), %2$s.total_responsi_jam) - COALESCE((SELECT kompensasi_dikerjakan_jam FROM %3$s WHERE current_student_id = %2$s.id LIMIT 1), 0) - COALESCE((SELECT responsi_dikerjakan_jam FROM %3$s WHERE current_student_id = %2$s.id LIMIT 1), 0)',
+            $summaryOverrideTable,
+            $studentTable,
+            $progressTable,
+        );
     }
 }

@@ -1,4 +1,4 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, router } from '@inertiajs/react';
 import {
     Download,
     FileText,
@@ -14,8 +14,22 @@ import {
     ChevronLeft,
     ChevronRight,
     RotateCcw,
+    PencilLine,
+    ShieldAlert,
+    Clock3,
+    Save,
+    X,
+    Trash2,
+    LayoutDashboard,
+    Users,
+    CalendarClock,
+    ClipboardList,
 } from 'lucide-react';
-import { type DragEvent, useEffect, useState } from 'react';
+import { type DragEvent, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import {
+    adminStudentOverview,
+} from '@/actions/App/Http/Controllers/KompenResponHubController';
 import {
     downloadUploadedWorkbook,
     downloadTemplate,
@@ -26,12 +40,20 @@ import { show as importTaskStatus } from '@/actions/App/Http/Controllers/KompenR
 import { destroy as logout } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
 import { settings as adminSettings } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
 import {
-    details as downloadDetails,
-    detailsPdf as downloadDetailsPdf,
-    students as downloadStudents,
-    studentsPdf as downloadStudentsPdf,
-} from '@/actions/App/Http/Controllers/KompenResponHubDownloadController';
-import { student as studentApi } from '@/actions/App/Http/Controllers/KompenResponHubController';
+    download as downloadExport,
+    show as exportTaskStatus,
+    store as storeExport,
+} from '@/actions/App/Http/Controllers/KompenResponHubExportController';
+import {
+    storeCutoff,
+    closeCutoff,
+    storeDetailOverride,
+    storeProgress,
+    storeSummaryOverride,
+    storeWarning,
+    updateWarning,
+    destroyWarning,
+} from '@/actions/App/Http/Controllers/KompenResponHubLifecycleController';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -71,6 +93,16 @@ type Student = {
     total_hutang_jam: string;
     kompensasi_dikerjakan_jam: string;
     sisa_hutang_jam: string;
+    effective_total_kompensasi_jam: string;
+    effective_total_responsi_jam: string;
+    effective_total_hutang_jam: string;
+    effective_kompensasi_dikerjakan_jam: string;
+    effective_responsi_dikerjakan_jam: string;
+    effective_sisa_hutang_jam: string;
+    progress_status: 'none' | 'completed' | 'warning_active';
+    last_worked_at: string | null;
+    has_summary_override: boolean;
+    warning: Warning | null;
 };
 
 type Detail = {
@@ -88,6 +120,45 @@ type Detail = {
     keterangan: string | null;
     jam_kompensasi: string;
     jam_responsi: string;
+    has_override: boolean;
+};
+
+type Warning = {
+    id: number;
+    student_id: number | null;
+    nim: string;
+    nama_mahasiswa: string;
+    kelas: string;
+    periode_semester: string;
+    letter_status: 'not_created' | 'draft' | 'issued' | 'cancelled';
+    resolution: 'outstanding' | 'completed' | 'needs_review';
+    snapshot: { sisa_hutang_jam: number };
+    reason: string | null;
+    issued_at: string | null;
+    cancelled_at: string | null;
+};
+
+type ActivityLog = {
+    id: number;
+    event_type: string;
+    subject_type: string;
+    nim: string | null;
+    subject_name: string | null;
+    periode_semester: string | null;
+    kelas: string | null;
+    actor_type: string;
+    actor_name: string | null;
+    actor_email?: string | null;
+    reason: string | null;
+    occurred_at: string;
+};
+
+type Cutoff = {
+    id: number;
+    periode_semester: string;
+    deadline_at: string;
+    closed_at: string | null;
+    timezone: string;
 };
 
 type ImportAuditLog = {
@@ -102,6 +173,14 @@ type ImportAuditLog = {
     class_count: number;
     student_count: number;
     detail_count: number;
+    quality_report?: {
+        status: 'passed';
+        checks: { label: string; status: 'passed'; detail: string }[];
+    } | null;
+    metadata: {
+        restored?: boolean;
+        restored_imports?: { id: number; original_filename: string }[];
+    } | null;
     occurred_at: string;
 };
 
@@ -116,6 +195,21 @@ type ImportTask = {
     completed_at: string | null;
 };
 
+type ExportTask = {
+    id: number;
+    access_token: string;
+    resource: 'students' | 'details' | 'warnings';
+    format: 'xlsx' | 'pdf';
+    status: 'queued' | 'processing' | 'completed' | 'failed';
+    progress: number;
+    progress_message: string;
+    download_filename: string | null;
+    error_message: string | null;
+    queued_at: string | null;
+    completed_at: string | null;
+    expires_at: string | null;
+};
+
 type Pagination<T> = {
     data: T[];
     links: { prev: string | null; next: string | null };
@@ -123,10 +217,14 @@ type Pagination<T> = {
 };
 
 type Filters = {
+    nim?: string;
+    nama?: string;
     search?: string;
     tingkat?: number;
     kelas?: string;
     periode_semester?: string;
+    activity_event?: string;
+    activity_actor?: string;
     per_page?: number;
 };
 
@@ -136,24 +234,84 @@ type FilterOptions = {
     periode_semester: string[];
 };
 
+type Dashboard = {
+    summary: {
+        total_students: number;
+        outstanding_students: number;
+        completed_students: number;
+        outstanding_hours: number;
+        warning_count: number;
+        issued_warning_count: number;
+        periods: {
+            periode_semester: string;
+            deadline_at: string | null;
+            closed_at: string | null;
+            status: 'open' | 'cutoff_passed' | 'locked';
+        }[];
+    };
+    attention: {
+        upcoming_cutoffs: {
+            periode_semester: string;
+            deadline_at: string;
+        }[];
+        outstanding_after_cutoff: number;
+        draft_warnings: number;
+    };
+    worklist: {
+        fixed_candidates: Student[];
+        warnings_to_follow_up: Warning[];
+    };
+};
+
+type StudentOverview = {
+    summary: Student;
+    source: {
+        import_filename: string | null;
+        imported_at: string | null;
+        total_kompensasi_jam: string;
+        total_responsi_jam: string;
+        sisa_hutang_jam: string;
+    };
+    details: Detail[];
+    warnings: Warning[];
+    activities: ActivityLog[];
+};
+
 type KompenResponHubPageProps = {
-    activeTab: 'upload' | 'students' | 'details' | 'imports';
+    activeTab:
+        | 'dashboard'
+        | 'upload'
+        | 'students'
+        | 'details'
+        | 'imports'
+        | 'warnings'
+        | 'activity';
     isAdmin: boolean;
     filters: Filters;
     filterOptions: FilterOptions;
+    activityFilterOptions: { event_types: string[]; actor_emails: string[] };
+    dashboard: Dashboard | null;
     flash: { success: string | null; error: string | null };
     students: Pagination<Student> | null;
     details: Pagination<Detail> | null;
     imports: Pagination<ImportAuditLog> | null;
+    warnings: Pagination<Warning> | null;
+    fixedCandidates: Pagination<Student> | null;
+    activityLogs: Pagination<ActivityLog> | null;
+    cutoffs: Cutoff[];
     activeImportTasks: ImportTask[];
+    exportTasks: ExportTask[];
     canRollbackLatestImport: boolean;
 };
 
 const adminTabs = [
-    ['upload', 'Upload dokumen'],
+    ['dashboard', 'Ringkasan'],
+    ['upload', 'Upload Dokumen'],
     ['students', 'Kompen dan Respon'],
     ['details', 'Detail Kompen'],
-    ['imports', 'Log upload'],
+    ['imports', 'Log Upload'],
+    ['warnings', 'Surat Peringatan'],
+    ['activity', 'Riwayat Aktivitas'],
 ] as const;
 
 const studentTabs = [
@@ -165,6 +323,22 @@ function number(value: string): string {
     return new Intl.NumberFormat('id-ID', {
         maximumFractionDigits: 2,
     }).format(Number(value));
+}
+
+function datetimeLocalValue(value: string, timeZone: string): string {
+    const dateParts = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+    }).formatToParts(new Date(value));
+    const part = (type: Intl.DateTimeFormatPartTypes): string =>
+        dateParts.find((item) => item.type === type)?.value ?? '';
+
+    return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}`;
 }
 
 function Pager<T>({ data }: { data: Pagination<T> }): React.JSX.Element {
@@ -225,8 +399,14 @@ function Pager<T>({ data }: { data: Pagination<T> }): React.JSX.Element {
 
 function StudentTable({
     data,
+    isEditMode = false,
+    onSelect,
+    onOpenProfile,
 }: {
     data: Pagination<Student>;
+    isEditMode?: boolean;
+    onSelect?: (student: Student) => void;
+    onOpenProfile?: (student: Student) => void;
 }): React.JSX.Element {
     const headings = [
         'Tingkat',
@@ -234,6 +414,7 @@ function StudentTable({
         'Nama',
         'Kelas',
         'Periode',
+        'Status',
         'T[j]',
         'S[j]',
         'I[j]',
@@ -241,9 +422,10 @@ function StudentTable({
         'Kompen[j]',
         'Responsi[j]',
         'Total[j]',
-        'Dikerjakan[j]',
+        'Komp. selesai[j]',
+        'Resp. selesai[j]',
         'Sisa[j]',
-        'API',
+        ...(onOpenProfile ? ['Profil'] : []),
     ];
 
     return (
@@ -263,7 +445,14 @@ function StudentTable({
                         {data.data.map((student) => (
                             <tr
                                 key={student.id}
-                                className="transition-colors duration-150 hover:bg-[#B1C9EF]/10"
+                                className={cn(
+                                    'transition-colors duration-150 hover:bg-[#B1C9EF]/10',
+                                    isEditMode &&
+                                        'cursor-pointer ring-inset hover:ring-1 hover:ring-[#628ECB]',
+                                )}
+                                onClick={() =>
+                                    isEditMode && onSelect?.(student)
+                                }
                             >
                                 <td className="px-4 py-3.5 font-semibold text-[#395886]">
                                     {student.tingkat}
@@ -280,16 +469,20 @@ function StudentTable({
                                 <td className="px-4 py-3.5 text-xs font-semibold text-[#628ECB]">
                                     {student.periode_semester}
                                 </td>
+                                <td className="px-4 py-3.5">
+                                    <ProgressStatusBadge status={student.progress_status} />
+                                </td>
                                 {[
                                     student.total_jam_terlambat,
                                     student.total_jam_sakit,
                                     student.total_jam_izin,
                                     student.total_jam_bolos,
-                                    student.total_kompensasi_jam,
-                                    student.total_responsi_jam,
-                                    student.total_hutang_jam,
-                                    student.kompensasi_dikerjakan_jam,
-                                    student.sisa_hutang_jam,
+                                    student.effective_total_kompensasi_jam,
+                                    student.effective_total_responsi_jam,
+                                    student.effective_total_hutang_jam,
+                                    student.effective_kompensasi_dikerjakan_jam,
+                                    student.effective_responsi_dikerjakan_jam,
+                                    student.effective_sisa_hutang_jam,
                                 ].map((value, valueIndex) => (
                                     <td
                                         key={`${student.id}-${valueIndex}`}
@@ -298,16 +491,22 @@ function StudentTable({
                                         {number(value)}
                                     </td>
                                 ))}
-                                <td className="px-4 py-3.5">
-                                    <a
-                                        className="text-xs font-bold text-[#628ECB] underline decoration-[#8AAEE0] underline-offset-4 transition-colors hover:text-[#395886]"
-                                        href={studentApi.url(student.id)}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                    >
-                                        Lengkap
-                                    </a>
-                                </td>
+                                {onOpenProfile ? (
+                                    <td className="px-4 py-3.5">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                onOpenProfile(student);
+                                            }}
+                                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                                        >
+                                            Lihat
+                                        </Button>
+                                    </td>
+                                ) : null}
                             </tr>
                         ))}
                     </tbody>
@@ -318,10 +517,37 @@ function StudentTable({
     );
 }
 
+function ProgressStatusBadge({
+    status,
+}: {
+    status: Student['progress_status'];
+}): React.JSX.Element {
+    const labels: Record<Student['progress_status'], string> = {
+        completed: 'Selesai',
+        warning_active: 'SP aktif',
+        none: '',
+    };
+    const tones: Record<Student['progress_status'], string> = {
+        completed: 'bg-emerald-100 text-emerald-800',
+        warning_active: 'bg-rose-100 text-rose-800',
+        none: '',
+    };
+
+    if (status === 'none') {
+        return null;
+    }
+
+    return <span className={cn('inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-black', tones[status])}>{labels[status]}</span>;
+}
+
 function DetailTable({
     data,
+    isEditMode = false,
+    onSelect,
 }: {
     data: Pagination<Detail>;
+    isEditMode?: boolean;
+    onSelect?: (detail: Detail) => void;
 }): React.JSX.Element {
     const headings = [
         'Tanggal',
@@ -355,7 +581,12 @@ function DetailTable({
                         {data.data.map((detail) => (
                             <tr
                                 key={detail.id}
-                                className="transition-colors duration-150 hover:bg-[#B1C9EF]/10"
+                                className={cn(
+                                    'transition-colors duration-150 hover:bg-[#B1C9EF]/10',
+                                    isEditMode &&
+                                        'cursor-pointer ring-inset hover:ring-1 hover:ring-[#628ECB]',
+                                )}
+                                onClick={() => isEditMode && onSelect?.(detail)}
                             >
                                 <td className="px-4 py-3.5 text-xs font-semibold whitespace-nowrap text-[#395886]">
                                     {detail.tanggal}
@@ -418,6 +649,7 @@ function ImportAuditLogTable({
         'Kelas',
         'Mahasiswa',
         'Detail',
+        'Validasi',
     ];
 
     return (
@@ -450,7 +682,7 @@ function ImportAuditLogTable({
                                     >
                                         {auditLog.event_type === 'upload'
                                             ? 'Upload'
-                                            : 'Rollback · Dihapus'}
+                                            : 'Rollback'}
                                     </span>
                                 </td>
                                 <td className="px-4 py-3.5 text-xs whitespace-nowrap text-[#395886]">
@@ -471,7 +703,14 @@ function ImportAuditLogTable({
                                     {auditLog.periode_semester}
                                 </td>
                                 <td className="max-w-64 truncate px-4 py-3.5 font-mono text-xs font-semibold text-[#395886]">
-                                    {auditLog.original_filename}
+                                    <p>{auditLog.original_filename}</p>
+                                    {auditLog.event_type === 'rollback' ? (
+                                        <p className="mt-1 whitespace-normal font-sans text-[11px] font-medium text-[#395886]/70">
+                                            {auditLog.metadata?.restored
+                                                ? `Dipulihkan ke: ${auditLog.metadata.restored_imports?.map((importItem) => importItem.original_filename).join(', ')}`
+                                                : 'Tidak ada versi sebelumnya; data aktif dibatalkan.'}
+                                        </p>
+                                    ) : null}
                                 </td>
                                 <td className="px-4 py-3.5">
                                     {auditLog.can_download_file &&
@@ -507,6 +746,20 @@ function ImportAuditLogTable({
                                 <td className="px-4 py-3.5 text-right font-mono text-xs font-bold text-[#395886] tabular-nums">
                                     {auditLog.detail_count}
                                 </td>
+                                <td className="min-w-64 px-4 py-3.5">
+                                    {auditLog.quality_report?.checks.length ? (
+                                        <div className="grid gap-1">
+                                            {auditLog.quality_report.checks.map((check) => (
+                                                <p key={check.label} className="text-[11px] leading-tight text-[#395886]/75">
+                                                    <span className="font-bold text-emerald-700">✓ {check.label}</span>
+                                                    <span className="block">{check.detail}</span>
+                                                </p>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs text-[#395886]/40 italic">Tidak tersedia untuk unggahan lama</span>
+                                    )}
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -527,7 +780,7 @@ function RollbackLatestImportButton({
             {...rollbackLatestImport.form()}
             onBefore={() =>
                 window.confirm(
-                    'Hapus data dari unggahan terakhir? Data mahasiswa dan detail terkait tidak dapat dipulihkan.',
+                    'Rollback versi impor aktif? Data akan dikembalikan ke versi workbook sebelumnya per kelas. Kelas tanpa versi sebelumnya akan dibatalkan. Semua file dan riwayat upload tetap tersimpan.',
                 )
             }
         >
@@ -540,8 +793,8 @@ function RollbackLatestImportButton({
                 >
                     <RotateCcw className="mr-2 size-4" />
                     {processing
-                        ? 'Menghapus unggahan…'
-                        : 'Hapus unggahan terakhir'}
+                        ? 'Memulihkan versi…'
+                        : 'Rollback versi aktif'}
                 </Button>
             )}
         </Form>
@@ -597,6 +850,7 @@ function ImportProgressPanel({
     initialImportTasks: ImportTask[];
 }): React.JSX.Element | null {
     const [importTasks, setImportTasks] = useState(initialImportTasks);
+    const notifiedFailedTaskIds = useRef<Set<number>>(new Set());
     const activeTaskIds = importTasks
         .filter(
             (importTask) =>
@@ -646,6 +900,21 @@ function ImportProgressPanel({
                 if (!isMounted) {
                     return;
                 }
+
+                updatedTasks
+                    .filter((task) => task.status === 'failed')
+                    .forEach((task) => {
+                        if (notifiedFailedTaskIds.current.has(task.id)) {
+                            return;
+                        }
+
+                        notifiedFailedTaskIds.current.add(task.id);
+                        toast.error('Impor perlu diperbaiki', {
+                            description:
+                                task.error_message ??
+                                'Periksa keterangan pada proses impor.',
+                        });
+                    });
 
                 setImportTasks((currentTasks) =>
                     currentTasks.map(
@@ -701,6 +970,172 @@ function ImportProgressPanel({
                         <p className="mt-1 text-xs font-bold text-rose-600">
                             {importTask.error_message}
                         </p>
+                    ) : null}
+                </div>
+            ))}
+        </section>
+    );
+}
+
+function queueExport(
+    resource: ExportTask['resource'],
+    format: ExportTask['format'],
+    filters: Filters,
+): void {
+    router.post(
+        storeExport.url(),
+        {
+            resource,
+            format,
+            nim: filters.nim,
+            nama: filters.nama,
+            search: filters.search,
+            kelas: filters.kelas,
+            tingkat: filters.tingkat,
+            periode_semester: filters.periode_semester,
+        },
+        { preserveScroll: true },
+    );
+}
+
+function ExportProgressPanel({
+    initialExportTasks,
+}: {
+    initialExportTasks: ExportTask[];
+}): React.JSX.Element | null {
+    const [exportTasks, setExportTasks] = useState(initialExportTasks);
+    const activeTaskIds = exportTasks
+        .filter(
+            (task) => task.status === 'queued' || task.status === 'processing',
+        )
+        .map((task) => task.id);
+    const activeTaskKey = activeTaskIds.join(',');
+
+    useEffect(() => {
+        setExportTasks(initialExportTasks);
+    }, [initialExportTasks]);
+
+    useEffect(() => {
+        if (activeTaskIds.length === 0) {
+            return;
+        }
+
+        let isMounted = true;
+        const refreshProgress = async (): Promise<void> => {
+            try {
+                const updatedTasks: ExportTask[] = [];
+
+                for (const exportTaskId of activeTaskIds) {
+                    const task = exportTasks.find(
+                        (currentTask) => currentTask.id === exportTaskId,
+                    );
+                    if (!task) {
+                        continue;
+                    }
+
+                    const response = await fetch(
+                        exportTaskStatus.url(exportTaskId, {
+                            query: { token: task.access_token },
+                        }),
+                        {
+                            credentials: 'same-origin',
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        },
+                    );
+
+                    if (!response.ok) {
+                        throw new Error('Status ekspor tidak dapat dimuat.');
+                    }
+
+                    const payload: { data: ExportTask } = await response.json();
+                    updatedTasks.push(payload.data);
+                }
+
+                if (!isMounted) {
+                    return;
+                }
+
+                setExportTasks((currentTasks) =>
+                    currentTasks.map(
+                        (task) =>
+                            updatedTasks.find(
+                                (updatedTask) => updatedTask.id === task.id,
+                            ) ?? task,
+                    ),
+                );
+            } catch {
+                return;
+            }
+        };
+
+        void refreshProgress();
+        const interval = window.setInterval(() => {
+            void refreshProgress();
+        }, 1500);
+
+        return () => {
+            isMounted = false;
+            window.clearInterval(interval);
+        };
+    }, [activeTaskKey]);
+
+    if (exportTasks.length === 0) {
+        return null;
+    }
+
+    return (
+        <section className="grid gap-3" aria-live="polite">
+            {exportTasks.map((task) => (
+                <div
+                    key={task.id}
+                    className="grid gap-3 rounded-3xl border border-white/80 bg-white/85 p-4 shadow-sm"
+                >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <p className="text-sm font-extrabold text-[#395886]">
+                                Ekspor{' '}
+                                {task.resource === 'students'
+                                    ? 'Kompen dan Respon'
+                                    : task.resource === 'details'
+                                      ? 'Detail Kompen'
+                                      : 'Surat Peringatan'}{' '}
+                                · {task.format.toUpperCase()}
+                            </p>
+                            <p className="mt-0.5 text-xs text-[#395886]/70">
+                                {task.progress_message}
+                            </p>
+                        </div>
+                        {task.status === 'completed' ? (
+                            <Button
+                                asChild
+                                size="sm"
+                                className="rounded-xl bg-[#395886] text-xs font-bold"
+                            >
+                                <a
+                                    href={downloadExport.url(task.id, {
+                                        query: { token: task.access_token },
+                                    })}
+                                >
+                                    <Download className="mr-1.5 size-3.5" />
+                                    Unduh file
+                                </a>
+                            </Button>
+                        ) : task.status === 'failed' ? (
+                            <span className="text-xs font-bold text-rose-600">
+                                {task.error_message}
+                            </span>
+                        ) : (
+                            <span className="font-mono text-xs font-bold text-[#395886]">
+                                {task.progress}%
+                            </span>
+                        )}
+                    </div>
+                    {task.status === 'queued' ||
+                    task.status === 'processing' ? (
+                        <ProgressBar value={task.progress} />
                     ) : null}
                 </div>
             ))}
@@ -773,7 +1208,7 @@ function UploadPanel({
                                     type="file"
                                     accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                     required
-                                    className="cursor-pointer rounded-2xl border-[#8AAEE0] bg-white/90 py-2 text-sm text-[#395886] shadow-2xs transition-all duration-300 file:mr-4 file:rounded-xl file:border-0 file:bg-[#395886] file:px-3 file:py-1 file:text-xs file:font-bold file:text-white hover:file:bg-[#1E293B]"
+                                    className="h-12 cursor-pointer rounded-2xl border-[#8AAEE0] bg-white/90 p-1.5 text-sm text-[#395886] shadow-2xs transition-all duration-300 file:mr-3 file:h-9 file:rounded-xl file:border-0 file:bg-[#395886] file:px-3 file:text-xs file:font-bold file:text-white hover:file:bg-[#1E293B]"
                                 />
                                 <p className="text-[11px] leading-tight font-medium text-[#395886]/60">
                                     Maksimum 20 MB. Periode pada filter akan
@@ -835,30 +1270,6 @@ function FilterPanel({
         filters.per_page?.toString() ?? '15',
     );
     const indexAction = isAdmin ? adminIndex : studentIndex;
-    const spreadsheetDownloadAction =
-        activeTab === 'students' ? downloadStudents : downloadDetails;
-    const pdfDownloadAction =
-        activeTab === 'students' ? downloadStudentsPdf : downloadDetailsPdf;
-    const downloadQuery = {
-        search: filters.search,
-        tingkat: tingkat || undefined,
-        kelas: kelas || undefined,
-        periode_semester: periode,
-    };
-    const spreadsheetDownloadUrl = periode
-        ? spreadsheetDownloadAction.url({
-              query: {
-                  ...downloadQuery,
-              },
-          })
-        : null;
-    const pdfDownloadUrl = periode
-        ? pdfDownloadAction.url({
-              query: {
-                  ...downloadQuery,
-              },
-          })
-        : null;
 
     return (
         <Form
@@ -1001,44 +1412,1517 @@ function FilterPanel({
                 >
                     Reset filter
                 </Link>
-                {spreadsheetDownloadUrl && pdfDownloadUrl ? (
-                    <div className="flex flex-wrap gap-2">
-                        <Button
-                            asChild
-                            size="sm"
-                            variant="outline"
-                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white"
-                        >
-                            <a
-                                href={spreadsheetDownloadUrl}
-                                className="flex items-center gap-1.5"
-                            >
-                                <FileSpreadsheet className="size-3.5" />
-                                Download XLSX
-                            </a>
-                        </Button>
-                        <Button
-                            asChild
-                            size="sm"
-                            variant="outline"
-                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white"
-                        >
-                            <a
-                                href={pdfDownloadUrl}
-                                className="flex items-center gap-1.5"
-                            >
-                                <FileText className="size-3.5" />
-                                Download PDF
-                            </a>
-                        </Button>
-                    </div>
-                ) : (
-                    <span className="text-xs font-semibold text-[#395886]/70 italic">
-                        Pilih periode untuk mengunduh data.
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-[#395886]/70">
+                        Tanpa filter berarti seluruh data.
                     </span>
-                )}
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => queueExport(activeTab, 'xlsx', filters)}
+                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs hover:bg-[#395886] hover:text-white"
+                    >
+                        <FileSpreadsheet className="mr-1.5 size-3.5" />
+                        Buat XLSX
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => queueExport(activeTab, 'pdf', filters)}
+                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs hover:bg-[#395886] hover:text-white"
+                    >
+                        <FileText className="mr-1.5 size-3.5" />
+                        Buat PDF
+                    </Button>
+                </div>
             </div>
         </Form>
+    );
+}
+
+function EditModeControl({
+    enabled,
+    onChange,
+}: {
+    enabled: boolean;
+    onChange: (enabled: boolean) => void;
+}): React.JSX.Element {
+    return (
+        <Button
+            type="button"
+            variant="outline"
+            onClick={() => onChange(!enabled)}
+            className={cn(
+                'rounded-2xl border-[#8AAEE0] bg-white px-4 text-xs font-bold text-[#395886]',
+                enabled &&
+                    'border-[#395886] bg-[#395886] text-white hover:bg-[#1E293B] hover:text-white',
+            )}
+        >
+            <PencilLine className="mr-2 size-4" />
+            {enabled ? 'Mode perbaikan aktif' : 'Mode perbaikan data'}
+        </Button>
+    );
+}
+
+function StudentCorrectionPanel({
+    student,
+    onClose,
+}: {
+    student: Student;
+    onClose: () => void;
+}): React.JSX.Element {
+    return (
+        <section className="grid gap-4 rounded-3xl border border-[#8AAEE0]/60 bg-white/90 p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
+                        Mahasiswa dipilih
+                    </p>
+                    <h3 className="mt-1 text-base font-extrabold text-[#395886]">
+                        {student.nama_mahasiswa} · {student.nim}
+                    </h3>
+                    <p className="mt-1 text-xs text-[#395886]/70">
+                        Simpan setiap koreksi dengan alasan agar jejak audit
+                        tetap lengkap.
+                    </p>
+                </div>
+                <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    onClick={onClose}
+                    className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]"
+                    aria-label="Tutup panel perbaikan"
+                >
+                    <X className="size-4" />
+                </Button>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+                <Form
+                    {...storeProgress.form(student.id)}
+                    className="grid gap-3 rounded-2xl border border-[#D5DEEF] p-4"
+                >
+                    {({ errors, processing }) => (
+                        <>
+                            <p className="text-sm font-bold text-[#395886]">
+                                Progres pengerjaan
+                            </p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Input
+                                    name="kompensasi_dikerjakan_jam"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    defaultValue={
+                                        student.effective_kompensasi_dikerjakan_jam
+                                    }
+                                    placeholder="Jam Kompen"
+                                />
+                                <Input
+                                    name="responsi_dikerjakan_jam"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    defaultValue={
+                                        student.effective_responsi_dikerjakan_jam
+                                    }
+                                    placeholder="Jam Responsi"
+                                />
+                            </div>
+                            <Input
+                                name="last_worked_at"
+                                type="datetime-local"
+                                required
+                                defaultValue={
+                                    student.last_worked_at?.slice(0, 16) ?? ''
+                                }
+                            />
+                            <Input
+                                name="reason"
+                                required
+                                minLength={5}
+                                maxLength={1000}
+                                placeholder="Alasan perubahan"
+                            />
+                            {errors.kompensasi_dikerjakan_jam ||
+                            errors.last_worked_at ? (
+                                <p className="text-xs font-bold text-rose-600">
+                                    {errors.kompensasi_dikerjakan_jam ??
+                                        errors.last_worked_at}
+                                </p>
+                            ) : null}
+                            <Button
+                                disabled={processing}
+                                type="submit"
+                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                            >
+                                <Save className="mr-2 size-4" />
+                                Simpan progres
+                            </Button>
+                        </>
+                    )}
+                </Form>
+                <Form
+                    {...storeSummaryOverride.form(student.id)}
+                    className="grid gap-3 rounded-2xl border border-[#D5DEEF] p-4"
+                >
+                    {({ errors, processing }) => (
+                        <>
+                            <p className="text-sm font-bold text-[#395886]">
+                                Koreksi total Kompen / Responsi
+                            </p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Input
+                                    name="total_kompensasi_jam"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    defaultValue={
+                                        student.effective_total_kompensasi_jam
+                                    }
+                                    placeholder="Total Kompen"
+                                />
+                                <Input
+                                    name="total_responsi_jam"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    defaultValue={
+                                        student.effective_total_responsi_jam
+                                    }
+                                    placeholder="Total Responsi"
+                                />
+                            </div>
+                            <Input
+                                name="reason"
+                                required
+                                minLength={5}
+                                maxLength={1000}
+                                placeholder="Alasan koreksi"
+                            />
+                            {errors.total_kompensasi_jam ? (
+                                <p className="text-xs font-bold text-rose-600">
+                                    {errors.total_kompensasi_jam}
+                                </p>
+                            ) : null}
+                            <Button
+                                disabled={processing}
+                                type="submit"
+                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                            >
+                                <Save className="mr-2 size-4" />
+                                Simpan koreksi
+                            </Button>
+                        </>
+                    )}
+                </Form>
+            </div>
+        </section>
+    );
+}
+
+function DetailCorrectionPanel({
+    detail,
+    onClose,
+}: {
+    detail: Detail;
+    onClose: () => void;
+}): React.JSX.Element {
+    return (
+        <Form
+            {...storeDetailOverride.form(detail.id)}
+            className="grid gap-3 rounded-3xl border border-[#8AAEE0]/60 bg-white/90 p-5 shadow-sm md:grid-cols-2"
+        >
+            {({ errors, processing }) => (
+                <>
+                    <div className="flex items-start justify-between gap-4 md:col-span-2">
+                        <div>
+                            <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
+                                Detail dipilih
+                            </p>
+                            <h3 className="mt-1 text-base font-extrabold text-[#395886]">
+                                {detail.nama_mahasiswa} · {detail.mata_kuliah}
+                            </h3>
+                        </div>
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            onClick={onClose}
+                            className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]"
+                            aria-label="Tutup panel perbaikan"
+                        >
+                            <X className="size-4" />
+                        </Button>
+                    </div>
+                    <Input
+                        name="tanggal"
+                        type="date"
+                        required
+                        defaultValue={detail.tanggal}
+                    />
+                    <Input
+                        name="mata_kuliah"
+                        required
+                        maxLength={100}
+                        defaultValue={detail.mata_kuliah}
+                    />
+                    <Input
+                        name="nama_dosen"
+                        required
+                        maxLength={100}
+                        defaultValue={detail.nama_dosen}
+                    />
+                    <Input
+                        name="jenis_pertemuan"
+                        required
+                        maxLength={20}
+                        defaultValue={detail.jenis_pertemuan}
+                    />
+                    <Input
+                        name="presensi"
+                        required
+                        maxLength={20}
+                        defaultValue={detail.presensi}
+                    />
+                    <Input
+                        name="menit_keterlambatan"
+                        type="number"
+                        min="0"
+                        defaultValue={detail.menit_keterlambatan}
+                    />
+                    <Input
+                        name="jam_kompensasi"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        defaultValue={detail.jam_kompensasi}
+                    />
+                    <Input
+                        name="jam_responsi"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        defaultValue={detail.jam_responsi}
+                    />
+                    <Input
+                        name="keterangan"
+                        className="md:col-span-2"
+                        maxLength={2000}
+                        defaultValue={detail.keterangan ?? ''}
+                        placeholder="Keterangan"
+                    />
+                    <Input
+                        name="reason"
+                        className="md:col-span-2"
+                        required
+                        minLength={5}
+                        maxLength={1000}
+                        placeholder="Alasan koreksi"
+                    />
+                    {errors.tanggal ? (
+                        <p className="text-xs font-bold text-rose-600">
+                            {errors.tanggal}
+                        </p>
+                    ) : null}
+                    <Button
+                        disabled={processing}
+                        type="submit"
+                        className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                    >
+                        <Save className="mr-2 size-4" />
+                        Simpan koreksi detail
+                    </Button>
+                </>
+            )}
+        </Form>
+    );
+}
+
+function WarningStatusBadge({
+    warning,
+}: {
+    warning: Warning;
+}): React.JSX.Element {
+    const label =
+        warning.resolution === 'completed' &&
+        warning.letter_status === 'not_created'
+            ? 'Kompen selesai · SP tidak diterbitkan'
+            : warning.resolution === 'completed'
+              ? 'Kompen selesai setelah SP'
+              : warning.letter_status === 'issued'
+                ? 'SP terbit'
+                : warning.letter_status === 'draft'
+                  ? 'Draft SP'
+                  : warning.letter_status === 'cancelled'
+                    ? 'SP dibatalkan'
+                    : 'Belum dibuat';
+    return (
+        <span
+            className={cn(
+                'inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold',
+                warning.resolution === 'completed'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : warning.letter_status === 'issued'
+                      ? 'bg-rose-100 text-rose-700'
+                      : warning.letter_status === 'cancelled'
+                        ? 'bg-slate-100 text-slate-700'
+                        : warning.letter_status === 'draft'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-[#B1C9EF]/40 text-[#395886]',
+            )}
+        >
+            {label}
+        </span>
+    );
+}
+
+function WarningCandidateTable({
+    data,
+    selectedStudentId,
+    onSelect,
+}: {
+    data: Pagination<Student>;
+    selectedStudentId: number | null;
+    onSelect: (student: Student) => void;
+}): React.JSX.Element {
+    return (
+        <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
+            <div className="flex flex-col justify-between gap-2 border-b border-[#F0F3FA] px-5 py-4 sm:flex-row sm:items-center">
+                <div>
+                    <h2 className="text-base font-extrabold text-[#395886]">
+                        Mahasiswa belum memiliki SP
+                    </h2>
+                    <p className="mt-0.5 text-xs text-[#395886]/70">
+                        Sisa jam masih ada setelah cutoff. Pilih mahasiswa untuk
+                        membuat atau memperbarui draft SP.
+                    </p>
+                </div>
+                <span className="w-fit rounded-full bg-[#B1C9EF]/40 px-3 py-1 text-xs font-bold text-[#395886]">
+                    Setelah cutoff
+                </span>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-sm">
+                    <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
+                        <tr>
+                            <th className="px-4 py-3">Mahasiswa</th>
+                            <th className="px-4 py-3">Kelas</th>
+                            <th className="px-4 py-3">Periode</th>
+                            <th className="px-4 py-3 text-right">Sisa[j]</th>
+                            <th className="px-4 py-3 text-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F0F3FA]">
+                        {data.data.map((student) => (
+                            <tr
+                                key={student.id}
+                                className={cn(
+                                    'transition-colors hover:bg-[#B1C9EF]/10',
+                                    selectedStudentId === student.id &&
+                                        'bg-[#B1C9EF]/20',
+                                )}
+                            >
+                                <td className="px-4 py-3">
+                                    <p className="font-bold text-[#395886]">
+                                        {student.nama_mahasiswa}
+                                    </p>
+                                    <p className="font-mono text-xs text-[#628ECB]">
+                                        {student.nim}
+                                    </p>
+                                </td>
+                                <td className="px-4 py-3 text-xs font-semibold text-[#395886]">
+                                    {student.kelas}
+                                </td>
+                                <td className="px-4 py-3 text-xs text-[#395886]/70">
+                                    {student.periode_semester}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono text-xs font-bold text-[#395886]">
+                                    {number(student.effective_sisa_hutang_jam)}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => onSelect(student)}
+                                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                                    >
+                                        {selectedStudentId === student.id
+                                            ? 'Dipilih'
+                                            : 'Pilih'}
+                                    </Button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <Pager data={data} />
+        </section>
+    );
+}
+
+function WarningTable({
+    data,
+    onSelect,
+}: {
+    data: Pagination<Warning>;
+    onSelect: (warning: Warning) => void;
+}): React.JSX.Element {
+    return (
+        <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[850px] text-sm">
+                    <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
+                        <tr>
+                            <th className="px-4 py-3">Mahasiswa</th>
+                            <th className="px-4 py-3">Kelas</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Sisa[j]</th>
+                            <th className="px-4 py-3">Catatan</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F0F3FA]">
+                        {data.data.map((warning) => (
+                            <tr
+                                key={warning.id}
+                                onClick={() => onSelect(warning)}
+                                className="cursor-pointer hover:bg-[#B1C9EF]/10"
+                            >
+                                <td className="px-4 py-3">
+                                    <p className="font-bold text-[#395886]">
+                                        {warning.nama_mahasiswa}
+                                    </p>
+                                    <p className="font-mono text-xs text-[#628ECB]">
+                                        {warning.nim}
+                                    </p>
+                                </td>
+                                <td className="px-4 py-3 text-xs font-semibold">
+                                    {warning.kelas}
+                                </td>
+                                <td className="px-4 py-3">
+                                    <WarningStatusBadge warning={warning} />
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono text-xs">
+                                    {number(
+                                        String(
+                                            warning.snapshot.sisa_hutang_jam,
+                                        ),
+                                    )}
+                                </td>
+                                <td className="max-w-xs px-4 py-3 text-xs text-[#395886]/70">
+                                    {warning.reason ?? '—'}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <Pager data={data} />
+        </section>
+    );
+}
+
+function WarningPanel({
+    cutoffs,
+    filterOptions,
+    filters,
+    warnings,
+    fixedCandidates,
+    selectedWarning,
+    onSelectWarning,
+    onCloseWarning,
+}: {
+    cutoffs: Cutoff[];
+    filterOptions: FilterOptions;
+    filters: Filters;
+    warnings: Pagination<Warning> | null;
+    fixedCandidates: Pagination<Student> | null;
+    selectedWarning: Warning | null;
+    onSelectWarning: (warning: Warning) => void;
+    onCloseWarning: () => void;
+}): React.JSX.Element {
+    const [selectedStudent, setSelectedStudent] = useState<Student | null>(
+        null,
+    );
+    const [selectedCutoffPeriod, setSelectedCutoffPeriod] = useState(
+        filters.periode_semester ?? '',
+    );
+    const selectedCutoff = cutoffs.find(
+        (cutoff) => cutoff.periode_semester === selectedCutoffPeriod,
+    );
+
+    return (
+        <section className="grid gap-4">
+            <Form
+                {...adminIndex.form()}
+                className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(220px,1fr)_minmax(180px,auto)_minmax(180px,auto)_auto]"
+            >
+                <input name="tab" type="hidden" value="warnings" />
+                <Input
+                    name="search"
+                    defaultValue={filters.search}
+                    maxLength={100}
+                    placeholder="Cari nama atau NIM"
+                    className="rounded-xl border-[#8AAEE0] bg-white"
+                />
+                <select
+                    name="kelas"
+                    defaultValue={filters.kelas ?? ''}
+                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                >
+                    <option value="">Semua kelas</option>
+                    {filterOptions.kelas.map((kelas) => (
+                        <option key={kelas} value={kelas}>
+                            {kelas}
+                        </option>
+                    ))}
+                </select>
+                <select
+                    name="periode_semester"
+                    defaultValue={filters.periode_semester ?? ''}
+                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                >
+                    <option value="">Semua periode</option>
+                    {filterOptions.periode_semester.map((period) => (
+                        <option key={period} value={period}>
+                            {period}
+                        </option>
+                    ))}
+                </select>
+                <Button
+                    type="submit"
+                    className="rounded-xl bg-[#395886] text-xs font-bold"
+                >
+                    <Search className="mr-1.5 size-4" />
+                    Terapkan
+                </Button>
+            </Form>
+            <div className="grid gap-4 xl:grid-cols-2">
+                <Form
+                    {...storeCutoff.form()}
+                    className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm"
+                >
+                    {({ processing, errors }) => (
+                        <>
+                            <div>
+                                <h2 className="text-lg font-extrabold text-[#395886]">
+                                    Batas waktu periode
+                                </h2>
+                                <p className="mt-1 text-xs text-[#395886]/70">
+                                    Timezone operasional: Asia/Jakarta.
+                                </p>
+                            </div>
+                            <select
+                                name="periode_semester"
+                                required
+                                value={selectedCutoffPeriod}
+                                onChange={(event) =>
+                                    setSelectedCutoffPeriod(event.target.value)
+                                }
+                                className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                            >
+                                <option value="">Pilih periode</option>
+                                {filterOptions.periode_semester.map(
+                                    (period) => (
+                                        <option key={period} value={period}>
+                                            {period}
+                                        </option>
+                                    ),
+                                )}
+                            </select>
+                            <Input
+                                key={selectedCutoff?.id ?? 'new-cutoff'}
+                                name="deadline_at"
+                                type="datetime-local"
+                                required
+                                disabled={selectedCutoff?.closed_at !== null}
+                                defaultValue={
+                                    selectedCutoff
+                                        ? datetimeLocalValue(
+                                              selectedCutoff.deadline_at,
+                                              selectedCutoff.timezone,
+                                          )
+                                        : ''
+                                }
+                            />
+                            {errors.deadline_at ? (
+                                <p className="text-xs font-bold text-rose-600">
+                                    {errors.deadline_at}
+                                </p>
+                            ) : null}
+                            <Button
+                                disabled={processing || selectedCutoff?.closed_at !== null}
+                                type="submit"
+                                className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                            >
+                                <Clock3 className="mr-2 size-4" />
+                                Simpan batas waktu
+                            </Button>
+                            {selectedCutoff ? (
+                                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/50 p-3">
+                                    <p className="mr-auto text-xs font-semibold text-[#395886]/75">
+                            {selectedCutoff.closed_at
+                                ? `Periode ditutup pada ${new Date(selectedCutoff.closed_at).toLocaleString('id-ID', { timeZone: selectedCutoff.timezone })}.`
+                                            : new Date(selectedCutoff.deadline_at).getTime() > Date.now()
+                                              ? `Penutupan tersedia setelah ${new Date(selectedCutoff.deadline_at).toLocaleString('id-ID', { timeZone: selectedCutoff.timezone })}.`
+                                              : 'Tutup periode untuk mengunci perubahan manual dan impor baru.'}
+                                    </p>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={
+                                            selectedCutoff.closed_at !== null ||
+                                            new Date(selectedCutoff.deadline_at).getTime() >
+                                                Date.now()
+                                        }
+                                        onClick={() => {
+                                            if (window.confirm('Tutup periode ini? Perubahan manual dan impor baru akan dikunci.')) {
+                                                router.post(closeCutoff.url(selectedCutoff.id));
+                                            }
+                                        }}
+                                        className="rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
+                                    >
+                                        <ShieldAlert className="mr-1.5 size-3.5" />
+                                        Tutup periode
+                                    </Button>
+                                </div>
+                            ) : null}
+                            <div className="text-xs text-[#395886]/70">
+                                {cutoffs.map((cutoff) => (
+                                    <p key={cutoff.id}>
+                                        {cutoff.periode_semester}:{' '}
+                                        {new Date(
+                                            cutoff.deadline_at,
+                                        ).toLocaleString('id-ID', {
+                                            timeZone: cutoff.timezone,
+                                        })}
+                                    </p>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </Form>
+                <div className="grid content-start gap-2 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm">
+                    <h2 className="text-lg font-extrabold text-[#395886]">
+                        Buat SP manual
+                    </h2>
+                    <p className="text-xs leading-relaxed text-[#395886]/70">
+                        Pilih mahasiswa dengan sisa jam setelah cutoff. Form
+                        pembuatan draft akan muncul setelah dipilih.
+                    </p>
+                </div>
+            </div>
+            {selectedStudent ? (
+                <Form
+                    {...storeWarning.form()}
+                    className="grid gap-3 rounded-3xl border border-[#8AAEE0]/60 bg-white p-5 shadow-sm md:grid-cols-[1fr_minmax(240px,1.5fr)_auto]"
+                >
+                    {({ processing, errors }) => (
+                        <>
+                            <div>
+                                <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
+                                    Mahasiswa dipilih
+                                </p>
+                                <p className="mt-1 text-sm font-extrabold text-[#395886]">
+                                    {selectedStudent.nama_mahasiswa} ·{' '}
+                                    {selectedStudent.nim}
+                                </p>
+                                <p className="mt-1 text-xs text-[#395886]/70">
+                                    Sisa{' '}
+                                    {number(
+                                        selectedStudent.effective_sisa_hutang_jam,
+                                    )}{' '}
+                                    jam.
+                                </p>
+                            </div>
+                            <input
+                                name="student_id"
+                                type="hidden"
+                                value={selectedStudent.id}
+                            />
+                            <Input
+                                name="reason"
+                                required
+                                minLength={5}
+                                maxLength={1000}
+                                placeholder="Alasan pembuatan draft SP"
+                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                    disabled={processing}
+                                    type="submit"
+                                    className="rounded-xl bg-[#395886] text-xs font-bold"
+                                >
+                                    <ShieldAlert className="mr-2 size-4" />
+                                    Buat draft SP
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setSelectedStudent(null)}
+                                    className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]"
+                                >
+                                    Batal
+                                </Button>
+                            </div>
+                            {errors.student_id || errors.reason ? (
+                                <p className="text-xs font-bold text-rose-600 md:col-span-3">
+                                    {errors.student_id ?? errors.reason}
+                                </p>
+                            ) : null}
+                        </>
+                    )}
+                </Form>
+            ) : null}
+            {fixedCandidates?.data.length ? (
+                <WarningCandidateTable
+                    data={fixedCandidates}
+                    selectedStudentId={selectedStudent?.id ?? null}
+                    onSelect={setSelectedStudent}
+                />
+            ) : (
+                <div className="rounded-3xl border border-dashed border-[#8AAEE0] bg-white/80 p-6 text-center text-xs font-semibold text-[#395886]/70">
+                    Tidak ada mahasiswa dengan sisa jam setelah cutoff pada
+                    filter yang dipilih.
+                </div>
+            )}
+            <div className="flex flex-col justify-between gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm sm:flex-row sm:items-center">
+                <div>
+                    <h2 className="text-base font-extrabold text-[#395886]">
+                        Arsip dan status SP
+                    </h2>
+                    <p className="mt-0.5 text-xs text-[#395886]/70">
+                        Draft dan penerbitan SP setelah cutoff tetap
+                        dikendalikan admin.
+                    </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => queueExport('warnings', 'xlsx', filters)}
+                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                    >
+                        <FileSpreadsheet className="mr-1.5 size-3.5" />
+                        Buat XLSX
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => queueExport('warnings', 'pdf', filters)}
+                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                    >
+                        <FileText className="mr-1.5 size-3.5" />
+                        Buat PDF
+                    </Button>
+                </div>
+            </div>
+            {selectedWarning ? (
+                <section className="grid gap-4 rounded-3xl border border-[#8AAEE0]/60 bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
+                                SP dipilih
+                            </p>
+                            <h3 className="mt-1 text-base font-extrabold text-[#395886]">
+                                {selectedWarning.nama_mahasiswa} ·{' '}
+                                {selectedWarning.nim}
+                            </h3>
+                        </div>
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            onClick={onCloseWarning}
+                            className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]"
+                            aria-label="Tutup panel SP"
+                        >
+                            <X className="size-4" />
+                        </Button>
+                    </div>
+                    <div className="grid gap-4 xl:grid-cols-2">
+                        <Form
+                            {...updateWarning.form(selectedWarning.id)}
+                            className="grid gap-3 rounded-2xl border border-[#D5DEEF] p-4"
+                        >
+                            {({ processing }) => (
+                                <>
+                                    <p className="text-sm font-bold text-[#395886]">
+                                        Perbarui status SP
+                                    </p>
+                                    <select
+                                        name="letter_status"
+                                        defaultValue={
+                                            selectedWarning.letter_status
+                                        }
+                                        className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                                    >
+                                        <option value="draft">
+                                            Draft SP
+                                        </option>
+                                        <option value="issued">
+                                            Terbitkan SP
+                                        </option>
+                                    </select>
+                                    <Input
+                                        name="reason"
+                                        required
+                                        minLength={5}
+                                        maxLength={1000}
+                                        defaultValue={
+                                            selectedWarning.reason ?? ''
+                                        }
+                                        placeholder="Alasan perubahan status"
+                                    />
+                                    <Button
+                                        disabled={processing}
+                                        type="submit"
+                                        className="w-fit rounded-xl bg-[#395886] text-xs font-bold"
+                                    >
+                                        <Save className="mr-2 size-4" />
+                                        Simpan status
+                                    </Button>
+                                </>
+                            )}
+                        </Form>
+                        <Form
+                            {...destroyWarning.form(selectedWarning.id)}
+                            className="grid gap-3 rounded-2xl border border-rose-200 bg-rose-50/50 p-4"
+                            onBefore={() =>
+                                window.confirm(
+                                    'Batalkan SP ini? Riwayat audit tetap tersimpan dan mahasiswa kembali ke daftar sisa jam setelah cutoff.',
+                                )
+                            }
+                        >
+                            {({ processing }) => (
+                                <>
+                                    <p className="text-sm font-bold text-rose-800">
+                                        Batalkan / hapus dari proses aktif
+                                    </p>
+                                    <p className="text-xs text-rose-700">
+                                        Pembatalan tidak menghapus jejak audit.
+                                        Mahasiswa dapat dipilih lagi untuk
+                                        membuat draft baru.
+                                    </p>
+                                    <Input
+                                        name="reason"
+                                        required
+                                        minLength={5}
+                                        maxLength={1000}
+                                        placeholder="Alasan pembatalan SP"
+                                    />
+                                    <Button
+                                        disabled={
+                                            processing ||
+                                            selectedWarning.letter_status ===
+                                                'cancelled'
+                                        }
+                                        type="submit"
+                                        variant="outline"
+                                        className="w-fit rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
+                                    >
+                                        <Trash2 className="mr-2 size-4" />
+                                        Batalkan SP
+                                    </Button>
+                                </>
+                            )}
+                        </Form>
+                    </div>
+                </section>
+            ) : null}
+            {warnings?.data.length ? (
+                <WarningTable data={warnings} onSelect={onSelectWarning} />
+            ) : (
+                <EmptyTableState isAdmin />
+            )}
+        </section>
+    );
+}
+
+function activityDescription(log: ActivityLog): string {
+    const descriptions: Record<string, string> = {
+        'import.completed': 'Workbook berhasil diimpor',
+        'import.rolled_back': 'Versi impor sebelumnya dipulihkan',
+        'progress.updated': 'Progres pengerjaan diperbarui',
+        'summary.override_updated': 'Total Kompen dan Responsi dikoreksi',
+        'detail.override_updated': 'Detail Kompen dikoreksi',
+        'cutoff.updated': 'Batas waktu periode diperbarui',
+        'warning.drafted': 'Draft SP dibuat',
+        'warning.issued': 'SP diterbitkan',
+        'warning.cancelled': 'SP dibatalkan',
+        'warning.archived': 'Data SP diselaraskan setelah cutoff',
+        'warning.classification_fixed': 'Status SP diselaraskan setelah cutoff',
+        'warning.classification_temporary':
+            'Status SP diselaraskan setelah perubahan cutoff',
+        'warning.resolution_updated': 'Status penyelesaian SP diperbarui',
+        'export.completed': 'File ekspor selesai dibuat',
+    };
+
+    return (
+        descriptions[log.event_type] ?? log.event_type.replaceAll('.', ' · ')
+    );
+}
+
+function ActivityFilterPanel({
+    filters,
+    filterOptions,
+    activityFilterOptions,
+}: {
+    filters: Filters;
+    filterOptions: FilterOptions;
+    activityFilterOptions: { event_types: string[]; actor_emails: string[] };
+}): React.JSX.Element {
+    return (
+        <Form
+            {...adminIndex.form()}
+            className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(160px,1fr)_minmax(180px,1fr)_minmax(180px,1fr)_auto_auto] md:items-end"
+        >
+            <input name="tab" type="hidden" value="activity" />
+            <div className="grid flex-1 gap-1.5">
+                <Label
+                    htmlFor="activity-period"
+                    className="text-xs font-bold text-[#395886]"
+                >
+                    Periode aktivitas
+                </Label>
+                <select
+                    id="activity-period"
+                    name="periode_semester"
+                    defaultValue={filters.periode_semester ?? ''}
+                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                >
+                    <option value="">Semua periode</option>
+                    {filterOptions.periode_semester.map((period) => (
+                        <option key={period} value={period}>
+                            {period}
+                        </option>
+                    ))}
+                </select>
+            </div>
+            <div className="grid gap-1.5">
+                <Label htmlFor="activity-event" className="text-xs font-bold text-[#395886]">
+                    Jenis aktivitas
+                </Label>
+                <select
+                    id="activity-event"
+                    name="activity_event"
+                    defaultValue={filters.activity_event ?? ''}
+                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                >
+                    <option value="">Semua aktivitas</option>
+                    {activityFilterOptions.event_types.map((eventType) => (
+                        <option key={eventType} value={eventType}>
+                            {eventType.replaceAll('.', ' · ')}
+                        </option>
+                    ))}
+                </select>
+            </div>
+            <div className="grid gap-1.5">
+                <Label htmlFor="activity-actor" className="text-xs font-bold text-[#395886]">
+                    Admin pelaksana
+                </Label>
+                <select
+                    id="activity-actor"
+                    name="activity_actor"
+                    defaultValue={filters.activity_actor ?? ''}
+                    className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm text-[#395886]"
+                >
+                    <option value="">Semua admin</option>
+                    {activityFilterOptions.actor_emails.map((email) => (
+                        <option key={email} value={email}>
+                            {email}
+                        </option>
+                    ))}
+                </select>
+            </div>
+            <Button
+                type="submit"
+                className="rounded-xl bg-[#395886] text-xs font-bold"
+            >
+                <Search className="mr-1.5 size-4" />
+                Terapkan
+            </Button>
+            <Button
+                asChild
+                type="button"
+                variant="outline"
+                className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]"
+            >
+                <Link href={adminIndex.url({ query: { tab: 'activity' } })}>
+                    Reset
+                </Link>
+            </Button>
+        </Form>
+    );
+}
+
+function ActivityLogTable({
+    data,
+}: {
+    data: Pagination<ActivityLog>;
+}): React.JSX.Element {
+    return (
+        <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[750px] text-sm">
+                    <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
+                        <tr>
+                            <th className="px-4 py-3">Waktu</th>
+                            <th className="px-4 py-3">Aktivitas</th>
+                            <th className="px-4 py-3">Subjek</th>
+                            <th className="px-4 py-3">Aktor</th>
+                            <th className="px-4 py-3">Alasan</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F0F3FA]">
+                        {data.data.map((log) => (
+                            <tr key={log.id}>
+                                <td className="px-4 py-3 text-xs">
+                                    {new Date(log.occurred_at).toLocaleString(
+                                        'id-ID',
+                                        { timeZone: 'Asia/Jakarta' },
+                                    )}
+                                </td>
+                                <td className="px-4 py-3 text-xs font-semibold text-[#395886]">
+                                    {activityDescription(log)}
+                                </td>
+                                <td className="px-4 py-3 text-xs">
+                                    {log.subject_name ? (
+                                        <>
+                                            <p className="font-semibold text-[#395886]">
+                                                {log.subject_name}
+                                            </p>
+                                            {log.nim ? (
+                                                <p className="font-mono text-[11px] text-[#628ECB]">
+                                                    {log.nim}
+                                                </p>
+                                            ) : null}
+                                        </>
+                                    ) : (
+                                        (log.nim ?? log.subject_type)
+                                    )}
+                                </td>
+                                <td className="px-4 py-3 text-xs">
+                                    {log.actor_name ?? 'Sistem'}
+                                </td>
+                                <td className="max-w-xs px-4 py-3 text-xs text-[#395886]/70">
+                                    {log.reason ?? '—'}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <Pager data={data} />
+        </section>
+    );
+}
+
+function DashboardPanel({
+    dashboard,
+    filters,
+    filterOptions,
+}: {
+    dashboard: Dashboard;
+    filters: Filters;
+    filterOptions: FilterOptions;
+}): React.JSX.Element {
+    const warningQuery = {
+        tab: 'warnings',
+        ...(filters.tingkat ? { tingkat: filters.tingkat } : {}),
+        ...(filters.kelas ? { kelas: filters.kelas } : {}),
+        ...(filters.periode_semester
+            ? { periode_semester: filters.periode_semester }
+            : {}),
+    };
+    const cards = [
+        {
+            label: 'Mahasiswa terpantau',
+            value: dashboard.summary.total_students,
+            detail: 'Sesuai periode dan filter aktif',
+            icon: Users,
+        },
+        {
+            label: 'Masih memiliki sisa jam',
+            value: dashboard.summary.outstanding_students,
+            detail: `${number(String(dashboard.summary.outstanding_hours))} jam perlu ditindaklanjuti`,
+            icon: Clock3,
+        },
+        {
+            label: 'Kompen selesai',
+            value: dashboard.summary.completed_students,
+            detail: 'Tidak memiliki sisa jam efektif',
+            icon: CheckCircle2,
+        },
+        {
+            label: 'SP aktif',
+            value: dashboard.summary.warning_count,
+            detail: `${dashboard.summary.issued_warning_count} telah diterbitkan`,
+            icon: ShieldAlert,
+        },
+    ];
+
+    return (
+        <section className="grid gap-5">
+            <Form
+                {...adminIndex.form()}
+                className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(160px,1fr)_minmax(120px,0.7fr)_minmax(140px,0.8fr)_auto_auto] md:items-end"
+            >
+                <input name="tab" type="hidden" value="dashboard" />
+                <div className="grid flex-1 gap-1.5">
+                    <Label
+                        htmlFor="dashboard-period"
+                        className="text-xs font-bold text-[#395886]"
+                    >
+                        Ringkas periode
+                    </Label>
+                    <select
+                        id="dashboard-period"
+                        name="periode_semester"
+                        defaultValue={filters.periode_semester ?? ''}
+                        className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                    >
+                        <option value="">Semua periode</option>
+                        {filterOptions.periode_semester.map((period) => (
+                            <option key={period} value={period}>
+                                {period}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div className="grid gap-1.5">
+                    <Label
+                        htmlFor="dashboard-level"
+                        className="text-xs font-bold text-[#395886]"
+                    >
+                        Tingkat
+                    </Label>
+                    <select
+                        id="dashboard-level"
+                        name="tingkat"
+                        defaultValue={filters.tingkat?.toString() ?? ''}
+                        className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                    >
+                        <option value="">Semua tingkat</option>
+                        {filterOptions.tingkat.map((level) => (
+                            <option key={level} value={level}>
+                                Tingkat {level}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div className="grid gap-1.5">
+                    <Label
+                        htmlFor="dashboard-class"
+                        className="text-xs font-bold text-[#395886]"
+                    >
+                        Kelas
+                    </Label>
+                    <select
+                        id="dashboard-class"
+                        name="kelas"
+                        defaultValue={filters.kelas ?? ''}
+                        className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                    >
+                        <option value="">Semua kelas</option>
+                        {filterOptions.kelas.map((classCode) => (
+                            <option key={classCode} value={classCode}>
+                                {classCode}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <Button
+                    type="submit"
+                    className="rounded-xl bg-[#395886] text-xs font-bold"
+                >
+                    <Search className="mr-1.5 size-4" />
+                    Terapkan
+                </Button>
+                <Button
+                    asChild
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]"
+                >
+                    <Link href={adminIndex.url({ query: { tab: 'dashboard' } })}>
+                        Reset
+                    </Link>
+                </Button>
+            </Form>
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {cards.map((card) => {
+                    const Icon = card.icon;
+
+                    return (
+                        <Card key={card.label} className="border-white/80 bg-white/85 shadow-sm">
+                            <CardContent className="flex items-start justify-between gap-4 p-5">
+                                <div>
+                                    <p className="text-xs font-semibold text-[#395886]/70">
+                                        {card.label}
+                                    </p>
+                                    <p className="mt-2 text-3xl font-black tabular-nums text-[#395886]">
+                                        {number(String(card.value))}
+                                    </p>
+                                    <p className="mt-1 text-[11px] text-[#395886]/60">
+                                        {card.detail}
+                                    </p>
+                                </div>
+                                <div className="rounded-2xl bg-[#B1C9EF]/35 p-3 text-[#395886]">
+                                    <Icon className="size-5" />
+                                </div>
+                            </CardContent>
+                        </Card>
+                    );
+                })}
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+                <Card className="border-white/80 bg-white/85 shadow-sm">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base text-[#395886]">
+                            <CalendarClock className="size-4" /> Status periode
+                        </CardTitle>
+                        <CardDescription>
+                            Batas waktu menentukan kapan SP dapat dibuat. Periode terkunci hanya setelah ditutup oleh admin.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-2">
+                        {dashboard.summary.periods.length ? dashboard.summary.periods.map((period) => (
+                            <div key={period.periode_semester} className="flex items-center justify-between rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 px-4 py-3">
+                                <div>
+                                    <p className="text-sm font-bold text-[#395886]">{period.periode_semester}</p>
+                                    <p className="text-xs text-[#395886]/65">
+                                        {period.deadline_at ? new Date(period.deadline_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) : 'Batas waktu belum ditetapkan'}
+                                    </p>
+                                </div>
+                                <span className={cn(
+                                    'rounded-full px-2.5 py-1 text-[10px] font-black uppercase',
+                                    period.status === 'open' && 'bg-emerald-100 text-emerald-800',
+                                    period.status === 'cutoff_passed' && 'bg-amber-100 text-amber-800',
+                                    period.status === 'locked' && 'bg-slate-200 text-slate-700',
+                                )}>
+                                    {period.status === 'open'
+                                        ? 'Berjalan'
+                                        : period.status === 'cutoff_passed'
+                                          ? 'Lewat cutoff'
+                                          : 'Terkunci'}
+                                </span>
+                            </div>
+                        )) : (
+                            <p className="rounded-2xl border border-dashed border-[#8AAEE0] p-4 text-xs text-[#395886]/70">Belum ada batas waktu periode. Tetapkan pada Surat Peringatan.</p>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card className="border-white/80 bg-white/85 shadow-sm">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base text-[#395886]">
+                            <ClipboardList className="size-4" /> Daftar kerja admin
+                        </CardTitle>
+                        <CardDescription>
+                            Prioritas yang membutuhkan keputusan atau tindak lanjut.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-3">
+                        <DashboardWorklistLink
+                            title="Belum memiliki SP"
+                            count={dashboard.worklist.fixed_candidates.length}
+                            description="Masih memiliki sisa jam setelah cutoff."
+                        />
+                        <DashboardWorklistLink
+                            title="SP perlu ditindaklanjuti"
+                            count={dashboard.worklist.warnings_to_follow_up.length}
+                            description="Draft atau surat aktif pada periode terpilih."
+                        />
+                        <Button asChild variant="outline" className="mt-1 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                            <Link href={adminIndex.url({ query: warningQuery })}>
+                                Buka Surat Peringatan
+                            </Link>
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <Card className="border-white/80 bg-white/85 shadow-sm">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base text-[#395886]">
+                        <ShieldAlert className="size-4" /> Perlu tindakan
+                    </CardTitle>
+                    <CardDescription>
+                        Ringkasan tindak lanjut berdasarkan filter dashboard saat ini.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-3">
+                    <DashboardAttentionItem
+                        title="Cutoff mendekat"
+                        count={dashboard.attention.upcoming_cutoffs.length}
+                        description={
+                            dashboard.attention.upcoming_cutoffs.length
+                                ? dashboard.attention.upcoming_cutoffs
+                                      .map(
+                                          (cutoff) =>
+                                              `${cutoff.periode_semester} · ${new Date(cutoff.deadline_at).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })}`,
+                                      )
+                                      .join(', ')
+                                : 'Tidak ada cutoff dalam tujuh hari ke depan.'
+                        }
+                    />
+                    <DashboardAttentionItem
+                        title="Sisa jam setelah cutoff"
+                        count={dashboard.attention.outstanding_after_cutoff}
+                        description="Mahasiswa yang perlu diproses untuk SP."
+                        href={adminIndex.url({ query: warningQuery })}
+                    />
+                    <DashboardAttentionItem
+                        title="Draft SP belum diterbitkan"
+                        count={dashboard.attention.draft_warnings}
+                        description="Tinjau draft sebelum menerbitkan SP."
+                        href={adminIndex.url({ query: warningQuery })}
+                    />
+                </CardContent>
+            </Card>
+        </section>
+    );
+}
+
+function DashboardAttentionItem({
+    title,
+    count,
+    description,
+    href,
+}: {
+    title: string;
+    count: number;
+    description: string;
+    href?: string;
+}): React.JSX.Element {
+    const content = (
+        <>
+            <div>
+                <p className="text-sm font-bold text-[#395886]">{title}</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-[#395886]/65">
+                    {description}
+                </p>
+            </div>
+            <span className="rounded-xl bg-[#395886] px-2.5 py-1 text-xs font-black tabular-nums text-white">
+                {count}
+            </span>
+        </>
+    );
+
+    const className =
+        'flex items-start justify-between gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 px-4 py-3 transition-colors';
+
+    return href ? (
+        <Link href={href} className={`${className} hover:bg-[#B1C9EF]/35`}>
+            {content}
+        </Link>
+    ) : (
+        <div className={className}>{content}</div>
+    );
+}
+
+function DashboardWorklistLink({
+    title,
+    count,
+    description,
+}: {
+    title: string;
+    count: number;
+    description: string;
+}): React.JSX.Element {
+    return (
+        <div className="flex items-start justify-between gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 px-4 py-3">
+            <div>
+                <p className="text-sm font-bold text-[#395886]">{title}</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-[#395886]/65">{description}</p>
+            </div>
+            <span className="rounded-xl bg-[#395886] px-2.5 py-1 text-xs font-black tabular-nums text-white">{count}</span>
+        </div>
+    );
+}
+
+function StudentOverviewPanel({
+    overview,
+    onClose,
+}: {
+    overview: StudentOverview;
+    onClose: () => void;
+}): React.JSX.Element {
+    const { summary, source } = overview;
+
+    return (
+        <section className="overflow-hidden rounded-3xl border border-[#8AAEE0] bg-white shadow-lg">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#D5DEEF] bg-[#F0F3FA]/65 px-5 py-4">
+                <div>
+                    <p className="text-[10px] font-black tracking-[0.16em] text-[#628ECB] uppercase">Profil mahasiswa</p>
+                    <h2 className="mt-1 text-lg font-black text-[#395886]">{summary.nama_mahasiswa}</h2>
+                    <p className="font-mono text-xs text-[#395886]/70">{summary.nim} · {summary.kelas} · {summary.periode_semester}</p>
+                </div>
+                <Button type="button" variant="outline" onClick={onClose} className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                    <X className="mr-1.5 size-4" /> Tutup
+                </Button>
+            </div>
+            <div className="grid gap-4 p-5 xl:grid-cols-[1fr_1fr_1.2fr]">
+                <div className="rounded-2xl border border-[#D5DEEF] p-4">
+                    <p className="text-xs font-black tracking-wide text-[#395886] uppercase">Data efektif</p>
+                    <dl className="mt-3 grid gap-2 text-xs">
+                        <OverviewValue label="Kompen" value={`${number(summary.effective_total_kompensasi_jam)} jam`} />
+                        <OverviewValue label="Responsi" value={`${number(summary.effective_total_responsi_jam)} jam`} />
+                        <OverviewValue label="Kompen dikerjakan" value={`${number(summary.effective_kompensasi_dikerjakan_jam)} jam`} />
+                        <OverviewValue label="Responsi dikerjakan" value={`${number(summary.effective_responsi_dikerjakan_jam)} jam`} />
+                        <OverviewValue label="Sisa hutang" value={`${number(summary.effective_sisa_hutang_jam)} jam`} emphasized />
+                    </dl>
+                    {summary.has_summary_override ? <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">Nilai efektif menggunakan koreksi admin.</p> : null}
+                </div>
+                <div className="rounded-2xl border border-[#D5DEEF] p-4">
+                    <p className="text-xs font-black tracking-wide text-[#395886] uppercase">Sumber workbook</p>
+                    <dl className="mt-3 grid gap-2 text-xs">
+                        <OverviewValue label="Kompen asal" value={`${number(source.total_kompensasi_jam)} jam`} />
+                        <OverviewValue label="Responsi asal" value={`${number(source.total_responsi_jam)} jam`} />
+                        <OverviewValue label="Sisa asal" value={`${number(source.sisa_hutang_jam)} jam`} />
+                    </dl>
+                    <p className="mt-3 text-[11px] leading-relaxed text-[#395886]/65">{source.import_filename ?? 'Sumber unggahan tidak tersedia'}{source.imported_at ? ` · ${new Date(source.imported_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}` : ''}</p>
+                </div>
+                <div className="rounded-2xl border border-[#D5DEEF] p-4">
+                    <p className="text-xs font-black tracking-wide text-[#395886] uppercase">Jejak perubahan terakhir</p>
+                    <div className="mt-3 grid gap-2">
+                        {overview.activities.length ? overview.activities.slice(0, 4).map((activity) => (
+                            <div key={activity.id} className="border-l-2 border-[#8AAEE0] pl-3 text-xs">
+                                <p className="font-semibold text-[#395886]">{activityDescription(activity)}</p>
+                                <p className="text-[11px] text-[#395886]/65">{new Date(activity.occurred_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}{activity.reason ? ` · ${activity.reason}` : ''}</p>
+                            </div>
+                        )) : <p className="text-xs text-[#395886]/65">Belum ada perubahan manual yang tercatat.</p>}
+                    </div>
+                    <p className="mt-4 text-[11px] text-[#395886]/65">{overview.details.length} detail Kompen · {overview.warnings.length} riwayat SP</p>
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function OverviewValue({
+    label,
+    value,
+    emphasized = false,
+}: {
+    label: string;
+    value: string;
+    emphasized?: boolean;
+}): React.JSX.Element {
+    return (
+        <div className="flex items-center justify-between gap-3">
+            <dt className="text-[#395886]/65">{label}</dt>
+            <dd className={cn('font-mono font-bold text-[#395886]', emphasized && 'text-base')}>{value}</dd>
+        </div>
     );
 }
 
@@ -1053,7 +2937,7 @@ function EmptyTableState({ isAdmin }: { isAdmin: boolean }): React.JSX.Element {
             </p>
             <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed font-medium text-[#395886]/70">
                 {isAdmin
-                    ? 'Unggah workbook XLSX melalui tab Upload dokumen atau sesuaikan filter yang digunakan.'
+                    ? 'Unggah workbook XLSX melalui tab Upload Dokumen atau sesuaikan filter yang digunakan.'
                     : 'Belum ada data yang sesuai dengan filter yang dipilih. Coba pilih periode lain atau atur ulang filter.'}
             </p>
         </div>
@@ -1065,16 +2949,54 @@ export default function KompenResponHubIndex({
     isAdmin,
     filters,
     filterOptions,
+    activityFilterOptions,
+    dashboard,
     flash,
     students,
     details,
     imports,
+    warnings,
+    fixedCandidates,
+    activityLogs,
+    cutoffs,
     activeImportTasks,
+    exportTasks,
     canRollbackLatestImport,
 }: KompenResponHubPageProps): React.JSX.Element {
     const indexAction = isAdmin ? adminIndex : studentIndex;
     const tabs = isAdmin ? adminTabs : studentTabs;
     const [isUploadRequestActive, setIsUploadRequestActive] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [selectedStudent, setSelectedStudent] = useState<Student | null>(
+        null,
+    );
+    const [selectedDetail, setSelectedDetail] = useState<Detail | null>(null);
+    const [selectedWarning, setSelectedWarning] = useState<Warning | null>(
+        null,
+    );
+    const [studentOverview, setStudentOverview] = useState<StudentOverview | null>(null);
+    const [isStudentOverviewLoading, setIsStudentOverviewLoading] = useState(false);
+
+    async function openStudentOverview(student: Student): Promise<void> {
+        setIsStudentOverviewLoading(true);
+
+        try {
+            const response = await fetch(adminStudentOverview.url(student.id), {
+                headers: { Accept: 'application/json' },
+            });
+
+            if (!response.ok) {
+                throw new Error('Profil mahasiswa tidak dapat dimuat.');
+            }
+
+            const payload = (await response.json()) as { data: StudentOverview };
+            setStudentOverview(payload.data);
+        } catch {
+            window.alert('Profil mahasiswa tidak dapat dimuat. Silakan coba lagi.');
+        } finally {
+            setIsStudentOverviewLoading(false);
+        }
+    }
 
     return (
         <>
@@ -1168,7 +3090,7 @@ export default function KompenResponHubIndex({
                         <Alert className="animate-in fade-in slide-in-from-top-2 rounded-2xl border border-emerald-200 bg-emerald-50/90 text-emerald-900 shadow-sm backdrop-blur-md duration-300">
                             <CheckCircle2 className="size-5 animate-bounce text-emerald-600" />
                             <AlertTitle className="text-base font-bold text-emerald-950">
-                                Impor Workbook Berhasil
+                                Tindakan Berhasil Disimpan
                             </AlertTitle>
                             <AlertDescription className="mt-0.5 text-xs text-emerald-700">
                                 {flash.success}
@@ -1197,6 +3119,7 @@ export default function KompenResponHubIndex({
                             initialImportTasks={activeImportTasks}
                         />
                     ) : null}
+                    <ExportProgressPanel initialExportTasks={exportTasks} />
 
                     {/* Navigation Tabs */}
                     <nav
@@ -1208,7 +3131,11 @@ export default function KompenResponHubIndex({
                                 key={tab}
                                 href={indexAction.url({
                                     query:
-                                        tab === 'upload' || tab === 'imports'
+                                        tab === 'upload' ||
+                                        tab === 'dashboard' ||
+                                        tab === 'imports' ||
+                                        tab === 'warnings' ||
+                                        tab === 'activity'
                                             ? { tab }
                                             : { ...filters, tab },
                                 })}
@@ -1244,6 +3171,14 @@ export default function KompenResponHubIndex({
                     ) : null}
 
                     {/* Main Views */}
+                    {activeTab === 'dashboard' && isAdmin && dashboard ? (
+                        <DashboardPanel
+                            dashboard={dashboard}
+                            filters={filters}
+                            filterOptions={filterOptions}
+                        />
+                    ) : null}
+
                     {activeTab === 'upload' ? (
                         <UploadPanel
                             onUploadRequestActivityChange={
@@ -1260,8 +3195,9 @@ export default function KompenResponHubIndex({
                                         Audit Impor
                                     </h2>
                                     <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
-                                        Riwayat upload dan penghapusan unggahan
-                                        terakhir.
+                                        Riwayat upload dan rollback versi aktif. Rollback
+                                        mengembalikan data ke workbook sebelumnya per
+                                        kelas tanpa menghapus file sumber.
                                     </p>
                                 </div>
                                 <RollbackLatestImportButton
@@ -1280,8 +3216,58 @@ export default function KompenResponHubIndex({
                         </section>
                     ) : null}
 
+                    {activeTab === 'warnings' && isAdmin ? (
+                        <WarningPanel
+                            cutoffs={cutoffs}
+                            filterOptions={filterOptions}
+                            filters={filters}
+                            warnings={warnings}
+                            fixedCandidates={fixedCandidates}
+                            selectedWarning={selectedWarning}
+                            onSelectWarning={setSelectedWarning}
+                            onCloseWarning={() => setSelectedWarning(null)}
+                        />
+                    ) : null}
+
+                    {activeTab === 'activity' && isAdmin ? (
+                        <section className="grid gap-4">
+                            <ActivityFilterPanel
+                                filters={filters}
+                                filterOptions={filterOptions}
+                                activityFilterOptions={activityFilterOptions}
+                            />
+                            {activityLogs?.data.length ? (
+                                <ActivityLogTable data={activityLogs} />
+                            ) : (
+                                <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-10 text-center text-xs font-bold text-[#395886]/70">
+                                    Belum ada aktivitas yang tercatat.
+                                </div>
+                            )}
+                        </section>
+                    ) : null}
+
                     {activeTab === 'students' || activeTab === 'details' ? (
                         <section className="flex flex-col gap-4">
+                            {isAdmin && studentOverview ? (
+                                <StudentOverviewPanel
+                                    overview={studentOverview}
+                                    onClose={() => setStudentOverview(null)}
+                                />
+                            ) : null}
+                            {isAdmin ? (
+                                <div className="flex justify-end">
+                                    <EditModeControl
+                                        enabled={isEditMode}
+                                        onChange={(enabled) => {
+                                            setIsEditMode(enabled);
+                                            if (!enabled) {
+                                                setSelectedStudent(null);
+                                                setSelectedDetail(null);
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            ) : null}
                             <FilterPanel
                                 key={activeTab}
                                 activeTab={activeTab}
@@ -1289,16 +3275,46 @@ export default function KompenResponHubIndex({
                                 filters={filters}
                                 filterOptions={filterOptions}
                             />
+                            {isAdmin &&
+                            isEditMode &&
+                            activeTab === 'students' &&
+                            selectedStudent ? (
+                                <StudentCorrectionPanel
+                                    student={selectedStudent}
+                                    onClose={() => setSelectedStudent(null)}
+                                />
+                            ) : null}
+                            {isAdmin &&
+                            isEditMode &&
+                            activeTab === 'details' &&
+                            selectedDetail ? (
+                                <DetailCorrectionPanel
+                                    detail={selectedDetail}
+                                    onClose={() => setSelectedDetail(null)}
+                                />
+                            ) : null}
                             {(activeTab === 'students' ? students : details)
                                 ?.data.length ? (
                                 activeTab === 'students' && students ? (
-                                    <StudentTable data={students} />
+                                    <StudentTable
+                                        data={students}
+                                        isEditMode={isAdmin && isEditMode}
+                                        onSelect={setSelectedStudent}
+                                        onOpenProfile={isAdmin ? openStudentOverview : undefined}
+                                    />
                                 ) : details ? (
-                                    <DetailTable data={details} />
+                                    <DetailTable
+                                        data={details}
+                                        isEditMode={isAdmin && isEditMode}
+                                        onSelect={setSelectedDetail}
+                                    />
                                 ) : null
                             ) : (
                                 <EmptyTableState isAdmin={isAdmin} />
                             )}
+                            {isStudentOverviewLoading ? (
+                                <p className="text-center text-xs font-semibold text-[#395886]/70">Memuat profil mahasiswa…</p>
+                            ) : null}
                         </section>
                     ) : null}
                 </div>

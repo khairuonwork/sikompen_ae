@@ -1,12 +1,18 @@
 <?php
 
+use App\Actions\KompenResponHub\BuildKompenResponHubExport;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
+use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Jobs\GenerateKompenResponHubExport;
 use App\Jobs\ProcessKompenResponHubImport;
+use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
+use App\Models\KompenResponHubExportTask;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
+use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -36,6 +42,55 @@ test('the public page and data API do not require a login', function () {
         ->assertJsonPath('data.0.total_hutang_jam', '3.5000');
 
     $this->get('/admin/login')->assertOk();
+});
+
+test('the admin landing page provides a period-aware operational summary', function () {
+    $student = createStudent();
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->get('/admin')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('activeTab', 'dashboard')
+            ->where('dashboard.summary.total_students', 1)
+            ->where('dashboard.summary.outstanding_students', 1)
+            ->has('dashboard.worklist.fixed_candidates')
+            ->has('dashboard.worklist.warnings_to_follow_up'),
+        );
+
+    $this->actingAs($admin, 'admin')->getJson("/admin/kompen-respon/students/{$student->id}/overview")
+        ->assertOk()
+        ->assertJsonPath('data.summary.nim', $student->nim)
+        ->assertJsonPath('data.source.total_kompensasi_jam', '1.5000');
+});
+
+test('the dashboard filters its summary and actions by class and level', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $firstStudent = createStudent();
+    $secondStudent = $firstStudent->replicate();
+    $secondStudent->fill([
+        'nim' => '987654321',
+        'nama_mahasiswa' => 'Dani Pratama',
+        'kelas' => '2AEA1',
+        'tingkat' => 2,
+    ])->save();
+
+    KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $firstStudent->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tingkat=2&kelas=2AEA1')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('filters.tingkat', 2)
+            ->where('filters.kelas', '2AEA1')
+            ->where('dashboard.summary.total_students', 1)
+            ->where('dashboard.attention.outstanding_after_cutoff', 1)
+            ->where('dashboard.worklist.fixed_candidates.0.nim', '987654321'),
+        );
 });
 
 test('the dynamic filters only expose uploaded periods and filter their records', function () {
@@ -105,18 +160,43 @@ test('the student API returns the complete kompen and respon payload for one stu
         ->assertJsonPath('data.details.0.jam_responsi', '2.0000');
 });
 
-test('students can download a landscape XLSX limited to the selected uploaded period', function () {
+test('an export without filters is queued and produces a landscape XLSX', function () {
+    Storage::fake('local');
+    Queue::fake();
     createStudent();
 
-    $this->get('/mahasiswa/downloads/students')
+    $this->post('/exports', [
+        'resource' => 'students',
+        'format' => 'xlsx',
+    ])
         ->assertRedirect()
-        ->assertSessionHasErrors('periode_semester');
+        ->assertSessionHas('success');
 
-    $response = $this->get('/mahasiswa/downloads/students?periode_semester=2026%2F2027%20Ganjil');
+    $task = KompenResponHubExportTask::query()->sole();
+
+    expect($task->filters)->toBe([])
+        ->and($task->status)->toBe(KompenResponHubExportTask::StatusQueued);
+
+    Queue::assertPushed(
+        GenerateKompenResponHubExport::class,
+        fn (GenerateKompenResponHubExport $job): bool => $job->exportTaskId === $task->id,
+    );
+
+    (new GenerateKompenResponHubExport($task->id))->handle(
+        app(BuildKompenResponHubExport::class),
+        app(RecordKompenResponHubActivity::class),
+    );
+
+    $task->refresh();
+    expect($task->status)->toBe(KompenResponHubExportTask::StatusCompleted);
+    $this->get("/exports/{$task->id}/download?token={$task->access_token}")
+        ->assertNotFound();
+    $response = $this->withCookie(config('session.cookie'), $task->request_session_id)
+        ->get("/exports/{$task->id}/download?token={$task->access_token}");
 
     $response
         ->assertOk()
-        ->assertDownload('kompen-dan-respon-2026-2027-ganjil.xlsx')
+        ->assertDownload("kompen-dan-respon-semua-periode-{$task->id}.xlsx")
         ->assertHeaderContains(
             'Content-Type',
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -131,7 +211,7 @@ test('students can download a landscape XLSX limited to the selected uploaded pe
         expect($worksheet->getPageSetup()->getOrientation())
             ->toBe(PageSetup::ORIENTATION_LANDSCAPE)
             ->and($worksheet->getCell('A1')->getValue())->toBe('Kompen dan Respon')
-            ->and($worksheet->getCell('B2')->getValue())->toBe('2026/2027 Ganjil')
+            ->and($worksheet->getCell('B2')->getValue())->toBe('Semua Periode')
             ->and($worksheet->getCell('B5')->getValue())->toBe('123456789')
             ->and($worksheet->getStyle('A5')->getNumberFormat()->getFormatCode())->toBe('#,##0')
             ->and($worksheet->getStyle('F5')->getNumberFormat()->getFormatCode())->toBe('#,##0.00');
@@ -140,7 +220,9 @@ test('students can download a landscape XLSX limited to the selected uploaded pe
     }
 });
 
-test('students can download a landscape PDF for detail kompen', function () {
+test('an export produces a landscape PDF for detail kompen', function () {
+    Storage::fake('local');
+    Queue::fake();
     $student = createStudent();
     KompenResponHubDetail::create([
         'kompen_respon_hub_student_id' => $student->id,
@@ -154,14 +236,36 @@ test('students can download a landscape PDF for detail kompen', function () {
         'jam_responsi' => 2,
     ]);
 
-    $response = $this->get('/mahasiswa/downloads/details/pdf?periode_semester=2026%2F2027%20Ganjil');
+    $this->post('/exports', [
+        'resource' => 'details',
+        'format' => 'pdf',
+        'periode_semester' => '2026/2027 Ganjil',
+    ])->assertRedirect();
+
+    $task = KompenResponHubExportTask::query()->sole();
+    (new GenerateKompenResponHubExport($task->id))->handle(
+        app(BuildKompenResponHubExport::class),
+        app(RecordKompenResponHubActivity::class),
+    );
+
+    $task->refresh();
+    expect($task->status)->toBe(KompenResponHubExportTask::StatusCompleted);
+    $response = $this->withCookie(config('session.cookie'), $task->request_session_id)
+        ->get("/exports/{$task->id}/download?token={$task->access_token}");
 
     $response
         ->assertOk()
-        ->assertDownload('detail-kompen-2026-2027-ganjil.pdf')
+        ->assertDownload("detail-kompen-2026-2027-ganjil-{$task->id}.pdf")
         ->assertHeaderContains('Content-Type', 'application/pdf');
 
-    expect($response->getContent())->toStartWith('%PDF-');
+    expect($response->streamedContent())->toStartWith('%PDF-');
+});
+
+test('a student cannot queue an export of warning letters', function () {
+    $this->post('/exports', [
+        'resource' => 'warnings',
+        'format' => 'xlsx',
+    ])->assertForbidden();
 });
 
 test('an authenticated admin can upload a valid workbook that replaces matching class data', function () {
@@ -187,7 +291,10 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
     expect($import->periode_semester)->toBe('2026/2027 Gasal')
         ->and($import->uploaded_by_admin_id)->toBe($admin->id)
         ->and($import->uploader_name)->toBe('Khairul Anwar')
-        ->and($import->uploader_email)->toBe($admin->email);
+        ->and($import->uploader_email)->toBe($admin->email)
+        ->and($import->quality_report['status'])->toBe('passed')
+        ->and($import->quality_report['checks'])->toHaveCount(6)
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.completed')->exists())->toBeTrue();
 
     $this->actingAs($admin, 'admin')->get('/admin?tab=imports')
         ->assertOk()
@@ -196,7 +303,8 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
             ->has('imports.data', 1)
             ->where('imports.data.0.event_type', 'upload')
             ->where('imports.data.0.actor_name', 'Khairul Anwar')
-            ->where('imports.data.0.actor_email', $admin->email),
+            ->where('imports.data.0.actor_email', $admin->email)
+            ->where('imports.data.0.quality_report.status', 'passed'),
         );
 
     $this->getJson('/api/kompen-respon/details?nim=123456789')
@@ -270,7 +378,7 @@ test('a completed import clears cached filter options', function () {
         ->assertJsonPath('periode_semester', ['2026/2027 Gasal']);
 });
 
-test('an admin can delete only the latest upload and its related data is removed', function () {
+test('an admin can roll back an initial import while keeping its source workbook and audit trail', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
     $olderStudent = createStudent('2025/2026 Gasal');
@@ -296,19 +404,72 @@ test('an admin can delete only the latest upload and its related data is removed
         ->delete('/admin/kompen-respon/imports/latest')
         ->assertRedirect('/admin?tab=imports');
 
-    expect(KompenResponHubImport::query()->find($latestImport->id))->toBeNull()
+    expect(KompenResponHubImport::query()->find($latestImport->id))->not->toBeNull()
         ->and(KompenResponHubStudent::query()->find($latestStudent->id))->toBeNull()
         ->and(KompenResponHubDetail::query()->where('kompen_respon_hub_student_id', $latestStudent->id)->exists())->toBeFalse()
         ->and(KompenResponHubStudent::query()->find($olderStudent->id))->not->toBeNull();
 
-    Storage::disk('local')->assertMissing($latestImport->stored_path);
+    Storage::disk('local')->assertExists($latestImport->stored_path);
 
     $auditLog = KompenResponHubImportAuditLog::query()->latest('id')->firstOrFail();
     expect($auditLog->event_type)->toBe(KompenResponHubImportAuditLog::EVENT_ROLLBACK)
         ->and($auditLog->source_import_id)->toBe($latestImport->id)
+        ->and($auditLog->actor_name)->toBe($admin->email)
         ->and($auditLog->actor_email)->toBe($admin->email)
         ->and($auditLog->student_count)->toBe(1)
-        ->and($auditLog->detail_count)->toBe(0);
+        ->and($auditLog->detail_count)->toBe(0)
+        ->and($auditLog->metadata['restored'])->toBeFalse()
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.rolled_back')->exists())->toBeTrue();
+});
+
+test('an admin can roll back an incorrect workbook to the previous version for the same class', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'versi-awal.xlsx',
+            workbookContents(compensationHours: 1.5, responseHours: 2),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $previousImport = KompenResponHubImport::query()->sole();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'versi-keliru.xlsx',
+            workbookContents(compensationHours: 9.25, responseHours: 4.5),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $incorrectImport = KompenResponHubImport::query()->latest('id')->firstOrFail();
+    expect($incorrectImport->replaced_imports)->toBe(['1AEA1' => $previousImport->id])
+        ->and(KompenResponHubStudent::query()->sole()->total_hutang_jam)->toBe('13.7500');
+
+    $this->actingAs($admin, 'admin')
+        ->delete('/admin/kompen-respon/imports/latest')
+        ->assertRedirect('/admin?tab=imports');
+
+    $restoredStudent = KompenResponHubStudent::query()->sole();
+    expect($restoredStudent->kompen_respon_hub_import_id)->toBe($previousImport->id)
+        ->and($restoredStudent->total_hutang_jam)->toBe('3.5000')
+        ->and(KompenResponHubImport::query()->find($incorrectImport->id))->not->toBeNull();
+
+    Storage::disk('local')->assertExists($previousImport->stored_path);
+    Storage::disk('local')->assertExists($incorrectImport->stored_path);
+
+    $auditLog = KompenResponHubImportAuditLog::query()->latest('id')->firstOrFail();
+    expect($auditLog->event_type)->toBe(KompenResponHubImportAuditLog::EVENT_ROLLBACK)
+        ->and($auditLog->source_import_id)->toBe($incorrectImport->id)
+        ->and($auditLog->actor_email)->toBe($admin->email)
+        ->and($auditLog->metadata['restored'])->toBeTrue()
+        ->and($auditLog->metadata['restored_imports'][0]['id'])->toBe($previousImport->id)
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'import.rolled_back')
+            ->where('subject_reference', (string) $incorrectImport->id)
+            ->exists())->toBeTrue();
 });
 
 test('a rollback clears cached filter options', function () {
@@ -417,6 +578,62 @@ test('an invalid academic year marks the queued import as failed', function () {
         ->and($importTask->error_message)->toContain('Tahun ajaran wajib berformat');
 });
 
+test('an import is rejected when summary hours do not match detail totals', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(detailCompensationHours: 1),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Total Kompensasi 1.5000 jam tidak sama')
+        ->and(KompenResponHubImport::query()->doesntExist())->toBeTrue()
+        ->and(KompenResponHubStudent::query()->doesntExist())->toBeTrue();
+});
+
+test('an import is rejected when a detail name differs from its summary identity', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(detailName: 'Rina Berbeda'),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Nama mahasiswa harus sama');
+});
+
+test('an import is rejected when it contains an identical detail twice', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(duplicateDetail: true),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Detail duplikat dengan baris 2 ditemukan.');
+});
+
 test('an admin can import a legacy workbook with its period in one cell', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
@@ -503,7 +720,14 @@ function workbookContents(
     string $academicYear = '2026/2027',
     string $classCode = '1AEA1',
     int $level = 1,
+    float $compensationHours = 1.5,
+    float $responseHours = 2,
+    ?float $detailCompensationHours = null,
+    ?float $detailResponseHours = null,
+    ?string $detailName = null,
+    bool $duplicateDetail = false,
 ): string {
+    $totalHours = $compensationHours + $responseHours;
     $workbook = new Spreadsheet;
     $summary = $workbook->getActiveSheet();
     $summary->setTitle('Kompen dan Respon');
@@ -514,15 +738,37 @@ function workbookContents(
     $summary->setCellValue('H2', $level);
     $summary->fromArray([
         ['NO.', 'NIM', 'NAMA MAHASISWA', 'T[J]', 'S[J]', 'I[J]', 'B[J]', 'KOMPENSASI[J]', 'RESPONSI[J]', 'TOTAL[J]', 'KOMPENSASI DIKERJAKAN[J]', 'SISA KOMPEN[J]'],
-        [1, '123456789', 'Rina Utami', 0.5, 0, 0, 0, 1.5, 2, 3.5, 0, 3.5],
+        [1, '123456789', 'Rina Utami', 0.5, 0, 0, 0, $compensationHours, $responseHours, $totalHours, 0, $totalHours],
     ], null, 'A3');
     $summary->setCellValue('A6', 'TEMPLATE BLOK KELAS BARU — SALIN LALU GANTI KODE');
 
     $details = $workbook->createSheet();
     $details->setTitle('Detail Kompen');
+    $detailRow = [
+        1,
+        $classCode,
+        '123456789',
+        $detailName ?? 'Rina Utami',
+        'Algoritma',
+        'Ibu Sari',
+        '2026-09-01',
+        'Luring',
+        'Terlambat',
+        15,
+        'Macet',
+        $detailCompensationHours ?? $compensationHours,
+        $detailResponseHours ?? $responseHours,
+    ];
+    $detailRows = [$detailRow];
+    if ($duplicateDetail) {
+        $duplicateRow = $detailRow;
+        $duplicateRow[0] = 2;
+        $detailRows[] = $duplicateRow;
+    }
+
     $details->fromArray([
         ['NO.', 'KELAS', 'NIM', 'NAMA MAHASISWA', 'MATA KULIAH', 'NAMA DOSEN', 'TANGGAL', 'JENIS PERTEMUAN', 'PRESENSI', 'MENIT KETERLAMBATAN', 'KETERANGAN', 'JAM KOMPENSASI', 'JAM RESPONSI'],
-        [1, $classCode, '123456789', 'Rina Utami', 'Algoritma', 'Ibu Sari', '2026-09-01', 'Luring', 'Terlambat', 15, 'Macet', 1.5, 2],
+        ...$detailRows,
     ]);
 
     $writer = new Xlsx($workbook);

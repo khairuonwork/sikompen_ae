@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class KompenResponHubDetail extends Model
 {
@@ -11,6 +12,7 @@ class KompenResponHubDetail extends Model
 
     protected $fillable = [
         'kompen_respon_hub_student_id',
+        'source_key',
         'tanggal',
         'mata_kuliah',
         'nama_dosen',
@@ -43,5 +45,55 @@ class KompenResponHubDetail extends Model
             KompenResponHubStudent::class,
             'kompen_respon_hub_student_id',
         );
+    }
+
+    public function override(): HasOne
+    {
+        return $this->hasOne(KompenResponHubDetailOverride::class, 'source_key', 'source_key');
+    }
+
+    public function getEffectiveMataKuliahAttribute(): string
+    {
+        return $this->override?->override_values['mata_kuliah'] ?? $this->mata_kuliah;
+    }
+
+    public function getEffectiveNamaDosenAttribute(): string
+    {
+        return $this->override?->override_values['nama_dosen'] ?? $this->nama_dosen;
+    }
+
+    public function getEffectiveTanggalAttribute(): string
+    {
+        return $this->override?->override_values['tanggal'] ?? $this->tanggal?->format('Y-m-d') ?? '';
+    }
+
+    public function getEffectiveJenisPertemuanAttribute(): string
+    {
+        return $this->override?->override_values['jenis_pertemuan'] ?? $this->jenis_pertemuan;
+    }
+
+    public function getEffectivePresensiAttribute(): string
+    {
+        return $this->override?->override_values['presensi'] ?? $this->presensi;
+    }
+
+    public function getEffectiveMenitKeterlambatanAttribute(): int
+    {
+        return (int) ($this->override?->override_values['menit_keterlambatan'] ?? $this->menit_keterlambatan);
+    }
+
+    public function getEffectiveKeteranganAttribute(): ?string
+    {
+        return $this->override?->override_values['keterangan'] ?? $this->keterangan;
+    }
+
+    public function getEffectiveJamKompensasiAttribute(): string
+    {
+        return (string) ($this->override?->override_values['jam_kompensasi'] ?? $this->jam_kompensasi);
+    }
+
+    public function getEffectiveJamResponsiAttribute(): string
+    {
+        return (string) ($this->override?->override_values['jam_responsi'] ?? $this->jam_responsi);
     }
 }

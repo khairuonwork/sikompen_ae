@@ -59,6 +59,7 @@ class ParseKompenResponHubWorkbook
             $classes,
             $errors,
         );
+        $this->validateDetailHourTotals($students, $details, $errors);
 
         return $this->result($errors, $classes, $students, $details, $period);
     }
@@ -76,6 +77,7 @@ class ParseKompenResponHubWorkbook
 
         $students = [];
         $studentKeys = [];
+        $studentClassesByNim = [];
         $periods = [];
         $classes = [];
 
@@ -146,6 +148,14 @@ class ParseKompenResponHubWorkbook
                     ];
                 }
                 $studentKeys[$studentKey] = true;
+
+                if (isset($studentClassesByNim[$nim]) && $studentClassesByNim[$nim] !== $classMetadata['class']) {
+                    $errors[] = [
+                        'location' => $location,
+                        'message' => "NIM {$nim} tercatat pada lebih dari satu kelas ({$studentClassesByNim[$nim]} dan {$classMetadata['class']}).",
+                    ];
+                }
+                $studentClassesByNim[$nim] = $classMetadata['class'];
 
                 $compensationHours = $this->decimal($sheet, $marker['column'] + 7, $row, $errors);
                 $responseHours = $this->decimal($sheet, $marker['column'] + 8, $row, $errors);
@@ -300,11 +310,15 @@ class ParseKompenResponHubWorkbook
         }
 
         $studentKeys = [];
+        $studentNames = [];
         foreach ($students as $student) {
-            $studentKeys["{$student['kelas']}:{$student['nim']}"] = true;
+            $studentKey = "{$student['kelas']}:{$student['nim']}";
+            $studentKeys[$studentKey] = true;
+            $studentNames[$studentKey] = $student['nama_mahasiswa'];
         }
 
         $details = [];
+        $detailFingerprints = [];
         for ($row = $headerRow + 1; $row <= $sheet->getHighestDataRow(); $row++) {
             $values = [];
             for ($column = 1; $column <= 13; $column++) {
@@ -323,8 +337,11 @@ class ParseKompenResponHubWorkbook
             }
 
             $this->validateNim($nim, "{$location}:C", $errors);
-            if (! isset($studentKeys["{$class}:{$nim}"])) {
+            $studentKey = "{$class}:{$nim}";
+            if (! isset($studentKeys[$studentKey])) {
                 $errors[] = ['location' => "{$location}:C", 'message' => 'NIM tidak ditemukan pada kelas yang sama di Kompen dan Respon.'];
+            } elseif ($this->normalize($name) !== $this->normalize($studentNames[$studentKey])) {
+                $errors[] = ['location' => "{$location}:D", 'message' => 'Nama mahasiswa harus sama dengan data NIM pada Kompen dan Respon.'];
             }
 
             foreach (['Nama Mahasiswa' => $name, 'Mata Kuliah' => $course, 'Nama Dosen' => $lecturer] as $label => $value) {
@@ -341,22 +358,98 @@ class ParseKompenResponHubWorkbook
                 $errors[] = ['location' => "{$location}:I", 'message' => 'Nilai presensi tidak valid.'];
             }
 
-            $details[] = [
+            $date = $this->date($sheet, 7, $row, $errors);
+            $compensationHours = $this->decimal($sheet, 12, $row, $errors, 'Detail Kompen');
+            $responseHours = $this->decimal($sheet, 13, $row, $errors, 'Detail Kompen');
+            $detail = [
                 'kelas' => $class,
                 'nim' => $nim,
-                'tanggal' => $this->date($sheet, 7, $row, $errors),
+                'tanggal' => $date,
                 'mata_kuliah' => $course,
                 'nama_dosen' => $lecturer,
                 'jenis_pertemuan' => $meeting,
                 'presensi' => $attendance,
                 'menit_keterlambatan' => $this->integer($sheet, 10, $row, $errors),
                 'keterangan' => $values[10] ?: null,
-                'jam_kompensasi' => $this->decimal($sheet, 12, $row, $errors, 'Detail Kompen'),
-                'jam_responsi' => $this->decimal($sheet, 13, $row, $errors, 'Detail Kompen'),
+                'jam_kompensasi' => $compensationHours,
+                'jam_responsi' => $responseHours,
             ];
+
+            $fingerprint = hash('sha256', json_encode($detail, JSON_THROW_ON_ERROR));
+            if (isset($detailFingerprints[$fingerprint])) {
+                $errors[] = [
+                    'location' => $location,
+                    'message' => "Detail duplikat dengan baris {$detailFingerprints[$fingerprint]} ditemukan.",
+                ];
+            }
+            $detailFingerprints[$fingerprint] = $row;
+            $details[] = $detail;
         }
 
         return $details;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $students
+     * @param  list<array<string, mixed>>  $details
+     * @param  list<array{location: string, message: string}>  $errors
+     */
+    private function validateDetailHourTotals(array $students, array $details, array &$errors): void
+    {
+        $detailTotals = [];
+
+        foreach ($details as $detail) {
+            $studentKey = "{$detail['kelas']}:{$detail['nim']}";
+            $detailTotals[$studentKey] ??= ['kompensasi' => 0.0, 'responsi' => 0.0];
+            $detailTotals[$studentKey]['kompensasi'] += (float) $detail['jam_kompensasi'];
+            $detailTotals[$studentKey]['responsi'] += (float) $detail['jam_responsi'];
+        }
+
+        foreach ($students as $student) {
+            $studentKey = "{$student['kelas']}:{$student['nim']}";
+            $detailTotal = $detailTotals[$studentKey] ?? ['kompensasi' => 0.0, 'responsi' => 0.0];
+
+            $this->addTotalMismatchError(
+                $errors,
+                $student,
+                'Kompensasi',
+                (float) $student['total_kompensasi_jam'],
+                $detailTotal['kompensasi'],
+            );
+            $this->addTotalMismatchError(
+                $errors,
+                $student,
+                'Responsi',
+                (float) $student['total_responsi_jam'],
+                $detailTotal['responsi'],
+            );
+        }
+    }
+
+    /**
+     * @param  list<array{location: string, message: string}>  $errors
+     * @param  array<string, mixed>  $student
+     */
+    private function addTotalMismatchError(
+        array &$errors,
+        array $student,
+        string $label,
+        float $summaryHours,
+        float $detailHours,
+    ): void {
+        if (round($summaryHours, 4) === round($detailHours, 4)) {
+            return;
+        }
+
+        $errors[] = [
+            'location' => "Kompen dan Respon · {$student['kelas']} · {$student['nim']}",
+            'message' => sprintf(
+                'Total %s %s jam tidak sama dengan akumulasi Detail Kompen %s jam.',
+                $label,
+                number_format($summaryHours, 4, '.', ''),
+                number_format($detailHours, 4, '.', ''),
+            ),
+        ];
     }
 
     /** @return list<array{class: string, column: int, row: int, location: string}> */

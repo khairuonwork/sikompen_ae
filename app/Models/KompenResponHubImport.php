@@ -21,6 +21,8 @@ class KompenResponHubImport extends Model
         'class_count',
         'student_count',
         'detail_count',
+        'quality_report',
+        'replaced_imports',
         'imported_at',
     ];
 
@@ -28,6 +30,8 @@ class KompenResponHubImport extends Model
     {
         return [
             'imported_at' => 'datetime',
+            'quality_report' => 'array',
+            'replaced_imports' => 'array',
         ];
     }
 

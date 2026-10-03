@@ -31,12 +31,21 @@ class ValidateSiAdminProxyRequest
             'nonce' => $this->requiredHeader($request, 'X-Si-Admin-Nonce', '/^[A-Za-z0-9_-]{16,128}$/'),
             'path' => $request->getPathInfo(),
             'role' => $this->requiredHeader($request, 'X-Si-Admin-Role', '/^[a-z]+$/'),
+            'student_nim' => (string) $request->header('X-Si-Admin-Student-Nim', ''),
             'timestamp' => (int) $this->requiredHeader($request, 'X-Si-Admin-Timestamp', '/^[0-9]{10}$/'),
             'user_id' => $this->requiredHeader($request, 'X-Si-Admin-User-Id', '/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/'),
         ];
         $providedSignature = $this->requiredHeader($request, 'X-Si-Admin-Signature', '/^[a-f0-9]{64}$/');
 
         abort_unless(in_array($attributes['role'], config('si-admin-proxy.allowed_roles'), true), 403);
+        abort_unless(
+            $attributes['role'] !== 'mahasiswa' || preg_match('/^[0-9]{9,20}$/', $attributes['student_nim']) === 1,
+            403,
+        );
+        abort_unless(
+            $attributes['role'] === 'mahasiswa' || $attributes['student_nim'] === '',
+            403,
+        );
         abort_unless(
             abs(now()->getTimestamp() - $attributes['timestamp']) <= config('si-admin-proxy.signature_ttl_seconds'),
             403,

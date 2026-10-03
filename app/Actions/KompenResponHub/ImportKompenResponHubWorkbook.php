@@ -5,14 +5,19 @@ namespace App\Actions\KompenResponHub;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubStudent;
+use App\Models\KompenResponHubStudentProgress;
+use App\Models\KompenResponHubStudentSummaryOverride;
+use App\Models\KompenResponHubWarningLetter;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ImportKompenResponHubWorkbook
 {
+    public function __construct(private EnsureKompenResponHubPeriodIsOpen $periodLock) {}
+
     /**
      * @param  array{preview: array{periode_semester: ?string, classes: list<string>, class_count: int, student_count: int, detail_count: int}, students: list<array<string, mixed>>, details: list<array<string, mixed>>}  $payload
-     * @return array{import_id: int, class_count: int, student_count: int, detail_count: int}
+     * @return array{import_id: int, periode_semester: string, class_count: int, student_count: int, detail_count: int}
      */
     public function execute(
         array $payload,
@@ -30,8 +35,14 @@ class ImportKompenResponHubWorkbook
             throw new \LogicException('Periode semester tidak ditemukan pada workbook.');
         }
 
+        if ($this->periodLock->isClosed($period)) {
+            throw new \LogicException('Periode telah ditutup dan tidak dapat menerima impor baru.');
+        }
+
         $result = DB::connection(config('kompen-respon-hub.database_connection'))
             ->transaction(function () use ($payload, $preview, $period, $originalFilename, $storedPath, $fileHash, $uploadedByAdminId, $uploaderName, $uploaderEmail): array {
+                $replacedImports = $this->currentImportsByClass($period, $preview['classes']);
+
                 $import = KompenResponHubImport::create([
                     'uploaded_by_admin_id' => $uploadedByAdminId,
                     'uploader_name' => $uploaderName,
@@ -43,45 +54,16 @@ class ImportKompenResponHubWorkbook
                     'class_count' => $preview['class_count'],
                     'student_count' => $preview['student_count'],
                     'detail_count' => $preview['detail_count'],
+                    'quality_report' => $this->qualityReport($payload),
+                    'replaced_imports' => $replacedImports,
                     'imported_at' => now(),
                 ]);
 
-                KompenResponHubStudent::query()
-                    ->where('periode_semester', $period)
-                    ->whereIn('kelas', $preview['classes'])
-                    ->delete();
-
-                $studentIds = [];
-                foreach ($payload['students'] as $studentAttributes) {
-                    $student = KompenResponHubStudent::create([
-                        ...$studentAttributes,
-                        'kompen_respon_hub_import_id' => $import->id,
-                        'periode_semester' => $period,
-                    ]);
-
-                    $studentIds["{$student->kelas}:{$student->nim}"] = $student->id;
-                }
-
-                foreach ($payload['details'] as $detailAttributes) {
-                    $studentKey = "{$detailAttributes['kelas']}:{$detailAttributes['nim']}";
-
-                    DB::connection(config('kompen-respon-hub.database_connection'))
-                        ->table('sikompen_detail_kompen')
-                        ->insert([
-                            'kompen_respon_hub_student_id' => $studentIds[$studentKey],
-                            'tanggal' => $detailAttributes['tanggal'],
-                            'mata_kuliah' => $detailAttributes['mata_kuliah'],
-                            'nama_dosen' => $detailAttributes['nama_dosen'],
-                            'jenis_pertemuan' => $detailAttributes['jenis_pertemuan'],
-                            'presensi' => $detailAttributes['presensi'],
-                            'menit_keterlambatan' => $detailAttributes['menit_keterlambatan'],
-                            'keterangan' => $detailAttributes['keterangan'],
-                            'jam_kompensasi' => $detailAttributes['jam_kompensasi'],
-                            'jam_responsi' => $detailAttributes['jam_responsi'],
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
-                }
+                $this->replaceActiveData(
+                    $payload,
+                    $period,
+                    array_fill_keys($preview['classes'], $import->id),
+                );
 
                 KompenResponHubImportAuditLog::create([
                     'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
@@ -98,14 +80,168 @@ class ImportKompenResponHubWorkbook
 
                 return [
                     'import_id' => $import->id,
+                    'periode_semester' => $period,
                     'class_count' => $preview['class_count'],
                     'student_count' => $preview['student_count'],
                     'detail_count' => $preview['detail_count'],
                 ];
             });
 
-        Cache::forget(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_KEY);
+        Cache::forever(
+            KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_VERSION_KEY,
+            (int) Cache::get(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_VERSION_KEY, 1) + 1,
+        );
 
         return $result;
+    }
+
+    /**
+     * Replace live rows for the supplied workbook classes and retain lifecycle
+     * references for matching student identities.
+     *
+     * @param  array{preview: array{periode_semester: ?string, classes: list<string>, class_count: int, student_count: int, detail_count: int}, students: list<array<string, mixed>>, details: list<array<string, mixed>>}  $payload
+     * @param  array<string, int>  $importIdsByClass
+     */
+    public function replaceActiveData(
+        array $payload,
+        string $period,
+        array $importIdsByClass,
+        bool $deleteCurrentData = true,
+    ): void {
+        $classes = $payload['preview']['classes'];
+
+        if (array_diff($classes, array_keys($importIdsByClass)) !== []) {
+            throw new \LogicException('Versi impor tidak memiliki sumber untuk semua kelas yang akan dipulihkan.');
+        }
+
+        if ($deleteCurrentData) {
+            KompenResponHubStudent::query()
+                ->where('periode_semester', $period)
+                ->whereIn('kelas', $classes)
+                ->delete();
+        }
+
+        $studentIds = [];
+        foreach ($payload['students'] as $studentAttributes) {
+            $class = (string) $studentAttributes['kelas'];
+            $student = KompenResponHubStudent::create([
+                ...$studentAttributes,
+                'kompen_respon_hub_import_id' => $importIdsByClass[$class],
+                'periode_semester' => $period,
+            ]);
+
+            $studentIds["{$student->kelas}:{$student->nim}"] = $student->id;
+        }
+
+        foreach ($payload['details'] as $detailAttributes) {
+            $studentKey = "{$detailAttributes['kelas']}:{$detailAttributes['nim']}";
+            $sourceKey = hash('sha256', json_encode($detailAttributes, JSON_THROW_ON_ERROR));
+
+            DB::connection(config('kompen-respon-hub.database_connection'))
+                ->table('sikompen_detail_kompen')
+                ->insert([
+                    'kompen_respon_hub_student_id' => $studentIds[$studentKey],
+                    'source_key' => $sourceKey,
+                    'tanggal' => $detailAttributes['tanggal'],
+                    'mata_kuliah' => $detailAttributes['mata_kuliah'],
+                    'nama_dosen' => $detailAttributes['nama_dosen'],
+                    'jenis_pertemuan' => $detailAttributes['jenis_pertemuan'],
+                    'presensi' => $detailAttributes['presensi'],
+                    'menit_keterlambatan' => $detailAttributes['menit_keterlambatan'],
+                    'keterangan' => $detailAttributes['keterangan'],
+                    'jam_kompensasi' => $detailAttributes['jam_kompensasi'],
+                    'jam_responsi' => $detailAttributes['jam_responsi'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+        }
+
+        foreach ($payload['students'] as $studentAttributes) {
+            $studentKey = "{$studentAttributes['kelas']}:{$studentAttributes['nim']}";
+            $identity = [
+                'nim' => $studentAttributes['nim'],
+                'periode_semester' => $period,
+                'kelas' => $studentAttributes['kelas'],
+            ];
+            $currentStudentId = $studentIds[$studentKey];
+
+            KompenResponHubStudentProgress::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
+            KompenResponHubStudentSummaryOverride::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
+            KompenResponHubWarningLetter::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
+        }
+    }
+
+    /** @param list<string> $classes
+     * @return array<string, int>
+     */
+    private function currentImportsByClass(string $period, array $classes): array
+    {
+        return KompenResponHubStudent::query()
+            ->where('periode_semester', $period)
+            ->whereIn('kelas', $classes)
+            ->get(['kelas', 'kompen_respon_hub_import_id'])
+            ->mapWithKeys(fn (KompenResponHubStudent $student): array => [
+                $student->kelas => $student->kompen_respon_hub_import_id,
+            ])
+            ->all();
+    }
+
+    /**
+     * Persist a concise, human-readable validation result with the import.
+     * The parser has already rejected malformed workbooks before this action
+     * executes, so every check recorded here represents accepted source data.
+     *
+     * @param  array{preview: array{periode_semester: ?string, classes: list<string>, class_count: int, student_count: int, detail_count: int}, students: list<array<string, mixed>>, details: list<array<string, mixed>>}  $payload
+     * @return array{status: string, checks: list<array{label: string, status: string, detail: string}>}
+     */
+    private function qualityReport(array $payload): array
+    {
+        $preview = $payload['preview'];
+        $studentsWithDebt = collect($payload['students'])
+            ->filter(fn (array $student): bool => (float) $student['total_hutang_jam'] > 0)
+            ->count();
+        $studentKeys = collect($payload['students'])
+            ->map(fn (array $student): string => "{$student['kelas']}:{$student['nim']}")
+            ->flip();
+        $uniqueStudentKeys = $studentKeys->count();
+        $linkedDetails = collect($payload['details'])
+            ->filter(fn (array $detail): bool => $studentKeys->has("{$detail['kelas']}:{$detail['nim']}"))
+            ->count();
+
+        return [
+            'status' => 'passed',
+            'checks' => [
+                [
+                    'label' => 'Struktur workbook',
+                    'status' => 'passed',
+                    'detail' => 'Sheet, kolom wajib, dan periode berhasil dibaca.',
+                ],
+                [
+                    'label' => 'Identitas mahasiswa',
+                    'status' => 'passed',
+                    'detail' => sprintf('%d NIM unik pada %d kelas siap diimpor.', $uniqueStudentKeys, $preview['class_count']),
+                ],
+                [
+                    'label' => 'Keunikan detail',
+                    'status' => 'passed',
+                    'detail' => sprintf('%d detail tidak memiliki duplikasi baris.', $preview['detail_count']),
+                ],
+                [
+                    'label' => 'Detail Kompen',
+                    'status' => 'passed',
+                    'detail' => sprintf('%d dari %d detail terhubung ke mahasiswa pada ringkasan.', $linkedDetails, $preview['detail_count']),
+                ],
+                [
+                    'label' => 'Ringkasan hutang',
+                    'status' => 'passed',
+                    'detail' => sprintf('%d mahasiswa memiliki jam Kompen atau Responsi.', $studentsWithDebt),
+                ],
+                [
+                    'label' => 'Rekonsiliasi jam',
+                    'status' => 'passed',
+                    'detail' => 'Total Kompensasi dan Responsi setiap mahasiswa sama dengan akumulasi Detail Kompen.',
+                ],
+            ],
+        ];
     }
 }
