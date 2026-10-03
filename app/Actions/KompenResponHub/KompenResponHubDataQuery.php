@@ -260,6 +260,16 @@ class KompenResponHubDataQuery
             ->orderBy('nim');
     }
 
+    /** @return Builder<KompenResponHubStudent> */
+    public function adminStudentSearch(string $search): Builder
+    {
+        return $this->students(['search' => $search])
+            ->reorder()
+            ->orderBy('nama_mahasiswa')
+            ->orderBy('nim')
+            ->orderByDesc('periode_semester');
+    }
+
     /**
      * @param  array<string, mixed>  $filters
      * @return Builder<KompenResponHubDetail>

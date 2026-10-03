@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
+use App\Http\Requests\SearchKompenResponHubStudentRequest;
 use App\Http\Resources\KompenResponHubActivityLogResource;
 use App\Http\Resources\KompenResponHubDetailResource;
 use App\Http\Resources\KompenResponHubExportTaskResource;
 use App\Http\Resources\KompenResponHubImportAuditLogResource;
 use App\Http\Resources\KompenResponHubImportTaskResource;
 use App\Http\Resources\KompenResponHubStudentResource;
+use App\Http\Resources\KompenResponHubStudentSearchResource;
 use App\Http\Resources\KompenResponHubWarningLetterResource;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
@@ -120,6 +122,16 @@ class KompenResponHubController extends Controller
                 'activities' => KompenResponHubActivityLogResource::collection($activities),
             ],
         ]);
+    }
+
+    public function adminStudentSearch(SearchKompenResponHubStudentRequest $request): JsonResponse
+    {
+        return KompenResponHubStudentSearchResource::collection(
+            $this->dataQuery
+                ->adminStudentSearch($request->string('q')->toString())
+                ->limit(10)
+                ->get(),
+        )->response();
     }
 
     public function filterOptions(KompenResponHubTableRequest $request): JsonResponse

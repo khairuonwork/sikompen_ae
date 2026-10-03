@@ -53,6 +53,9 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
             ->name('kompen-respon.index');
         Route::get('kompen-respon', fn () => to_route('admin.kompen-respon.index'))
             ->name('kompen-respon.legacy');
+        Route::get('kompen-respon/student-search', [KompenResponHubController::class, 'adminStudentSearch'])
+            ->middleware('throttle:30,1')
+            ->name('kompen-respon.students.search');
         Route::get('kompen-respon/students/{student}/overview', [KompenResponHubController::class, 'adminStudentOverview'])
             ->middleware('throttle:sikompen-data')
             ->name('kompen-respon.students.overview');

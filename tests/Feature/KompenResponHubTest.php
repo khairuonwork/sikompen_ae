@@ -64,6 +64,59 @@ test('the admin landing page provides a period-aware operational summary', funct
         ->assertJsonPath('data.source.total_kompensasi_jam', '1.5000');
 });
 
+test('an admin can search students globally with a validated, limited result set', function () {
+    $student = createStudent();
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->get('/admin/kompen-respon/student-search?q=Rina')
+        ->assertRedirect('/admin/login');
+
+    $this->actingAs($admin, 'admin')
+        ->getJson('/admin/kompen-respon/student-search?q=Rina')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $student->id)
+        ->assertJsonPath('data.0.nim', $student->nim)
+        ->assertJsonPath('data.0.nama_mahasiswa', $student->nama_mahasiswa)
+        ->assertJsonMissingPath('data.0.total_hutang_jam');
+
+    $this->actingAs($admin, 'admin')
+        ->getJson('/admin/kompen-respon/student-search?q=%3Cscript%3E')
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('q');
+});
+
+test('an admin student profile includes an interpretable before and after activity history', function () {
+    $student = createStudent();
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    KompenResponHubActivityLog::create([
+        'event_type' => 'progress.updated',
+        'subject_type' => 'student_progress',
+        'subject_reference' => (string) $student->id,
+        'nim' => $student->nim,
+        'subject_name' => $student->nama_mahasiswa,
+        'periode_semester' => $student->periode_semester,
+        'kelas' => $student->kelas,
+        'actor_type' => 'admin',
+        'actor_admin_id' => $admin->id,
+        'actor_name' => $admin->email,
+        'actor_email' => $admin->email,
+        'reason' => 'Kehadiran diverifikasi.',
+        'before_state' => ['kompensasi_dikerjakan_jam' => 1],
+        'after_state' => ['kompensasi_dikerjakan_jam' => 2.5],
+        'occurred_at' => now(),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->getJson("/admin/kompen-respon/students/{$student->id}/overview")
+        ->assertOk()
+        ->assertJsonPath('data.activities.0.event_type', 'progress.updated')
+        ->assertJsonPath('data.activities.0.before_state.kompensasi_dikerjakan_jam', 1)
+        ->assertJsonPath('data.activities.0.after_state.kompensasi_dikerjakan_jam', 2.5)
+        ->assertJsonPath('data.activities.0.reason', 'Kehadiran diverifikasi.');
+});
+
 test('the dashboard filters its summary and actions by class and level', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     $firstStudent = createStudent();
