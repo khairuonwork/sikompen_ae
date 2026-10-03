@@ -6,7 +6,7 @@
 | --- | --- |
 | `resources/js/app.tsx` | Membuat aplikasi Inertia React, judul dokumen, progress navigation, `TooltipProvider`, dan toast global. |
 | `resources/js/pages/welcome.tsx` | Halaman pemilih akses Admin/Mahasiswa. |
-| `resources/js/pages/kompen-respon-hub/index.tsx` | Halaman utama sistem: filter, tab, tabel mahasiswa, detail, upload, progress task, audit log, rollback, dan tombol XLSX/PDF. |
+| `resources/js/pages/kompen-respon-hub/index.tsx` | Page shell Sikompen: menerima props Inertia, menyimpan state lintas-tab, menyusun header/navigasi, lalu memasang panel tab yang sesuai. Tidak menyimpan implementasi tabel atau form domain. |
 | `resources/js/pages/auth/admin-login.tsx` | Form login admin dan kontrol tampil/sembunyikan password. |
 | `resources/js/pages/auth/admin-setup.tsx` | Form setup admin pertama atau pendaftaran admin baru memakai kode aktivasi. |
 | `resources/js/pages/admin/settings.tsx` | Pengaturan pembukaan jendela pendaftaran admin dan penyalinan kode aktivasi. |
@@ -21,6 +21,24 @@
 | `resources/js/hooks/use-appearance.tsx` | Penyimpanan dan penerapan preferensi tampilan terang/gelap. |
 | `resources/js/hooks/use-flash-toast.ts` | Helper pembacaan flash message untuk toast. |
 | `resources/js/hooks/use-mobile*.tsx` | Helper responsif/mobil yang disediakan starter kit. |
+
+## Modul halaman Sikompen
+
+Halaman Sikompen dipecah berdasarkan batas tanggung jawab. Semua file di bawah tetap private untuk domain Sikompen dan tidak dipakai sebagai komponen UI generik lintas aplikasi.
+
+| Lokasi | Isi dan tanggung jawab |
+| --- | --- |
+| `resources/js/pages/kompen-respon-hub/types.ts` | Kontrak TypeScript untuk props halaman, paginator, mahasiswa, detail, SP, task, audit impor, filter, dan dashboard. |
+| `resources/js/pages/kompen-respon-hub/constants.ts` | Definisi tab admin dan mahasiswa. |
+| `resources/js/pages/kompen-respon-hub/lib/formatters.ts` | Format angka jam dan nilai `datetime-local` berbasis zona waktu. |
+| `…/components/tables.tsx` | Pager serta tabel Kompen/Respon, Detail Kompen, dan Log Upload. |
+| `…/components/tasks.tsx` | Progress bar, polling antrean impor/ekspor, dan helper antrekan ekspor. |
+| `…/components/upload-panel.tsx` | Form upload workbook, tampilan nama file, dan pencegahan drop file ke kolom nama admin. |
+| `…/components/records.tsx` | Filter data, sakelar mode perbaikan, serta panel koreksi mahasiswa/detail. |
+| `…/components/warnings.tsx` | Tabel kandidat/SP, pengaturan cutoff, serta form penerbitan, edit, atau pembatalan SP. |
+| `…/components/activity.tsx` | Kamus label aktivitas, filter riwayat, dan tabel riwayat aktivitas. |
+| `…/components/dashboard.tsx` | Ringkasan dashboard, cutoff terdekat, worklist, dan profil mahasiswa. |
+| `…/components/feedback.tsx` | Panduan tabel yang dapat dibuka/tutup dan empty state. |
 
 ## Routing type-safe
 
@@ -44,3 +62,4 @@
 - Ubah halaman domain di `resources/js/pages/…`, bukan output Wayfinder.
 - Jika sebuah komponen dipakai hanya di halaman Sikompen, letakkan komponen baru dekat halaman atau buat folder komponen domain yang jelas setelah benar-benar diperlukan.
 - Bila mengubah JSX atau kelas Tailwind, jalankan `npm run check` dan `npm run build` sebelum deployment.
+- Tambahkan komponen baru ke folder domain yang paling dekat dengan tanggung jawabnya; jangan mengembalikan implementasi tabel/form besar ke `index.tsx`.
