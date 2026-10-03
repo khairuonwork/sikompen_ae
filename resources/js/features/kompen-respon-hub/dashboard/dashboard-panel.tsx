@@ -20,14 +20,14 @@ import {
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
-import { number } from "../lib/formatters";
+import { number } from "../shared/lib/formatters";
 import type {
     Dashboard,
     FilterOptions,
     Filters,
     StudentOverview,
-} from "../types";
-import { activityDescription } from "./activity";
+} from "../shared/types";
+import { activityDescription } from "../riwayat-aktivitas/activity-panel";
 
 export function DashboardPanel({
     dashboard,

@@ -19,7 +19,7 @@ flowchart TD
     Student --> Details
 ```
 
-Halaman mahasiswa dan admin berbagi page shell `resources/js/pages/kompen-respon-hub/index.tsx`. Prop `isAdmin` menentukan tab serta aksi yang diizinkan. Implementasi setiap tab berada pada folder `resources/js/pages/kompen-respon-hub/components/`, kontrak data berada di `types.ts`, dan helper format berada di `lib/formatters.ts`.
+Halaman mahasiswa dan admin berbagi page shell `resources/js/pages/kompen-respon-hub/index.tsx`. Prop `isAdmin` menentukan tab serta aksi yang diizinkan. Implementasi setiap tab berada pada folder feature-first di `resources/js/features/kompen-respon-hub/`, seperti `upload/`, `kompen-respon/`, `detail-kompen/`, dan `surat-peringatan/`; kontrak data berada di `shared/types.ts`, sedangkan helper format berada di `shared/lib/formatters.ts`.
 
 - Mahasiswa hanya melihat Kompen dan Respon/Detail Kompen serta tombol ekspor.
 - Admin mendapat tab Upload dan Log Upload, template download, progress impor, pemulihan versi upload yang dipilih, serta tautan Pengaturan.

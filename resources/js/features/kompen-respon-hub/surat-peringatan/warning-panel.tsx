@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
-import { datetimeLocalValue, number } from "../lib/formatters";
+import { datetimeLocalValue, number } from "../shared/lib/formatters";
 import type {
     Cutoff,
     FilterOptions,
@@ -45,10 +45,10 @@ import type {
     Pagination,
     Student,
     Warning,
-} from "../types";
-import { EmptyTableState } from "./feedback";
-import { Pager } from "./tables";
-import { queueExport } from "./tasks";
+} from "../shared/types";
+import { EmptyTableState } from "../shared/components/feedback";
+import { Pager } from "../shared/components/pagination";
+import { queueExport } from "../export/export-progress-panel";
 
 export function WarningStatusBadge({
     warning,

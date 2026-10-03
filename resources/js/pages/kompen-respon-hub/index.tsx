@@ -19,31 +19,30 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
 import { index as studentIndex } from "@/routes/student/kompen-respon";
-import { adminTabs, studentTabs } from "./constants";
-import { ActivityFilterPanel, ActivityLogTable } from "./components/activity";
-import { DashboardPanel, StudentOverviewPanel } from "./components/dashboard";
-import { EmptyTableState, TableGuide } from "./components/feedback";
+import { DashboardPanel, StudentOverviewPanel } from "@/features/kompen-respon-hub/dashboard/dashboard-panel";
+import { DetailCorrectionPanel } from "@/features/kompen-respon-hub/detail-kompen/detail-correction-panel";
+import { DetailTable } from "@/features/kompen-respon-hub/detail-kompen/detail-table";
+import { ExportProgressPanel } from "@/features/kompen-respon-hub/export/export-progress-panel";
+import { EditModeControl } from "@/features/kompen-respon-hub/kompen-respon/edit-mode-control";
 import {
-    DetailCorrectionPanel,
-    EditModeControl,
-    FilterPanel,
     StudentCorrectionPanel,
-} from "./components/records";
-import { ExportProgressPanel, ImportProgressPanel } from "./components/tasks";
-import {
-    DetailTable,
-    ImportAuditLogTable,
-    StudentTable,
-} from "./components/tables";
-import { UploadPanel } from "./components/upload-panel";
-import { WarningPanel } from "./components/warnings";
+} from "@/features/kompen-respon-hub/kompen-respon/student-correction-panel";
+import { StudentTable } from "@/features/kompen-respon-hub/kompen-respon/student-table";
+import { ImportAuditLogTable } from "@/features/kompen-respon-hub/log-upload/import-audit-log-table";
+import { ActivityFilterPanel, ActivityLogTable } from "@/features/kompen-respon-hub/riwayat-aktivitas/activity-panel";
+import { EmptyTableState, TableGuide } from "@/features/kompen-respon-hub/shared/components/feedback";
+import { FilterPanel } from "@/features/kompen-respon-hub/shared/components/data-filter-panel";
+import { adminTabs, studentTabs } from "@/features/kompen-respon-hub/shared/constants";
 import type {
     Detail,
     KompenResponHubPageProps,
     Student,
     StudentOverview,
     Warning,
-} from "./types";
+} from "@/features/kompen-respon-hub/shared/types";
+import { WarningPanel } from "@/features/kompen-respon-hub/surat-peringatan/warning-panel";
+import { ImportProgressPanel } from "@/features/kompen-respon-hub/upload/import-progress-panel";
+import { UploadPanel } from "@/features/kompen-respon-hub/upload/upload-panel";
 
 export default function KompenResponHubIndex({
     activeTab,

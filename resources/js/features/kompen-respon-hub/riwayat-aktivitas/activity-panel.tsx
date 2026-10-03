@@ -3,8 +3,8 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
-import type { ActivityLog, FilterOptions, Filters, Pagination } from "../types";
-import { Pager } from "./tables";
+import type { ActivityLog, FilterOptions, Filters, Pagination } from "../shared/types";
+import { Pager } from "../shared/components/pagination";
 
 export function activityLabel(eventType: string): string {
     const descriptions: Record<string, string> = {

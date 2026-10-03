@@ -24,21 +24,22 @@
 
 ## Modul halaman Sikompen
 
-Halaman Sikompen dipecah berdasarkan batas tanggung jawab. Semua file di bawah tetap private untuk domain Sikompen dan tidak dipakai sebagai komponen UI generik lintas aplikasi.
+Halaman Sikompen dipecah berdasarkan batas tanggung jawab. Semua file domain berada di `resources/js/features/kompen-respon-hub/`, bukan di bawah `pages/`, sehingga resolver Inertia hanya memuat entry page yang sebenarnya.
 
 | Lokasi | Isi dan tanggung jawab |
 | --- | --- |
-| `resources/js/pages/kompen-respon-hub/types.ts` | Kontrak TypeScript untuk props halaman, paginator, mahasiswa, detail, SP, task, audit impor, filter, dan dashboard. |
-| `resources/js/pages/kompen-respon-hub/constants.ts` | Definisi tab admin dan mahasiswa. |
-| `resources/js/pages/kompen-respon-hub/lib/formatters.ts` | Format angka jam dan nilai `datetime-local` berbasis zona waktu. |
-| `…/components/tables.tsx` | Pager serta tabel Kompen/Respon, Detail Kompen, dan Log Upload. |
-| `…/components/tasks.tsx` | Progress bar, polling antrean impor/ekspor, dan helper antrekan ekspor. |
-| `…/components/upload-panel.tsx` | Form upload workbook, tampilan nama file, dan pencegahan drop file ke kolom nama admin. |
-| `…/components/records.tsx` | Filter data, sakelar mode perbaikan, serta panel koreksi mahasiswa/detail. |
-| `…/components/warnings.tsx` | Tabel kandidat/SP, pengaturan cutoff, serta form penerbitan, edit, atau pembatalan SP. |
-| `…/components/activity.tsx` | Kamus label aktivitas, filter riwayat, dan tabel riwayat aktivitas. |
-| `…/components/dashboard.tsx` | Ringkasan dashboard, cutoff terdekat, worklist, dan profil mahasiswa. |
-| `…/components/feedback.tsx` | Panduan tabel yang dapat dibuka/tutup dan empty state. |
+| `resources/js/features/kompen-respon-hub/shared/types.ts` | Kontrak TypeScript untuk props halaman, paginator, mahasiswa, detail, SP, task, audit impor, filter, dan dashboard. |
+| `…/shared/constants.ts` | Definisi tab admin dan mahasiswa. |
+| `…/shared/lib/formatters.ts` | Format angka jam dan nilai `datetime-local` berbasis zona waktu. |
+| `…/shared/components/` | Komponen lintas-tab yang benar-benar generik bagi domain Sikompen: pagination, filter data, panduan/empty state, dan progress bar. |
+| `…/dashboard/` | Ringkasan dashboard, cutoff terdekat, worklist, dan profil mahasiswa. |
+| `…/upload/` | Form upload workbook, nama file, progres kirim, serta polling antrean impor. |
+| `…/kompen-respon/` | Tabel Kompen/Respon, mode perbaikan, dan koreksi mahasiswa. |
+| `…/detail-kompen/` | Tabel Detail Kompen serta koreksi detail manual. |
+| `…/log-upload/` | Tabel audit upload, download workbook, status versi, dan pemulihan versi yang dipilih. |
+| `…/surat-peringatan/` | Kandidat/SP, pengaturan cutoff, penerbitan, edit, dan pembatalan SP. |
+| `…/riwayat-aktivitas/` | Kamus label aktivitas, filter riwayat, dan tabel riwayat aktivitas. |
+| `…/export/` | Antrean, polling progres, dan download hasil ekspor. |
 
 ## Routing type-safe
 
