@@ -58,6 +58,15 @@ class KompenResponHubDataQuery
         return $query;
     }
 
+    /** @return Builder<KompenResponHubImport> */
+    public function activeImportVersions(): Builder
+    {
+        return $this->importVersions()
+            ->has('activeReference')
+            ->reorder()
+            ->orderByDesc('periode_semester');
+    }
+
     /** @return Builder<KompenResponHubWarningLetter> */
     public function warnings(array $filters, bool $includeCancelled = false): Builder
     {

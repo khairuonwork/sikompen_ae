@@ -57,6 +57,7 @@ export default function KompenResponHubIndex({
     details,
     imports,
     importVersions,
+    activeImportVersions,
     warnings,
     warningCandidates,
     rolledBackWarnings,
@@ -343,21 +344,19 @@ export default function KompenResponHubIndex({
                                         Log Upload
                                     </h2>
                                     <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
-                                        Catatan permanen aktivitas unggah dan
-                                        aktivasi workbook. Pemilihan sumber data
-                                        dilakukan melalui List File.
+                                        Riwayat permanen unggah dan pemilihan
+                                        workbook. Gunakan List File untuk melihat
+                                        sumber data yang sedang digunakan.
                                     </p>
                                 </div>
                             </div>
                             <TableGuide
                                 title="Panduan Log Upload"
                                 items={[
-                                    "Aksi menunjukkan unggahan atau aktivasi versi workbook.",
-                                    "Periode workbook menunjukkan periode yang dibaca dari file pada saat unggahan, bukan nama file atau waktu akses halaman.",
-                                    "Status versi aktif ditentukan oleh pilihan pada List File per periode, bukan nama file. File bernama sama tetap merupakan versi berbeda bila diunggah pada waktu berbeda.",
-                                    "Waktu unggah menunjukkan identitas waktu versi workbook; Waktu riwayat mencatat kapan aksi dilakukan.",
-                                    "Detail adalah jumlah baris Detail Kompen yang dibaca dari workbook, bukan catatan tambahan.",
-                                    "Log ini hanya audit; gunakan List File untuk memilih workbook yang dipakai sebagai data aktif.",
+                                    "Setiap baris mencatat satu tindakan: unggah, aktivasi, rollback, atau pemulihan data.",
+                                    "Periode dan nama file menjelaskan workbook yang terdampak; nama file yang sama tetap dapat menjadi versi berbeda bila waktu unggahnya berbeda.",
+                                    "Waktu tindakan menunjukkan kapan aktivitas dilakukan. Log ini bersifat audit dan tidak menentukan sumber data aktif.",
+                                    "Untuk melihat workbook yang sedang dipakai pada setiap periode, buka List File.",
                                 ]}
                             />
                             {imports?.data.length ? (
@@ -377,19 +376,22 @@ export default function KompenResponHubIndex({
                                     List File
                                 </h2>
                                 <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
-                                    Satu workbook dapat dipilih sebagai sumber data aktif untuk setiap periode. Mengganti versi hanya mengganti data sumber periode tersebut; koreksi manual, progres, SP, dan riwayat tetap dipertahankan.
+                                    Tentukan satu workbook yang digunakan untuk setiap periode. Mengganti versi hanya mengganti data sumber periode tersebut; koreksi manual, progres, SP, dan riwayat tetap dipertahankan.
                                 </p>
                             </div>
                             <TableGuide
                                 title="Panduan List File"
                                 items={[
-                                    "Setiap baris adalah satu versi workbook yang berhasil diproses, meskipun nama file sama.",
-                                    "Setiap periode hanya dapat memiliki satu versi aktif. Periode yang berbeda dapat memakai workbook aktif yang berbeda.",
-                                    "Klik Jadikan aktif untuk memilih sumber data periode. Tindakan ini dicatat dalam Log Upload dan Riwayat Aktivitas.",
+                                    "Bagian Sumber data yang digunakan merangkum satu workbook aktif pada setiap periode.",
+                                    "Setiap periode hanya dapat memiliki satu workbook aktif, sedangkan periode yang berbeda dapat memakai workbook aktif yang berbeda.",
+                                    "Daftar semua versi menyimpan riwayat workbook yang siap dipilih. Klik Jadikan aktif untuk mengganti sumber data periode terkait.",
                                 ]}
                             />
                             {importVersions?.data.length ? (
-                                <ImportVersionList data={importVersions} />
+                                <ImportVersionList
+                                    activeVersions={activeImportVersions}
+                                    data={importVersions}
+                                />
                             ) : (
                                 <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-10 text-center text-xs font-bold text-[#395886]/70">
                                     Belum ada workbook yang siap dipilih. Upload dokumen terlebih dahulu.

@@ -168,7 +168,13 @@ export type ExportTask = {
 export type Pagination<T> = {
     data: T[];
     links: { prev: string | null; next: string | null };
-    meta: { current_page: number; last_page: number; total: number };
+    meta: {
+        current_page: number;
+        last_page: number;
+        page_name: string;
+        per_page: number;
+        total: number;
+    };
 };
 
 export type Filters = {
@@ -247,6 +253,7 @@ export type KompenResponHubPageProps = {
     details: Pagination<Detail> | null;
     imports: Pagination<ImportAuditLog> | null;
     importVersions: Pagination<ImportVersion> | null;
+    activeImportVersions: ImportVersion[];
     warnings: Pagination<Warning> | null;
     warningCandidates: Pagination<Student> | null;
     rolledBackWarnings: Pagination<Warning> | null;

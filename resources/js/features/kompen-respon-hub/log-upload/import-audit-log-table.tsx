@@ -26,6 +26,15 @@ function eventLabel(eventType: ImportAuditLog["event_type"]): string {
     }[eventType];
 }
 
+function eventDescription(eventType: ImportAuditLog["event_type"]): string {
+    return {
+        upload: "Workbook disimpan dan siap dipilih.",
+        activate: "Workbook ditetapkan sebagai sumber data periode.",
+        rollback: "Data dari workbook dihapus melalui rollback.",
+        restore: "Riwayat workbook dipulihkan.",
+    }[eventType];
+}
+
 export function ImportAuditLogTable({
     data,
 }: {
@@ -33,23 +42,17 @@ export function ImportAuditLogTable({
 }): React.JSX.Element {
     const headings = [
         "Aksi",
-        "Waktu riwayat",
-        "Admin pelaksana",
-        "Periode workbook",
-        "Nama file",
-        "Waktu unggah",
-        "Status versi",
+        "Periode",
+        "Workbook",
+        "Pelaksana",
+        "Waktu tindakan",
         "File",
-        "Kelas",
-        "Mahasiswa",
-        "Detail",
-        "Validasi",
     ];
 
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1250px] text-sm">
+                <table className="w-full min-w-[900px] text-sm">
                     <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
                             {headings.map((heading) => (
@@ -71,25 +74,24 @@ export function ImportAuditLogTable({
                                     )}>
                                         {eventLabel(auditLog.event_type)}
                                     </span>
+                                    <p className="mt-1 max-w-48 text-[11px] leading-relaxed text-[#395886]/70">
+                                        {eventDescription(auditLog.event_type)}
+                                    </p>
                                 </td>
-                                <td className="px-4 py-3.5 text-xs whitespace-nowrap text-[#395886]">{formatJakartaDateTime(auditLog.occurred_at)}</td>
+                                <td className="px-4 py-3.5 text-xs font-semibold text-[#628ECB]">{auditLog.periode_semester}</td>
+                                <td className="max-w-64 px-4 py-3.5">
+                                    <p className="truncate font-mono text-xs font-semibold text-[#395886]" title={auditLog.original_filename}>
+                                        {auditLog.original_filename}
+                                    </p>
+                                    <p className="mt-1 text-[11px] text-[#395886]/60">
+                                        Diunggah {formatJakartaDateTime(auditLog.version_imported_at)}
+                                    </p>
+                                </td>
                                 <td className="px-4 py-3.5">
                                     <p className="text-xs font-bold text-[#395886]">{auditLog.actor_name ?? "—"}</p>
                                     <p className="text-[11px] text-[#395886]/60">{auditLog.actor_email ?? "—"}</p>
                                 </td>
-                                <td className="px-4 py-3.5 text-xs font-semibold text-[#628ECB]">{auditLog.periode_semester}</td>
-                                <td className="max-w-64 truncate px-4 py-3.5 font-mono text-xs font-semibold text-[#395886]">{auditLog.original_filename}</td>
-                                <td className="px-4 py-3.5 text-xs whitespace-nowrap text-[#395886]">{formatJakartaDateTime(auditLog.version_imported_at)}</td>
-                                <td className="px-4 py-3.5 whitespace-nowrap">
-                                    <span className={cn(
-                                        "rounded-full px-2.5 py-1 text-[10px] font-black tracking-wider uppercase",
-                                        auditLog.version_status === "active" && "border border-emerald-200 bg-emerald-100 text-emerald-800",
-                                        auditLog.version_status === "stored" && "border border-slate-200 bg-slate-100 text-slate-700",
-                                        auditLog.version_status === "unavailable" && "border border-rose-200 bg-rose-100 text-rose-800",
-                                    )}>
-                                        {auditLog.version_status === "active" ? "Sedang aktif" : auditLog.version_status === "stored" ? "Tersimpan" : "File tidak tersedia"}
-                                    </span>
-                                </td>
+                                <td className="px-4 py-3.5 text-xs whitespace-nowrap text-[#395886]">{formatJakartaDateTime(auditLog.occurred_at)}</td>
                                 <td className="px-4 py-3.5">
                                     {auditLog.can_download_file && auditLog.source_import_id !== null ? (
                                         <Button asChild size="sm" variant="outline" className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
@@ -99,23 +101,6 @@ export function ImportAuditLogTable({
                                         </Button>
                                     ) : (
                                         <span className="text-xs text-[#395886]/40 italic">Tidak tersedia</span>
-                                    )}
-                                </td>
-                                <td className="px-4 py-3.5 text-right font-mono text-xs font-bold text-[#395886] tabular-nums">{auditLog.class_count}</td>
-                                <td className="px-4 py-3.5 text-right font-mono text-xs font-bold text-[#395886] tabular-nums">{auditLog.student_count}</td>
-                                <td className="px-4 py-3.5 text-right font-mono text-xs font-bold text-[#395886] tabular-nums">{auditLog.detail_count}</td>
-                                <td className="min-w-64 px-4 py-3.5">
-                                    {auditLog.quality_report?.checks.length ? (
-                                        <div className="grid gap-1">
-                                            {auditLog.quality_report.checks.map((check) => (
-                                                <p key={check.label} className="text-[11px] leading-tight text-[#395886]/75">
-                                                    <span className="font-bold text-emerald-700">✓ {check.label}</span>
-                                                    <span className="block">{check.detail}</span>
-                                                </p>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <span className="text-xs text-[#395886]/40 italic">Tidak tersedia untuk unggahan lama</span>
                                     )}
                                 </td>
                             </tr>

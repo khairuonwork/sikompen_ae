@@ -113,6 +113,7 @@ test('a passed cutoff shows outstanding students as candidates without exposing 
         ->get('/admin?tab=warnings')
         ->assertInertia(fn ($page) => $page
             ->where('activeTab', 'warnings')
+            ->where('warningCandidates.meta.page_name', 'warning_candidate_page')
             ->has('warningCandidates.data', 1)
             ->where('warningCandidates.data.0.id', $student->id)
             ->has('warnings.data', 0),

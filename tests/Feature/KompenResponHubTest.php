@@ -133,11 +133,13 @@ test('the Kompen and Respon table filters students by class and level', function
     ]);
 
     $this->actingAs($admin, 'admin')
-        ->get('/admin?tingkat=2&kelas=2AEA1')
+        ->get('/admin?tingkat=2&kelas=2AEA1&per_page=25')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('filters.tingkat', 2)
             ->where('filters.kelas', '2AEA1')
+            ->where('students.meta.page_name', 'page')
+            ->where('students.meta.per_page', 25)
             ->where('activeTab', 'students')
             ->where('students.data.0.nim', '987654321'),
         );
@@ -444,6 +446,14 @@ test('the upload log identifies active data by import version instead of filenam
             ->where('imports.data.1.source_import_id', $archivedImport->id)
             ->where('imports.data.1.original_filename', 'source.xlsx')
             ->where('imports.data.1.version_status', 'stored'),
+        );
+
+    $this->actingAs($admin, 'admin')->get('/admin?tab=files')
+        ->assertInertia(fn ($page) => $page
+            ->where('activeImportVersions.0.id', $activeImport->id)
+            ->where('activeImportVersions.0.periode_semester', $activeImport->periode_semester)
+            ->where('activeImportVersions.0.is_active', true)
+            ->where('importVersions.data.0.id', $activeImport->id),
         );
 });
 

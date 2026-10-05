@@ -223,6 +223,11 @@ class KompenResponHubController extends Controller
                     KompenResponHubImportVersionResource::class,
                 )
                 : null,
+            'activeImportVersions' => $isAdmin && $activeTab === 'files'
+                ? KompenResponHubImportVersionResource::collection(
+                    $this->dataQuery->activeImportVersions()->get(),
+                )->resolve()
+                : [],
             'warnings' => $isAdmin && $activeTab === 'warnings'
                 ? $this->resourcePaginator(
                     $this->dataQuery->warnings($filters)->paginate($this->perPage($filters))->withQueryString(),
@@ -264,6 +269,11 @@ class KompenResponHubController extends Controller
         if (filled($filters['tingkat'] ?? null)) {
             $filters['tingkat'] = (int) $filters['tingkat'];
         }
+
+        $requestedPerPage = (int) ($filters['per_page'] ?? 15);
+        $filters['per_page'] = in_array($requestedPerPage, [15, 25, 50, 100], true)
+            ? $requestedPerPage
+            : 15;
 
         $studentNim = $this->proxyAccess->studentNim($request);
 
@@ -311,6 +321,9 @@ class KompenResponHubController extends Controller
      */
     private function resourcePaginator(LengthAwarePaginator $paginator, string $resource): array
     {
-        return $resource::collection($paginator)->response()->getData(true);
+        $pagination = $resource::collection($paginator)->response()->getData(true);
+        $pagination['meta']['page_name'] = $paginator->getPageName();
+
+        return $pagination;
     }
 }

@@ -19,13 +19,74 @@ function formatJakartaDateTime(value: string | null): string {
 }
 
 export function ImportVersionList({
+    activeVersions,
     data,
 }: {
+    activeVersions: ImportVersion[];
     data: Pagination<ImportVersion>;
 }): React.JSX.Element {
     return (
-        <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl">
-            <div className="overflow-x-auto">
+        <section className="grid gap-4">
+            <div className="rounded-3xl border border-[#B1C9EF]/70 bg-[#B1C9EF]/15 p-5">
+                <div className="flex flex-col gap-1">
+                    <h3 className="text-sm font-extrabold text-[#395886]">
+                        Sumber data yang digunakan
+                    </h3>
+                    <p className="text-xs font-medium text-[#395886]/70">
+                        Satu workbook aktif untuk setiap periode.
+                    </p>
+                </div>
+                {activeVersions.length > 0 ? (
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        {activeVersions.map((version) => (
+                            <article
+                                key={version.id}
+                                className="rounded-2xl border border-white bg-white/90 p-4 shadow-2xs"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <p className="text-xs font-extrabold text-[#395886]">
+                                        {version.periode_semester}
+                                    </p>
+                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-black tracking-wider text-emerald-800 uppercase">
+                                        <CheckCircle2 className="size-3" /> Digunakan
+                                    </span>
+                                </div>
+                                <p className="mt-3 truncate font-mono text-xs font-bold text-[#395886]" title={version.original_filename}>
+                                    {version.original_filename}
+                                </p>
+                                <p className="mt-1 text-[11px] text-[#395886]/60">
+                                    Dipilih {formatJakartaDateTime(version.activated_at)}
+                                </p>
+                                <div className="mt-4 flex items-center justify-between gap-3">
+                                    <p className="text-[11px] font-medium text-[#395886]/70">
+                                        {version.student_count} mahasiswa
+                                    </p>
+                                    <Button asChild size="sm" variant="outline" className="h-8 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                        <a href={downloadUploadedWorkbook.url(version.id)}>
+                                            <Download className="mr-1.5 size-3.5" /> Unduh
+                                        </a>
+                                    </Button>
+                                </div>
+                            </article>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="mt-4 rounded-2xl border border-dashed border-[#8AAEE0] bg-white/70 px-4 py-3 text-xs font-semibold text-[#395886]/70">
+                        Belum ada workbook yang digunakan. Pilih salah satu versi pada daftar di bawah.
+                    </p>
+                )}
+            </div>
+
+            <div className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl">
+                <div className="border-b border-[#F0F3FA] px-5 py-4">
+                    <h3 className="text-sm font-extrabold text-[#395886]">
+                        Semua versi workbook
+                    </h3>
+                    <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
+                        Pilih versi lain bila data sumber suatu periode perlu diganti.
+                    </p>
+                </div>
+                <div className="overflow-x-auto">
                 <table className="w-full min-w-[1080px] text-sm">
                     <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
@@ -103,8 +164,9 @@ export function ImportVersionList({
                         ))}
                     </tbody>
                 </table>
+                </div>
+                <Pager data={data} />
             </div>
-            <Pager data={data} />
         </section>
     );
 }
