@@ -8,10 +8,6 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('sikompen:archive-warning-candidates')
-    ->everyFifteenMinutes()
-    ->withoutOverlapping();
-
 Schedule::command('sikompen:purge-exports')
     ->hourly()
     ->withoutOverlapping();

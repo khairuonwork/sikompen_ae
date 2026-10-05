@@ -11,6 +11,7 @@ use App\Http\Resources\KompenResponHubDetailResource;
 use App\Http\Resources\KompenResponHubExportTaskResource;
 use App\Http\Resources\KompenResponHubImportAuditLogResource;
 use App\Http\Resources\KompenResponHubImportTaskResource;
+use App\Http\Resources\KompenResponHubImportVersionResource;
 use App\Http\Resources\KompenResponHubStudentResource;
 use App\Http\Resources\KompenResponHubStudentSearchResource;
 use App\Http\Resources\KompenResponHubWarningLetterResource;
@@ -23,6 +24,7 @@ use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -142,9 +144,19 @@ class KompenResponHubController extends Controller
     private function index(KompenResponHubTableRequest $request, bool $isAdmin): Response
     {
         $filters = $this->filtersForRequest($request);
-        $activeTab = $filters['tab'] ?? ($isAdmin ? 'dashboard' : 'students');
-        if (! $isAdmin && in_array($activeTab, ['dashboard', 'upload', 'imports', 'warnings', 'activity'], true)) {
+        $activeTab = $filters['tab'] ?? 'students';
+        if (! $isAdmin && in_array($activeTab, ['upload', 'files', 'imports', 'warnings', 'activity'], true)) {
             $activeTab = 'students';
+        }
+
+        $cutoffs = $isAdmin
+            ? KompenResponHubPeriodCutoff::query()
+                ->orderByDesc('deadline_at')
+                ->get(['id', 'periode_semester', 'deadline_at', 'timezone'])
+            : collect();
+
+        if ($isAdmin && $activeTab === 'warnings') {
+            $filters = $this->filtersForWarningPeriod($filters, $cutoffs);
         }
 
         return Inertia::render('kompen-respon-hub/index', [
@@ -156,20 +168,15 @@ class KompenResponHubController extends Controller
             'activityFilterOptions' => $isAdmin && $activeTab === 'activity'
                 ? $this->dataQuery->activityFilterOptions()
                 : ['event_types' => [], 'actor_emails' => []],
-            'dashboard' => $isAdmin && $activeTab === 'dashboard'
-                ? $this->dashboardData($filters)
-                : null,
             'cutoffs' => $isAdmin
-                ? KompenResponHubPeriodCutoff::query()
-                    ->orderByDesc('deadline_at')
-                    ->get(['id', 'periode_semester', 'deadline_at', 'timezone'])
-                    ->map(fn (KompenResponHubPeriodCutoff $cutoff): array => [
-                        'id' => $cutoff->id,
-                        'periode_semester' => $cutoff->periode_semester,
-                        'deadline_at' => $cutoff->deadline_at->toIso8601String(),
-                        'closed_at' => $cutoff->closed_at?->toIso8601String(),
-                        'timezone' => $cutoff->timezone,
-                    ])
+                ? $cutoffs->map(fn (KompenResponHubPeriodCutoff $cutoff): array => [
+                    'id' => $cutoff->id,
+                    'periode_semester' => $cutoff->periode_semester,
+                    'deadline_at' => $cutoff->deadline_at
+                        ->setTimezone($cutoff->timezone)
+                        ->toIso8601String(),
+                    'timezone' => $cutoff->timezone,
+                ])
                     ->all()
                 : [],
             'activeImportTasks' => $isAdmin
@@ -210,18 +217,28 @@ class KompenResponHubController extends Controller
                     KompenResponHubImportAuditLogResource::class,
                 )
                 : null,
+            'importVersions' => $isAdmin && $activeTab === 'files'
+                ? $this->resourcePaginator(
+                    $this->dataQuery->importVersions($filters)->paginate($this->perPage($filters))->withQueryString(),
+                    KompenResponHubImportVersionResource::class,
+                )
+                : null,
             'warnings' => $isAdmin && $activeTab === 'warnings'
                 ? $this->resourcePaginator(
                     $this->dataQuery->warnings($filters)->paginate($this->perPage($filters))->withQueryString(),
                     KompenResponHubWarningLetterResource::class,
                 )
                 : null,
-            'fixedCandidates' => $isAdmin && $activeTab === 'warnings'
+            'warningCandidates' => $isAdmin && $activeTab === 'warnings'
                 ? $this->resourcePaginator(
-                    $this->dataQuery->fixedWarningCandidates($filters)
-                        ->paginate($this->perPage($filters), ['*'], 'fixed_candidate_page')
-                        ->withQueryString(),
+                    $this->dataQuery->warningCandidates($filters)->paginate($this->perPage($filters), ['*'], 'warning_candidate_page')->withQueryString(),
                     KompenResponHubStudentResource::class,
+                )
+                : null,
+            'rolledBackWarnings' => $isAdmin && $activeTab === 'warnings'
+                ? $this->resourcePaginator(
+                    $this->dataQuery->rolledBackWarnings($filters)->paginate($this->perPage($filters), ['*'], 'warning_history_page')->withQueryString(),
+                    KompenResponHubWarningLetterResource::class,
                 )
                 : null,
             'activityLogs' => $isAdmin && $activeTab === 'activity'
@@ -258,27 +275,38 @@ class KompenResponHubController extends Controller
     }
 
     /**
+     * Surat Peringatan is always viewed in the context of one registered cutoff.
+     *
      * @param  array<string, mixed>  $filters
+     * @param  Collection<int, KompenResponHubPeriodCutoff>  $cutoffs
      * @return array<string, mixed>
      */
-    private function dashboardData(array $filters): array
+    private function filtersForWarningPeriod(array $filters, Collection $cutoffs): array
     {
-        $worklist = $this->dataQuery->adminWorklist($filters);
+        if ($cutoffs->isEmpty()) {
+            unset($filters['periode_semester']);
 
-        return [
-            'summary' => $this->dataQuery->dashboardSummary($filters),
-            'worklist' => [
-                'fixed_candidates' => KompenResponHubStudentResource::collection($worklist['fixed']->get())->resolve(),
-                'warnings_to_follow_up' => KompenResponHubWarningLetterResource::collection($worklist['warnings']->get())->resolve(),
-            ],
-        ];
+            return $filters;
+        }
+
+        $requestedPeriod = $filters['periode_semester'] ?? null;
+        $hasRequestedCutoff = filled($requestedPeriod)
+            && $cutoffs->contains(
+                fn (KompenResponHubPeriodCutoff $cutoff): bool => $cutoff->periode_semester === $requestedPeriod,
+            );
+
+        if (! $hasRequestedCutoff) {
+            $filters['periode_semester'] = $cutoffs->first()->periode_semester;
+        }
+
+        return $filters;
     }
 
     /**
-     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog|\App\Models\KompenResponHubWarningLetter|\App\Models\KompenResponHubActivityLog
+     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog|\App\Models\KompenResponHubImport|\App\Models\KompenResponHubWarningLetter|\App\Models\KompenResponHubActivityLog
      *
      * @param  LengthAwarePaginator<int, TModel>  $paginator
-     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource|KompenResponHubWarningLetterResource|KompenResponHubActivityLogResource>  $resource
+     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource|KompenResponHubImportVersionResource|KompenResponHubWarningLetterResource|KompenResponHubActivityLogResource>  $resource
      * @return array<string, mixed>
      */
     private function resourcePaginator(LengthAwarePaginator $paginator, string $resource): array

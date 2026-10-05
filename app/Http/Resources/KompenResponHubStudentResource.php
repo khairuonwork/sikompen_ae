@@ -9,6 +9,8 @@ class KompenResponHubStudentResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $hasActiveWarning = $this->hasActiveWarning();
+
         return [
             'id' => $this->id,
             'tingkat' => $this->tingkat,
@@ -34,11 +36,12 @@ class KompenResponHubStudentResource extends JsonResource
             'progress_status' => $this->progressStatus(),
             'last_worked_at' => $this->progress?->last_worked_at?->toIso8601String(),
             'has_summary_override' => $this->summaryOverride !== null,
-            'warning' => $this->latestWarning === null ? null : [
+            'has_active_warning' => $hasActiveWarning,
+            'warning' => $hasActiveWarning ? [
                 'id' => $this->latestWarning->id,
                 'letter_status' => $this->latestWarning->letter_status,
                 'resolution' => $this->latestWarning->resolution,
-            ],
+            ] : null,
         ];
     }
 
@@ -64,6 +67,6 @@ class KompenResponHubStudentResource extends JsonResource
         return $this->latestWarning !== null
             && $this->latestWarning->classification === 'fixed'
             && $this->latestWarning->resolution === 'outstanding'
-            && in_array($this->latestWarning->letter_status, ['draft', 'issued'], true);
+            && $this->latestWarning->letter_status === 'issued';
     }
 }

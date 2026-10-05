@@ -1,8 +1,8 @@
 export const adminTabs = [
-    ["dashboard", "Ringkasan"],
     ["upload", "Upload Dokumen"],
     ["students", "Kompen dan Respon"],
     ["details", "Detail Kompen"],
+    ["files", "List File"],
     ["imports", "Log Upload"],
     ["warnings", "Surat Peringatan"],
     ["activity", "Riwayat Aktivitas"],

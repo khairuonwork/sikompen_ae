@@ -22,7 +22,6 @@ class UpdateKompenResponHubWarningLetterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'letter_status' => ['required', 'in:draft,issued,cancelled'],
             'reason' => ['required', 'string', 'min:5', 'max:1000'],
         ];
     }

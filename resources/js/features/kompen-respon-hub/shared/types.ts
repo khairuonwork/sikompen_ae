@@ -23,7 +23,8 @@ export type Student = {
     progress_status: "none" | "completed" | "warning_active";
     last_worked_at: string | null;
     has_summary_override: boolean;
-    warning: Warning | null;
+    has_active_warning: boolean;
+    warning: Pick<Warning, "id" | "letter_status" | "resolution"> | null;
 };
 
 export type Detail = {
@@ -88,17 +89,17 @@ export type Cutoff = {
     id: number;
     periode_semester: string;
     deadline_at: string;
-    closed_at: string | null;
     timezone: string;
 };
 
 export type ImportAuditLog = {
     id: number;
-    event_type: "upload" | "rollback" | "restore";
+    event_type: "upload" | "rollback" | "restore" | "activate";
     source_import_id: number | null;
     can_download_file: boolean;
-    can_restore_version: boolean;
-    version_status: "active" | "partially_active" | "archived" | "unavailable";
+    version_status: "active" | "stored" | "unavailable";
+    version_imported_at: string | null;
+    version_activated_at: string | null;
     actor_name: string | null;
     actor_email: string | null;
     periode_semester: string;
@@ -117,6 +118,25 @@ export type ImportAuditLog = {
         restored_classes?: string[];
     } | null;
     occurred_at: string;
+};
+
+export type ImportVersion = {
+    id: number;
+    periode_semester: string;
+    original_filename: string;
+    class_count: number;
+    student_count: number;
+    detail_count: number;
+    uploaded_by_name: string | null;
+    uploaded_by_email: string | null;
+    imported_at: string | null;
+    is_active: boolean;
+    activated_at: string | null;
+    activated_by_email: string | null;
+    quality_report: {
+        status: "passed";
+        checks: { label: string; status: "passed"; detail: string }[];
+    } | null;
 };
 
 export type ImportTask = {
@@ -211,10 +231,10 @@ export type StudentOverview = {
 
 export type KompenResponHubPageProps = {
     activeTab:
-        | "dashboard"
         | "upload"
         | "students"
         | "details"
+        | "files"
         | "imports"
         | "warnings"
         | "activity";
@@ -222,13 +242,14 @@ export type KompenResponHubPageProps = {
     filters: Filters;
     filterOptions: FilterOptions;
     activityFilterOptions: { event_types: string[]; actor_emails: string[] };
-    dashboard: Dashboard | null;
     flash: { success: string | null; error: string | null };
     students: Pagination<Student> | null;
     details: Pagination<Detail> | null;
     imports: Pagination<ImportAuditLog> | null;
+    importVersions: Pagination<ImportVersion> | null;
     warnings: Pagination<Warning> | null;
-    fixedCandidates: Pagination<Student> | null;
+    warningCandidates: Pagination<Student> | null;
+    rolledBackWarnings: Pagination<Warning> | null;
     activityLogs: Pagination<ActivityLog> | null;
     cutoffs: Cutoff[];
     activeImportTasks: ImportTask[];
