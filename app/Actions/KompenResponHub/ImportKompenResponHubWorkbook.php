@@ -41,6 +41,7 @@ class ImportKompenResponHubWorkbook
                     'uploader_email' => $uploaderEmail,
                     'periode_semester' => $period,
                     'original_filename' => $originalFilename,
+                    'display_filename' => $originalFilename,
                     'stored_path' => $storedPath,
                     'file_hash' => $fileHash,
                     'class_count' => $preview['class_count'],

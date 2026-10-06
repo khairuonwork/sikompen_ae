@@ -66,6 +66,12 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
             ->name('kompen-respon.imports.store');
         Route::get('kompen-respon/imports/{import}/download', [KompenResponHubImportController::class, 'downloadUploadedWorkbook'])
             ->name('kompen-respon.imports.download');
+        Route::put('kompen-respon/imports/{import}', [KompenResponHubImportController::class, 'update'])
+            ->middleware('throttle:20,1')
+            ->name('kompen-respon.imports.update');
+        Route::delete('kompen-respon/imports/{import}', [KompenResponHubImportController::class, 'destroy'])
+            ->middleware('throttle:10,15')
+            ->name('kompen-respon.imports.destroy');
         Route::post('kompen-respon/imports/{import}/activate', [KompenResponHubImportActivationController::class, 'store'])
             ->middleware('throttle:5,15')
             ->name('kompen-respon.imports.activate');
@@ -77,6 +83,9 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
         Route::post('kompen-respon/cutoffs/{cutoff}/finalize', [KompenResponHubLifecycleController::class, 'finalizeCutoff'])
             ->middleware('throttle:5,15')
             ->name('kompen-respon.cutoffs.finalize');
+        Route::delete('kompen-respon/cutoffs/{cutoff}/finalization', [KompenResponHubLifecycleController::class, 'rollbackCutoffFinalization'])
+            ->middleware('throttle:5,15')
+            ->name('kompen-respon.cutoffs.finalization.destroy');
         Route::put('kompen-respon/students/{student}/progress', [KompenResponHubLifecycleController::class, 'storeProgress'])
             ->middleware('throttle:30,1')
             ->name('kompen-respon.students.progress.store');

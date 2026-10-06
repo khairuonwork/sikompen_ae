@@ -11,6 +11,7 @@ use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubStudentProgress;
 use App\Models\KompenResponHubStudentSummaryOverride;
 use App\Models\KompenResponHubWarningLetter;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Cache;
@@ -37,7 +38,61 @@ class KompenResponHubDataQuery
             $query->where('periode_semester', $filters['periode_semester']);
         }
 
+        if (filled($filters['import_month'] ?? null)) {
+            $monthStart = CarbonImmutable::createFromFormat(
+                '!Y-m',
+                (string) $filters['import_month'],
+                config('app.timezone'),
+            )->startOfMonth();
+
+            $query->where('occurred_at', '>=', $monthStart)
+                ->where('occurred_at', '<', $monthStart->addMonth());
+        } elseif (filled($filters['import_year'] ?? null)) {
+            $yearStart = CarbonImmutable::create(
+                (int) $filters['import_year'],
+                1,
+                1,
+                0,
+                0,
+                0,
+                config('app.timezone'),
+            );
+
+            $query->where('occurred_at', '>=', $yearStart)
+                ->where('occurred_at', '<', $yearStart->addYear());
+        }
+
         return $query;
+    }
+
+    /** @return list<string> */
+    public function importAuditPeriods(): array
+    {
+        return KompenResponHubImportAuditLog::query()
+            ->select('periode_semester')
+            ->selectRaw('MAX(occurred_at) as latest_occurred_at')
+            ->groupBy('periode_semester')
+            ->orderByDesc('latest_occurred_at')
+            ->pluck('periode_semester')
+            ->all();
+    }
+
+    /** @return list<int> */
+    public function importAuditYears(): array
+    {
+        $connection = KompenResponHubImportAuditLog::query()->getModel()->getConnection();
+        $yearExpression = $connection->getDriverName() === 'sqlite'
+            ? "strftime('%Y', occurred_at)"
+            : 'YEAR(occurred_at)';
+
+        return KompenResponHubImportAuditLog::query()
+            ->selectRaw("{$yearExpression} as activity_year")
+            ->whereNotNull('occurred_at')
+            ->groupByRaw($yearExpression)
+            ->orderByDesc('activity_year')
+            ->pluck('activity_year')
+            ->map(fn (mixed $year): int => (int) $year)
+            ->all();
     }
 
     /** @return Builder<KompenResponHubImport> */
@@ -127,11 +182,22 @@ class KompenResponHubDataQuery
                     ->join($cutoffTable, "{$cutoffTable}.id", '=', "{$warningTable}.cutoff_id")
                     ->whereColumn("{$warningTable}.current_student_id", "{$studentTable}.id")
                     ->whereColumn("{$cutoffTable}.periode_semester", "{$studentTable}.periode_semester")
-                    ->whereIn("{$warningTable}.letter_status", [
-                        KompenResponHubWarningLetter::LetterStatusDraft,
-                        KompenResponHubWarningLetter::LetterStatusIssued,
-                        KompenResponHubWarningLetter::LetterStatusCancelled,
-                    ]);
+                    ->where(function (\Illuminate\Database\Query\Builder $warningQuery) use ($warningTable): void {
+                        $warningQuery
+                            ->whereIn("{$warningTable}.letter_status", [
+                                KompenResponHubWarningLetter::LetterStatusDraft,
+                                KompenResponHubWarningLetter::LetterStatusIssued,
+                            ])
+                            ->orWhere(function (\Illuminate\Database\Query\Builder $cancelledWarningQuery) use ($warningTable): void {
+                                $cancelledWarningQuery
+                                    ->where("{$warningTable}.letter_status", KompenResponHubWarningLetter::LetterStatusCancelled)
+                                    ->where(function (\Illuminate\Database\Query\Builder $cancellationSourceQuery) use ($warningTable): void {
+                                        $cancellationSourceQuery
+                                            ->whereNull("{$warningTable}.cancellation_source")
+                                            ->orWhere("{$warningTable}.cancellation_source", '!=', KompenResponHubWarningLetter::CancellationSourceFinalizationRollback);
+                                    });
+                            });
+                    });
             });
     }
 

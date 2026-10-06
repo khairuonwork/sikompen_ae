@@ -6,6 +6,7 @@ use App\Actions\KompenResponHub\FinalizeKompenResponHubCutoff;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Http\Requests\DestroyKompenResponHubWarningLetterRequest;
 use App\Http\Requests\FinalizeKompenResponHubPeriodRequest;
+use App\Http\Requests\RollbackKompenResponHubPeriodFinalizationRequest;
 use App\Http\Requests\StoreKompenResponHubDetailOverrideRequest;
 use App\Http\Requests\StoreKompenResponHubPeriodCutoffRequest;
 use App\Http\Requests\StoreKompenResponHubStudentProgressRequest;
@@ -107,6 +108,69 @@ class KompenResponHubLifecycleController extends Controller
         return back()->with('success', 'Periode difiksasi dan dicatat pada riwayat aktivitas. Perbaikan data dan impor versi tetap dapat dilakukan bila diperlukan.');
     }
 
+    public function rollbackCutoffFinalization(
+        RollbackKompenResponHubPeriodFinalizationRequest $request,
+        KompenResponHubPeriodCutoff $cutoff,
+    ): RedirectResponse {
+        $reason = $request->validated('reason');
+        $rolledBackWarningCount = DB::connection(config('kompen-respon-hub.database_connection'))->transaction(function () use ($cutoff, $request, $reason): int {
+            $lockedCutoff = KompenResponHubPeriodCutoff::query()
+                ->lockForUpdate()
+                ->findOrFail($cutoff->id);
+            $warnings = KompenResponHubWarningLetter::query()
+                ->where('cutoff_id', $lockedCutoff->id)
+                ->where('classification', 'fixed')
+                ->where('letter_status', KompenResponHubWarningLetter::LetterStatusIssued)
+                ->where('resolution', 'outstanding')
+                ->lockForUpdate()
+                ->get();
+
+            abort_if($warnings->isEmpty(), 422, 'Tidak ada SP aktif pada periode ini yang dapat di-rollback.');
+
+            foreach ($warnings as $warning) {
+                $before = $warning->only(['letter_status', 'resolution', 'reason', 'cancelled_at', 'cancellation_source']);
+                $warning->update([
+                    'letter_status' => KompenResponHubWarningLetter::LetterStatusCancelled,
+                    'reason' => $reason,
+                    'cancelled_at' => now(),
+                    'cancellation_source' => KompenResponHubWarningLetter::CancellationSourceFinalizationRollback,
+                    'updated_by_admin_id' => $request->user('admin')?->id,
+                ]);
+
+                $this->activity->execute(
+                    'warning.rolled_back',
+                    'warning_letter',
+                    (string) $warning->id,
+                    $request->user('admin'),
+                    $request,
+                    $warning->nim,
+                    $warning->periode_semester,
+                    $warning->kelas,
+                    $reason,
+                    $before,
+                    $warning->only(['letter_status', 'resolution', 'reason', 'cancelled_at', 'cancellation_source']),
+                    ['cutoff_id' => $lockedCutoff->id, 'source' => 'period_finalization_rollback'],
+                    $warning->nama_mahasiswa,
+                );
+            }
+
+            $this->activity->execute(
+                'period.finalization_rolled_back',
+                'period_cutoff',
+                (string) $lockedCutoff->id,
+                $request->user('admin'),
+                $request,
+                period: $lockedCutoff->periode_semester,
+                reason: $reason,
+                metadata: ['rolled_back_warning_count' => $warnings->count()],
+            );
+
+            return $warnings->count();
+        });
+
+        return back()->with('success', "Finalisasi SP dibatalkan untuk {$rolledBackWarningCount} mahasiswa. Riwayat tetap tersimpan dan data tidak lagi tersedia sebagai SP aktif pada API.");
+    }
+
     public function storeProgress(StoreKompenResponHubStudentProgressRequest $request, KompenResponHubStudent $student): RedirectResponse
     {
         $validated = $request->validated();
@@ -196,15 +260,16 @@ class KompenResponHubLifecycleController extends Controller
         abort_unless($warning->letter_status === KompenResponHubWarningLetter::LetterStatusIssued, 422, 'Hanya SP aktif yang dapat di-rollback.');
 
         $validated = $request->validated();
-        $before = $warning->only(['letter_status', 'resolution', 'reason', 'cancelled_at']);
+        $before = $warning->only(['letter_status', 'resolution', 'reason', 'cancelled_at', 'cancellation_source']);
         $warning->update([
             'letter_status' => KompenResponHubWarningLetter::LetterStatusCancelled,
             'reason' => $validated['reason'],
             'cancelled_at' => now(),
+            'cancellation_source' => KompenResponHubWarningLetter::CancellationSourceManualRollback,
             'updated_by_admin_id' => $request->user('admin')?->id,
         ]);
 
-        $this->activity->execute('warning.rolled_back', 'warning_letter', (string) $warning->id, $request->user('admin'), $request, $warning->nim, $warning->periode_semester, $warning->kelas, $validated['reason'], $before, $warning->only(['letter_status', 'resolution', 'reason', 'cancelled_at']), subjectName: $warning->nama_mahasiswa);
+        $this->activity->execute('warning.rolled_back', 'warning_letter', (string) $warning->id, $request->user('admin'), $request, $warning->nim, $warning->periode_semester, $warning->kelas, $validated['reason'], $before, $warning->only(['letter_status', 'resolution', 'reason', 'cancelled_at', 'cancellation_source']), subjectName: $warning->nama_mahasiswa);
 
         return back()->with('success', 'SP di-rollback. Riwayat surat dan aktivitas tetap tersimpan, tetapi tidak lagi dihitung sebagai SP aktif.');
     }

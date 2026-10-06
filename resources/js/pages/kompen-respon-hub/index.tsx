@@ -30,6 +30,7 @@ import {
 } from "@/features/kompen-respon-hub/kompen-respon/student-correction-panel";
 import { StudentTable } from "@/features/kompen-respon-hub/kompen-respon/student-table";
 import { ImportAuditLogTable } from "@/features/kompen-respon-hub/log-upload/import-audit-log-table";
+import { ImportAuditFilterPanel } from "@/features/kompen-respon-hub/log-upload/import-audit-filter-panel";
 import { ImportVersionList } from "@/features/kompen-respon-hub/list-file/import-version-list";
 import { ActivityFilterPanel, ActivityLogTable } from "@/features/kompen-respon-hub/riwayat-aktivitas/activity-panel";
 import { EmptyTableState, TableGuide } from "@/features/kompen-respon-hub/shared/components/feedback";
@@ -51,7 +52,10 @@ export default function KompenResponHubIndex({
     isAdmin,
     filters,
     filterOptions,
+    importAuditPeriods,
+    importAuditYears,
     activityFilterOptions,
+    warningPeriods,
     flash,
     students,
     details,
@@ -63,6 +67,7 @@ export default function KompenResponHubIndex({
     rolledBackWarnings,
     activityLogs,
     cutoffs,
+    managedPeriodHasActiveWarnings,
     activeImportTasks,
     exportTasks,
 }: KompenResponHubPageProps): React.JSX.Element {
@@ -359,6 +364,11 @@ export default function KompenResponHubIndex({
                                     "Untuk melihat workbook yang sedang dipakai pada setiap periode, buka List File.",
                                 ]}
                             />
+                            <ImportAuditFilterPanel
+                                filters={filters}
+                                periods={importAuditPeriods}
+                                years={importAuditYears}
+                            />
                             {imports?.data.length ? (
                                 <ImportAuditLogTable data={imports} />
                             ) : (
@@ -405,9 +415,13 @@ export default function KompenResponHubIndex({
                             cutoffs={cutoffs}
                             filterOptions={filterOptions}
                             filters={filters}
+                            warningPeriods={warningPeriods}
                             warnings={warnings}
                             warningCandidates={warningCandidates}
                             rolledBackWarnings={rolledBackWarnings}
+                            managedPeriodHasActiveWarnings={
+                                managedPeriodHasActiveWarnings
+                            }
                             selectedWarning={selectedWarning}
                             onSelectWarning={setSelectedWarning}
                             onCloseWarning={() => setSelectedWarning(null)}

@@ -31,8 +31,8 @@ export function UploadPanel({
                     Upload Workbook
                 </CardTitle>
                 <CardDescription className="mt-1 text-xs leading-relaxed font-normal text-[#395886]/70 md:text-sm">
-                    Gunakan template yang sama dengan Sikompen. Data pada
-                    periode dan kelas di workbook akan diperbarui langsung.
+                    Gunakan template Sikompen. Periode wajib memakai tahun
+                    ajaran di C4 dan pilihan Gasal atau Genap di B4.
                 </CardDescription>
             </CardHeader>
             <Form
@@ -101,9 +101,9 @@ export function UploadPanel({
                                     </span>
                                 </p>
                                 <p className="text-[11px] leading-tight font-medium text-[#395886]/60">
-                                    Maksimum 20 MB. Periode pada filter akan
-                                    muncul otomatis setelah data berhasil
-                                    diimpor.
+                                    Maksimum 20 MB. B4 hanya menerima Gasal
+                                    atau Genap; C4 wajib berformat YYYY/YYYY,
+                                    misalnya 2026/2027.
                                 </p>
                                 {errors.file ? (
                                     <p className="mt-0.5 text-xs font-bold text-rose-600">

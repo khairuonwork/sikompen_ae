@@ -94,7 +94,7 @@ export type Cutoff = {
 
 export type ImportAuditLog = {
     id: number;
-    event_type: "upload" | "rollback" | "restore" | "activate";
+    event_type: "upload" | "rollback" | "restore" | "activate" | "rename" | "delete";
     source_import_id: number | null;
     can_download_file: boolean;
     version_status: "active" | "stored" | "unavailable";
@@ -124,6 +124,7 @@ export type ImportVersion = {
     id: number;
     periode_semester: string;
     original_filename: string;
+    display_filename: string;
     class_count: number;
     student_count: number;
     detail_count: number;
@@ -184,6 +185,10 @@ export type Filters = {
     tingkat?: number;
     kelas?: string;
     periode_semester?: string;
+    warning_period?: string;
+    list_period?: string;
+    import_month?: string;
+    import_year?: number;
     activity_event?: string;
     activity_actor?: string;
     per_page?: number;
@@ -247,7 +252,10 @@ export type KompenResponHubPageProps = {
     isAdmin: boolean;
     filters: Filters;
     filterOptions: FilterOptions;
+    importAuditPeriods: string[];
+    importAuditYears: number[];
     activityFilterOptions: { event_types: string[]; actor_emails: string[] };
+    warningPeriods: string[];
     flash: { success: string | null; error: string | null };
     students: Pagination<Student> | null;
     details: Pagination<Detail> | null;
@@ -261,4 +269,5 @@ export type KompenResponHubPageProps = {
     cutoffs: Cutoff[];
     activeImportTasks: ImportTask[];
     exportTasks: ExportTask[];
+    managedPeriodHasActiveWarnings: boolean;
 };

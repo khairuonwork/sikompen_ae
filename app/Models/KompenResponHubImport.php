@@ -17,6 +17,7 @@ class KompenResponHubImport extends Model
         'uploader_email',
         'periode_semester',
         'original_filename',
+        'display_filename',
         'stored_path',
         'file_hash',
         'class_count',

@@ -15,6 +15,7 @@ use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
@@ -392,12 +393,152 @@ test('an admin can download an available workbook from its upload log', function
 
     $this->actingAs($admin, 'admin')
         ->get("/admin/kompen-respon/imports/{$import->id}/download")
-        ->assertDownload("sikompen-import-{$import->id}.xlsx");
+        ->assertDownload('source.xlsx');
 
     $this->actingAs($admin, 'admin')->get('/admin?tab=imports')
         ->assertInertia(fn ($page) => $page
             ->where('imports.data.0.can_download_file', true),
         );
+});
+
+test('an admin can filter upload logs by workbook period, activity year, and activity month', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $matchingAudit = KompenResponHubImportAuditLog::factory()->create([
+        'source_import_id' => null,
+        'periode_semester' => '2026/2027 Gasal',
+        'original_filename' => 'oktober-gasal.xlsx',
+        'occurred_at' => CarbonImmutable::create(2026, 10, 4, 9, 30, 0, 'Asia/Jakarta'),
+    ]);
+    KompenResponHubImportAuditLog::factory()->create([
+        'source_import_id' => null,
+        'periode_semester' => '2026/2027 Gasal',
+        'original_filename' => 'september-gasal.xlsx',
+        'occurred_at' => CarbonImmutable::create(2026, 9, 30, 23, 59, 0, 'Asia/Jakarta'),
+    ]);
+    KompenResponHubImportAuditLog::factory()->create([
+        'source_import_id' => null,
+        'periode_semester' => '2026/2027 Genap',
+        'original_filename' => 'oktober-genap.xlsx',
+        'occurred_at' => CarbonImmutable::create(2026, 10, 4, 10, 0, 0, 'Asia/Jakarta'),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=imports&periode_semester=2026%2F2027%20Gasal&import_month=2026-10&import_year=2026')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('activeTab', 'imports')
+            ->where('filters.periode_semester', '2026/2027 Gasal')
+            ->where('filters.import_month', '2026-10')
+            ->where('filters.import_year', 2026)
+            ->where('importAuditPeriods', ['2026/2027 Genap', '2026/2027 Gasal'])
+            ->where('importAuditYears', [2026])
+            ->has('imports.data', 1)
+            ->where('imports.data.0.id', $matchingAudit->id),
+        );
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=imports&import_year=2026')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('filters.import_year', 2026)
+            ->has('imports.data', 3),
+        );
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=imports&import_month=2026-13')
+        ->assertSessionHasErrors('import_month');
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=imports&import_month=2026-10&import_year=2025')
+        ->assertSessionHasErrors('import_year');
+});
+
+test('an admin can rename an inactive workbook version and the audit trail remains interpretable', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $import = KompenResponHubImport::create([
+        'periode_semester' => '2026/2027 Genap',
+        'original_filename' => 'import-awal.xlsx',
+        'display_filename' => 'import-awal.xlsx',
+        'stored_path' => 'kompen-respon-hub/imports/import-awal.xlsx',
+        'file_hash' => str_repeat('b', 64),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 1,
+        'imported_at' => now(),
+    ]);
+    Storage::disk('local')->put($import->stored_path, 'workbook');
+
+    $this->actingAs($admin, 'admin')
+        ->put("/admin/kompen-respon/imports/{$import->id}", [
+            'display_filename' => 'rekap-kompen-genap.xlsx',
+        ])
+        ->assertRedirect('/admin?tab=files');
+
+    expect($import->refresh()->display_filename)->toBe('rekap-kompen-genap.xlsx')
+        ->and(KompenResponHubImportAuditLog::query()
+            ->where('event_type', KompenResponHubImportAuditLog::EVENT_RENAME)
+            ->where('source_import_id', $import->id)
+            ->where('original_filename', 'rekap-kompen-genap.xlsx')
+            ->exists())->toBeTrue()
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'import.renamed')
+            ->where('subject_reference', (string) $import->id)
+            ->exists())->toBeTrue();
+
+    $this->actingAs($admin, 'admin')
+        ->get("/admin/kompen-respon/imports/{$import->id}/download")
+        ->assertDownload('rekap-kompen-genap.xlsx');
+
+    $this->actingAs($admin, 'admin')
+        ->put("/admin/kompen-respon/imports/{$import->id}", [
+            'display_filename' => '../tidak-valid.xlsx',
+        ])
+        ->assertSessionHasErrors('display_filename');
+});
+
+test('an admin can delete an inactive workbook version while its audit trail remains', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $import = KompenResponHubImport::create([
+        'periode_semester' => '2026/2027 Genap',
+        'original_filename' => 'salah.xlsx',
+        'display_filename' => 'salah.xlsx',
+        'stored_path' => 'kompen-respon-hub/imports/salah.xlsx',
+        'file_hash' => str_repeat('c', 64),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 1,
+        'imported_at' => now(),
+    ]);
+    Storage::disk('local')->put($import->stored_path, 'workbook');
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/imports/{$import->id}")
+        ->assertRedirect('/admin?tab=files');
+
+    expect(KompenResponHubImport::query()->find($import->id))->toBeNull()
+        ->and(Storage::disk('local')->exists($import->stored_path))->toBeFalse()
+        ->and(KompenResponHubImportAuditLog::query()
+            ->where('event_type', KompenResponHubImportAuditLog::EVENT_DELETE)
+            ->where('source_import_id', $import->id)
+            ->where('original_filename', 'salah.xlsx')
+            ->exists())->toBeTrue()
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'import.deleted')
+            ->where('subject_reference', (string) $import->id)
+            ->exists())->toBeTrue();
+});
+
+test('an admin cannot delete the workbook version currently used by a period', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createStudent();
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/imports/{$student->kompen_respon_hub_import_id}")
+        ->assertUnprocessable();
+
+    expect(KompenResponHubImport::query()->find($student->kompen_respon_hub_import_id))->not->toBeNull();
 });
 
 test('the upload log identifies active data by import version instead of filename', function () {
@@ -719,7 +860,7 @@ test('an import is rejected when it contains an identical detail twice', functio
         ->and($importTask->error_message)->toContain('Detail duplikat dengan baris 2 ditemukan.');
 });
 
-test('an admin can import a legacy workbook with its period in one cell', function () {
+test('an import rejects a legacy combined period value', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
 
@@ -731,7 +872,28 @@ test('an admin can import a legacy workbook with its period in one cell', functi
         ),
     ])->assertRedirect('/admin?tab=upload');
 
-    expect(KompenResponHubImport::query()->sole()->periode_semester)->toBe('2026/2027 Gasal');
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Semester wajib diisi dengan Gasal atau Genap.');
+});
+
+test('an import rejects semester names other than Gasal or Genap', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents('Ganjil', '2026/2027'),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Semester wajib diisi dengan Gasal atau Genap.');
 });
 
 test('an admin import reads the class and level metadata from the workbook', function () {

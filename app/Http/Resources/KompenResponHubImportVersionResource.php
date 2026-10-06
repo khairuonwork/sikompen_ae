@@ -20,6 +20,7 @@ class KompenResponHubImportVersionResource extends JsonResource
             'id' => $this->id,
             'periode_semester' => $this->periode_semester,
             'original_filename' => $this->original_filename,
+            'display_filename' => $this->display_filename ?? $this->original_filename,
             'class_count' => $this->class_count,
             'student_count' => $this->student_count,
             'detail_count' => $this->detail_count,

@@ -23,6 +23,8 @@ function eventLabel(eventType: ImportAuditLog["event_type"]): string {
         activate: "Aktivasi",
         rollback: "Rollback",
         restore: "Pemulihan lama",
+        rename: "Ganti nama",
+        delete: "Hapus file",
     }[eventType];
 }
 
@@ -32,6 +34,8 @@ function eventDescription(eventType: ImportAuditLog["event_type"]): string {
         activate: "Workbook ditetapkan sebagai sumber data periode.",
         rollback: "Data dari workbook dihapus melalui rollback.",
         restore: "Riwayat workbook dipulihkan.",
+        rename: "Nama tampilan workbook diperbarui.",
+        delete: "Versi workbook dihapus; riwayat audit dipertahankan.",
     }[eventType];
 }
 

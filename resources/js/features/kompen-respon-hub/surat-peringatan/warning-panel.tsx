@@ -8,13 +8,17 @@ import {
     Save,
     Search,
     Archive,
+    Eye,
+    EyeOff,
     Trash2,
+    Undo2,
     X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     destroyWarning,
     finalizeCutoff,
+    rollbackCutoffFinalization,
     storeCutoff,
     updateWarning,
 } from "@/actions/App/Http/Controllers/KompenResponHubLifecycleController";
@@ -85,7 +89,7 @@ export function WarningTable({
     onSelect,
 }: {
     data: Pagination<Warning>;
-    onSelect: (warning: Warning) => void;
+    onSelect?: (warning: Warning) => void;
 }): React.JSX.Element {
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
@@ -104,8 +108,11 @@ export function WarningTable({
                         {data.data.map((warning) => (
                             <tr
                                 key={warning.id}
-                                onClick={() => onSelect(warning)}
-                                className="cursor-pointer hover:bg-[#B1C9EF]/10"
+                                onClick={() => onSelect?.(warning)}
+                                className={cn(
+                                    "hover:bg-[#B1C9EF]/10",
+                                    onSelect && "cursor-pointer",
+                                )}
                             >
                                 <td className="px-4 py-3">
                                     <p className="font-bold text-[#395886]">
@@ -192,9 +199,11 @@ export function WarningPanel({
     cutoffs,
     filterOptions,
     filters,
+    warningPeriods,
     warnings,
     warningCandidates,
     rolledBackWarnings,
+    managedPeriodHasActiveWarnings,
     selectedWarning,
     onSelectWarning,
     onCloseWarning,
@@ -202,14 +211,18 @@ export function WarningPanel({
     cutoffs: Cutoff[];
     filterOptions: FilterOptions;
     filters: Filters;
+    warningPeriods: string[];
     warnings: Pagination<Warning> | null;
     warningCandidates: Pagination<Student> | null;
     rolledBackWarnings: Pagination<Warning> | null;
+    managedPeriodHasActiveWarnings: boolean;
     selectedWarning: Warning | null;
     onSelectWarning: (warning: Warning) => void;
     onCloseWarning: () => void;
 }): React.JSX.Element {
-    const selectedWarningPeriod = filters.periode_semester ?? "";
+    const selectedWarningPeriod = filters.warning_period ?? "";
+    const selectedListPeriod = filters.list_period ?? selectedWarningPeriod;
+    const isInspectionMode = selectedListPeriod !== selectedWarningPeriod;
     const [editingCutoffPeriod, setEditingCutoffPeriod] = useState(
         selectedWarningPeriod,
     );
@@ -219,6 +232,12 @@ export function WarningPanel({
     const [isCutoffHistoryOpen, setIsCutoffHistoryOpen] = useState(false);
     const [selectedFilterClass, setSelectedFilterClass] = useState(
         filters.kelas ?? "",
+    );
+    const [isOtherPeriodPickerOpen, setIsOtherPeriodPickerOpen] = useState(
+        isInspectionMode,
+    );
+    const [selectedInspectionPeriod, setSelectedInspectionPeriod] = useState(
+        selectedListPeriod,
     );
     const selectedCutoff = cutoffs.find(
         (cutoff) => cutoff.periode_semester === selectedWarningPeriod,
@@ -233,17 +252,23 @@ export function WarningPanel({
         editingCutoff !== undefined &&
         new Date(editingCutoff.deadline_at).getTime() <= Date.now();
 
+    useEffect(() => {
+        setSelectedFilterClass(filters.kelas ?? "");
+        setIsOtherPeriodPickerOpen(isInspectionMode);
+        setSelectedInspectionPeriod(selectedListPeriod);
+    }, [filters.kelas, isInspectionMode, selectedListPeriod]);
+
     function openCutoffEditor(period: string): void {
         setEditingCutoffPeriod(period);
         setIsCutoffEditorOpen(true);
     }
 
-    function selectWarningPeriod(period: string): void {
+    function selectManagedWarningPeriod(period: string): void {
         router.get(
             adminIndex.url({
                 query: {
                     tab: "warnings",
-                    periode_semester: period,
+                    warning_period: period,
                     kelas: filters.kelas,
                     search: filters.search,
                     per_page: filters.per_page,
@@ -257,6 +282,10 @@ export function WarningPanel({
         );
     }
 
+    function returnToManagedPeriod(): void {
+        selectManagedWarningPeriod(selectedWarningPeriod);
+    }
+
     return (
         <section className="grid gap-4">
             <section className="order-2 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm">
@@ -266,12 +295,35 @@ export function WarningPanel({
                             List Mahasiswa
                         </h2>
                         <p className="mt-0.5 text-xs text-[#395886]/70">
-                            Setelah cutoff lewat, mahasiswa dengan sisa jam akan
-                            tampil sebagai kandidat SP. Mereka masuk API hanya
+                            Kandidat dari periode yang dikelola masuk API hanya
                             setelah Finalisasi SP dilakukan.
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                                if (isInspectionMode) {
+                                    returnToManagedPeriod();
+
+                                    return;
+                                }
+
+                                setIsOtherPeriodPickerOpen((isOpen) => !isOpen);
+                            }}
+                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                        >
+                            {isInspectionMode ? (
+                                <EyeOff className="mr-1.5 size-3.5" />
+                            ) : (
+                                <Eye className="mr-1.5 size-3.5" />
+                            )}
+                            {isInspectionMode
+                                ? "Kembali ke periode SP"
+                                : "Lihat periode lain"}
+                        </Button>
                         <Button
                             type="button"
                             size="sm"
@@ -300,56 +352,100 @@ export function WarningPanel({
                 </div>
                 <Form
                     {...adminIndex.form()}
-                    className="mt-4 grid gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 p-3 md:grid-cols-[minmax(220px,1fr)_minmax(150px,0.7fr)_auto] md:items-end"
+                    key={`${selectedWarningPeriod}:${selectedListPeriod}:${filters.kelas ?? ""}:${filters.search ?? ""}`}
+                    className={cn(
+                        "mt-4 grid gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 p-3 md:items-end",
+                        isOtherPeriodPickerOpen
+                            ? "md:grid-cols-[minmax(190px,1fr)_minmax(150px,0.7fr)_minmax(180px,0.85fr)_auto]"
+                            : "md:grid-cols-[minmax(190px,1fr)_minmax(150px,0.7fr)_auto]",
+                    )}
                 >
-                <input name="tab" type="hidden" value="warnings" />
-                <input name="kelas" type="hidden" value={selectedFilterClass} />
-                <input
-                    name="periode_semester"
-                    type="hidden"
-                    value={selectedWarningPeriod}
-                />
-                <Input
-                    name="search"
-                    defaultValue={filters.search}
-                    maxLength={100}
-                    placeholder="Cari nama atau NIM"
-                    className="h-10 rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886]"
-                />
-                <Select
-                    value={selectedFilterClass || "all"}
-                    onValueChange={(value) =>
-                        setSelectedFilterClass(value === "all" ? "" : value)
-                    }
-                >
-                    <SelectTrigger className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
-                        <SelectValue placeholder="Semua kelas" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-2xl text-xs font-semibold">
-                        <SelectItem
-                            value="all"
-                            className="cursor-pointer hover:bg-[#B1C9EF]/20"
-                        >
-                            Semua kelas
-                        </SelectItem>
-                        {filterOptions.kelas.map((kelas) => (
+                    <input name="tab" type="hidden" value="warnings" />
+                    <input
+                        name="warning_period"
+                        type="hidden"
+                        value={selectedWarningPeriod}
+                    />
+                    <input
+                        name="kelas"
+                        type="hidden"
+                        value={selectedFilterClass}
+                    />
+                    <input
+                        name="list_period"
+                        type="hidden"
+                        value={
+                            isOtherPeriodPickerOpen
+                                ? selectedInspectionPeriod
+                                : ""
+                        }
+                    />
+                    <Input
+                        name="search"
+                        defaultValue={filters.search}
+                        maxLength={100}
+                        placeholder="Cari nama atau NIM"
+                        className="h-10 rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886]"
+                    />
+                    <Select
+                        value={selectedFilterClass || "all"}
+                        onValueChange={(value) =>
+                            setSelectedFilterClass(value === "all" ? "" : value)
+                        }
+                    >
+                        <SelectTrigger className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
+                            <SelectValue placeholder="Semua kelas" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl text-xs font-semibold">
                             <SelectItem
-                                key={kelas}
-                                value={kelas}
+                                value="all"
                                 className="cursor-pointer hover:bg-[#B1C9EF]/20"
                             >
-                                {kelas}
+                                Semua kelas
                             </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                <Button
-                    type="submit"
-                    className="rounded-2xl bg-[#395886] text-xs font-bold text-white shadow-md transition-all duration-300 hover:bg-[#1E293B] hover:text-white active:scale-95"
-                >
-                    <Search className="mr-1.5 size-4" />
-                    Terapkan
-                </Button>
+                            {filterOptions.kelas.map((kelas) => (
+                                <SelectItem
+                                    key={kelas}
+                                    value={kelas}
+                                    className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                                >
+                                    {kelas}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {isOtherPeriodPickerOpen ? (
+                        <Select
+                            value={selectedInspectionPeriod || "placeholder"}
+                            onValueChange={(value) =>
+                                setSelectedInspectionPeriod(
+                                    value === "placeholder" ? "" : value,
+                                )
+                            }
+                        >
+                            <SelectTrigger className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
+                                <SelectValue placeholder="Pilih periode untuk dilihat" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl text-xs font-semibold">
+                                {warningPeriods.map((period) => (
+                                    <SelectItem
+                                        key={period}
+                                        value={period}
+                                        className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                                    >
+                                        {period}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    ) : null}
+                    <Button
+                        type="submit"
+                        className="rounded-2xl bg-[#395886] text-xs font-bold text-white shadow-md transition-all duration-300 hover:bg-[#1E293B] hover:text-white active:scale-95"
+                    >
+                        <Search className="mr-1.5 size-4" />
+                        Terapkan
+                    </Button>
                 </Form>
             </section>
             <section className="order-1 grid gap-4 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm">
@@ -378,33 +474,37 @@ export function WarningPanel({
                     ) : null}
                 </div>
 
-                {cutoffs.length ? (
-                    <div className="grid gap-1.5 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 p-3 sm:max-w-md">
+                {warningPeriods.length ? (
+                    <div className="grid gap-1.5 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 p-3 md:max-w-xl">
                         <Label className="text-xs font-bold text-[#395886]">
-                            Periode SP
+                            Periode SP yang dikelola
                         </Label>
                         <Select
-                            value={selectedWarningPeriod}
-                            onValueChange={selectWarningPeriod}
+                            value={selectedWarningPeriod || "placeholder"}
+                            onValueChange={(value) => {
+                                if (value !== "placeholder") {
+                                    selectManagedWarningPeriod(value);
+                                }
+                            }}
                         >
                             <SelectTrigger className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
                                 <SelectValue placeholder="Pilih periode SP" />
                             </SelectTrigger>
                             <SelectContent className="rounded-2xl text-xs font-semibold">
-                                {cutoffs.map((cutoff) => (
+                                {warningPeriods.map((period) => (
                                     <SelectItem
-                                        key={cutoff.id}
-                                        value={cutoff.periode_semester}
+                                        key={period}
+                                        value={period}
                                         className="cursor-pointer hover:bg-[#B1C9EF]/20"
                                     >
-                                        {cutoff.periode_semester}
+                                        {period}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        <p className="text-[11px] leading-relaxed text-[#395886]/70">
-                            Kandidat, SP aktif, riwayat, dan ekspor di bawah
-                            selalu memakai periode ini.
+                        <p className="text-xs text-[#395886]/70">
+                            Cutoff, finalisasi, pembatalan finalisasi, API, dan
+                            riwayat SP mengikuti periode ini.
                         </p>
                     </div>
                 ) : null}
@@ -452,7 +552,7 @@ export function WarningPanel({
                         <Button
                             type="button"
                             onClick={() => {
-                                setEditingCutoffPeriod("");
+                                setEditingCutoffPeriod(selectedWarningPeriod);
                                 setIsCutoffEditorOpen(true);
                             }}
                             className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
@@ -521,7 +621,7 @@ export function WarningPanel({
                                                     selectedWarningPeriod
                                                 }
                                                 onClick={() =>
-                                                    selectWarningPeriod(
+                                                    selectManagedWarningPeriod(
                                                         cutoff.periode_semester,
                                                     )
                                                 }
@@ -643,28 +743,77 @@ export function WarningPanel({
 
                 {selectedCutoff && isSelectedCutoffElapsed ? (
                     <div className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center">
-                        <p className="text-xs leading-relaxed font-medium text-amber-900">
-                            Cutoff {selectedCutoff.periode_semester} telah
-                            lewat. Perpanjang bila masa pengerjaan dibuka
-                            kembali, atau finalisasi untuk menerbitkan SP bagi
-                            seluruh kandidat yang masih memiliki sisa jam.
-                        </p>
-                        <Button
-                            type="button"
-                            onClick={() => {
-                                if (window.confirm("Finalisasi SP periode ini? Setiap kandidat dengan sisa jam akan menerima status SP aktif dan mulai tersedia pada API. Data serta cutoff tetap dapat diperbaiki setelahnya.")) {
-                                    router.post(finalizeCutoff.url(selectedCutoff.id));
+                        <div>
+                            <p className="text-xs leading-relaxed font-medium text-amber-900">
+                                {managedPeriodHasActiveWarnings
+                                    ? `SP ${selectedCutoff.periode_semester} sudah difinalisasi dan sedang tersedia pada API.`
+                                    : `Cutoff ${selectedCutoff.periode_semester} telah lewat. Perpanjang bila masa pengerjaan dibuka kembali, atau finalisasi untuk menerbitkan SP bagi seluruh kandidat yang masih memiliki sisa jam.`}
+                            </p>
+                            {managedPeriodHasActiveWarnings ? (
+                                <p className="mt-1 text-xs text-amber-800/80">
+                                    Pembatalan finalisasi menarik seluruh SP aktif
+                                    periode ini dari API tanpa menghapus riwayat.
+                                </p>
+                            ) : null}
+                        </div>
+                        {managedPeriodHasActiveWarnings ? (
+                            <Form
+                                {...rollbackCutoffFinalization.form(
+                                    selectedCutoff.id,
+                                )}
+                                className="flex shrink-0 flex-wrap items-center gap-2"
+                                onBefore={() =>
+                                    window.confirm(
+                                        "Batalkan seluruh SP aktif pada periode ini? Mahasiswa akan segera hilang dari API SP, tetapi riwayat tetap tersimpan.",
+                                    )
                                 }
-                            }}
-                            className="shrink-0 rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
-                        >
-                            <Archive className="mr-1.5 size-3.5" />
-                            Finalisasi SP
-                        </Button>
+                            >
+                                {({ processing }) => (
+                                    <>
+                                        <Input
+                                            name="reason"
+                                            required
+                                            minLength={5}
+                                            maxLength={1000}
+                                            placeholder="Alasan pembatalan"
+                                            className="h-9 min-w-52 bg-white text-xs"
+                                        />
+                                        <Button
+                                            disabled={processing}
+                                            type="submit"
+                                            variant="outline"
+                                            className="rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
+                                        >
+                                            <Undo2 className="mr-1.5 size-3.5" />
+                                            Batalkan finalisasi
+                                        </Button>
+                                    </>
+                                )}
+                            </Form>
+                        ) : (
+                            <Button
+                                type="button"
+                                onClick={() => {
+                                    if (
+                                        window.confirm(
+                                            "Finalisasi SP periode ini? Setiap kandidat dengan sisa jam akan menerima status SP aktif dan mulai tersedia pada API. Data serta cutoff tetap dapat diperbaiki setelahnya.",
+                                        )
+                                    ) {
+                                        router.post(
+                                            finalizeCutoff.url(selectedCutoff.id),
+                                        );
+                                    }
+                                }}
+                                className="shrink-0 rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
+                            >
+                                <Archive className="mr-1.5 size-3.5" />
+                                Finalisasi SP
+                            </Button>
+                        )}
                     </div>
                 ) : null}
             </section>
-            {selectedWarning ? (
+            {selectedWarning && !isInspectionMode ? (
                 <section className="order-4 grid gap-4 rounded-3xl border border-[#8AAEE0]/60 bg-white p-5 shadow-sm">
                     <div className="flex items-start justify-between gap-4">
                         <div>
@@ -764,12 +913,27 @@ export function WarningPanel({
                 </section>
             ) : null}
             <div className="order-4">
+                {isInspectionMode ? (
+                    <div className="mb-4 rounded-2xl border border-[#8AAEE0] bg-[#B1C9EF]/20 px-4 py-3 text-xs leading-relaxed text-[#395886]">
+                        <span className="font-extrabold">Mode lihat data.</span>{" "}
+                        Menampilkan periode {selectedListPeriod}. Finalisasi dan
+                        pembatalan finalisasi tetap hanya berlaku untuk periode
+                        SP yang dikelola, {selectedWarningPeriod}.
+                    </div>
+                ) : null}
                 {warningCandidates?.data.length ? (
                     <WarningCandidateTable data={warningCandidates} />
                 ) : null}
                 {warnings?.data.length ? (
                     <div className={cn(warningCandidates?.data.length ? "mt-4" : "")}>
-                        <WarningTable data={warnings} onSelect={onSelectWarning} />
+                        <WarningTable
+                            data={warnings}
+                            onSelect={
+                                isInspectionMode
+                                    ? undefined
+                                    : onSelectWarning
+                            }
+                        />
                     </div>
                 ) : warningCandidates?.data.length ? null : (
                     <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-10 text-center text-xs font-semibold text-[#395886]/70">
@@ -791,7 +955,9 @@ export function WarningPanel({
                     </div>
                     <WarningTable
                         data={rolledBackWarnings}
-                        onSelect={onSelectWarning}
+                        onSelect={
+                            isInspectionMode ? undefined : onSelectWarning
+                        }
                     />
                 </section>
             ) : null}

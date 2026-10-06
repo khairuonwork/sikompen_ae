@@ -118,23 +118,28 @@ class FinalizeKompenResponHubCutoff
                             KompenResponHubWarningLetter::LetterStatusNotCreated,
                             KompenResponHubWarningLetter::LetterStatusDraft,
                         ], true);
-                    if ($warning->snapshot !== $snapshot || $warning->resolution !== $resolution || $needsIssuance) {
-                        $before = $warning->only(['letter_status', 'resolution', 'snapshot', 'issued_at']);
+                    $isPeriodFinalizationRollback = $warning->letter_status === KompenResponHubWarningLetter::LetterStatusCancelled
+                        && $warning->cancellation_source === KompenResponHubWarningLetter::CancellationSourceFinalizationRollback;
+                    $needsReissuance = $isOutstanding && $isPeriodFinalizationRollback;
+                    if ($warning->snapshot !== $snapshot || $warning->resolution !== $resolution || $needsIssuance || $needsReissuance) {
+                        $before = $warning->only(['letter_status', 'resolution', 'snapshot', 'issued_at', 'cancelled_at', 'cancellation_source']);
                         $updates = [
                             'snapshot' => $snapshot,
                             'resolution' => $resolution,
                             'updated_by_admin_id' => $actor?->id,
                         ];
 
-                        if ($needsIssuance) {
+                        if ($needsIssuance || $needsReissuance) {
                             $updates['letter_status'] = KompenResponHubWarningLetter::LetterStatusIssued;
                             $updates['issued_at'] = now();
                             $updates['reason'] = 'SP diterbitkan otomatis saat periode difiksasi.';
+                            $updates['cancelled_at'] = null;
+                            $updates['cancellation_source'] = null;
                         }
 
                         $warning->update($updates);
 
-                        if ($needsIssuance) {
+                        if ($needsIssuance || $needsReissuance) {
                             $issuedWarningCount++;
                             $this->recordIssuedWarning($warning, $cutoff, $actor, $request, $before);
                         }

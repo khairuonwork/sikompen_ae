@@ -260,10 +260,6 @@ class ParseKompenResponHubWorkbook
         $semester = $this->value($sheet, $semesterColumn, $metadataRow);
         $academicYear = $this->value($sheet, $academicYearColumn, $metadataRow);
 
-        if ($academicYear === '' && preg_match('/^(\d{4}\/\d{4})\s+(GANJIL|GASAL|GENAP)$/iu', $semester, $matches)) {
-            return "{$matches[1]} {$this->normalizedSemester($matches[2])}";
-        }
-
         $normalizedSemester = $this->normalizedSemester($semester);
         if ($normalizedSemester === null) {
             $errors[] = [
@@ -616,7 +612,7 @@ class ParseKompenResponHubWorkbook
     private function normalizedSemester(string $semester): ?string
     {
         return match (mb_strtolower(trim($semester))) {
-            'ganjil', 'gasal' => 'Gasal',
+            'gasal' => 'Gasal',
             'genap' => 'Genap',
             default => null,
         };

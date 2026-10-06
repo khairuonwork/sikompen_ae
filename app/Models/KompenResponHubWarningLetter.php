@@ -20,9 +20,13 @@ class KompenResponHubWarningLetter extends Model
 
     public const LetterStatusCancelled = 'cancelled';
 
+    public const CancellationSourceFinalizationRollback = 'period_finalization_rollback';
+
+    public const CancellationSourceManualRollback = 'manual_rollback';
+
     protected $table = 'sikompen_surat_peringatan';
 
-    protected $fillable = ['cutoff_id', 'current_student_id', 'nim', 'periode_semester', 'kelas', 'nama_mahasiswa', 'classification', 'letter_status', 'resolution', 'snapshot', 'reason', 'issued_at', 'cancelled_at', 'created_by_admin_id', 'updated_by_admin_id'];
+    protected $fillable = ['cutoff_id', 'current_student_id', 'nim', 'periode_semester', 'kelas', 'nama_mahasiswa', 'classification', 'letter_status', 'resolution', 'snapshot', 'reason', 'issued_at', 'cancelled_at', 'cancellation_source', 'created_by_admin_id', 'updated_by_admin_id'];
 
     protected function casts(): array
     {

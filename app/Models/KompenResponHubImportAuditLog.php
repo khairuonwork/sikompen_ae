@@ -36,6 +36,10 @@ class KompenResponHubImportAuditLog extends Model
 
     public const EVENT_ACTIVATE = 'activate';
 
+    public const EVENT_RENAME = 'rename';
+
+    public const EVENT_DELETE = 'delete';
+
     protected $fillable = [
         'event_type',
         'source_import_id',

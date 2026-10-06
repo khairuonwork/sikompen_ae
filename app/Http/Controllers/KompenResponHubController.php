@@ -22,6 +22,7 @@ use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
+use App\Models\KompenResponHubWarningLetter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
@@ -144,6 +145,7 @@ class KompenResponHubController extends Controller
     private function index(KompenResponHubTableRequest $request, bool $isAdmin): Response
     {
         $filters = $this->filtersForRequest($request);
+        $filterOptions = $this->dataQuery->filterOptions();
         $activeTab = $filters['tab'] ?? 'students';
         if (! $isAdmin && in_array($activeTab, ['upload', 'files', 'imports', 'warnings', 'activity'], true)) {
             $activeTab = 'students';
@@ -156,7 +158,11 @@ class KompenResponHubController extends Controller
             : collect();
 
         if ($isAdmin && $activeTab === 'warnings') {
-            $filters = $this->filtersForWarningPeriod($filters, $cutoffs);
+            $filters = $this->filtersForWarningPeriod(
+                $filters,
+                $cutoffs,
+                $filterOptions['periode_semester'],
+            );
         }
 
         return Inertia::render('kompen-respon-hub/index', [
@@ -164,7 +170,16 @@ class KompenResponHubController extends Controller
             'isAdmin' => $isAdmin,
             'isProxySession' => $this->proxyAccess->hasValidProxySession($request),
             'filters' => $filters,
-            'filterOptions' => $this->dataQuery->filterOptions(),
+            'filterOptions' => $filterOptions,
+            'warningPeriods' => $isAdmin && $activeTab === 'warnings'
+                ? $filterOptions['periode_semester']
+                : [],
+            'importAuditPeriods' => $isAdmin && $activeTab === 'imports'
+                ? $this->dataQuery->importAuditPeriods()
+                : [],
+            'importAuditYears' => $isAdmin && $activeTab === 'imports'
+                ? $this->dataQuery->importAuditYears()
+                : [],
             'activityFilterOptions' => $isAdmin && $activeTab === 'activity'
                 ? $this->dataQuery->activityFilterOptions()
                 : ['event_types' => [], 'actor_emails' => []],
@@ -179,6 +194,14 @@ class KompenResponHubController extends Controller
                 ])
                     ->all()
                 : [],
+            'managedPeriodHasActiveWarnings' => $isAdmin && $activeTab === 'warnings'
+                ? KompenResponHubWarningLetter::query()
+                    ->where('periode_semester', $filters['warning_period'] ?? null)
+                    ->where('classification', 'fixed')
+                    ->where('letter_status', KompenResponHubWarningLetter::LetterStatusIssued)
+                    ->where('resolution', 'outstanding')
+                    ->exists()
+                : false,
             'activeImportTasks' => $isAdmin
                 ? KompenResponHubImportTaskResource::collection(
                     KompenResponHubImportTask::query()
@@ -270,6 +293,10 @@ class KompenResponHubController extends Controller
             $filters['tingkat'] = (int) $filters['tingkat'];
         }
 
+        if (filled($filters['import_year'] ?? null)) {
+            $filters['import_year'] = (int) $filters['import_year'];
+        }
+
         $requestedPerPage = (int) ($filters['per_page'] ?? 15);
         $filters['per_page'] = in_array($requestedPerPage, [15, 25, 50, 100], true)
             ? $requestedPerPage
@@ -285,28 +312,43 @@ class KompenResponHubController extends Controller
     }
 
     /**
-     * Surat Peringatan is always viewed in the context of one registered cutoff.
+     * Surat Peringatan has one managed period for finalization and a separate
+     * optional inspection period for the displayed list.
      *
      * @param  array<string, mixed>  $filters
      * @param  Collection<int, KompenResponHubPeriodCutoff>  $cutoffs
+     * @param  list<string>  $warningPeriods
      * @return array<string, mixed>
      */
-    private function filtersForWarningPeriod(array $filters, Collection $cutoffs): array
+    private function filtersForWarningPeriod(array $filters, Collection $cutoffs, array $warningPeriods): array
     {
-        if ($cutoffs->isEmpty()) {
+        if ($warningPeriods === []) {
             unset($filters['periode_semester']);
+            unset($filters['warning_period']);
+            unset($filters['list_period']);
 
             return $filters;
         }
 
-        $requestedPeriod = $filters['periode_semester'] ?? null;
-        $hasRequestedCutoff = filled($requestedPeriod)
-            && $cutoffs->contains(
-                fn (KompenResponHubPeriodCutoff $cutoff): bool => $cutoff->periode_semester === $requestedPeriod,
-            );
+        $requestedWarningPeriod = $filters['warning_period'] ?? $filters['periode_semester'] ?? null;
+        $hasRequestedWarningPeriod = filled($requestedWarningPeriod)
+            && in_array($requestedWarningPeriod, $warningPeriods, true);
 
-        if (! $hasRequestedCutoff) {
-            $filters['periode_semester'] = $cutoffs->first()->periode_semester;
+        $warningPeriod = $hasRequestedWarningPeriod
+            ? $requestedWarningPeriod
+            : $cutoffs->first()?->periode_semester ?? $warningPeriods[0];
+        $requestedListPeriod = $filters['list_period'] ?? $warningPeriod;
+        $hasRequestedListPeriod = filled($requestedListPeriod)
+            && in_array($requestedListPeriod, $warningPeriods, true);
+
+        $filters['warning_period'] = $warningPeriod;
+        $filters['list_period'] = $hasRequestedListPeriod
+            ? $requestedListPeriod
+            : $warningPeriod;
+        $filters['periode_semester'] = $filters['list_period'];
+
+        if ($filters['list_period'] === $filters['warning_period']) {
+            unset($filters['list_period']);
         }
 
         return $filters;

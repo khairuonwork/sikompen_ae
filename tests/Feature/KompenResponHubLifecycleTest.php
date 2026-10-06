@@ -188,6 +188,25 @@ test('the warning page keeps candidates scoped to its selected cutoff period', f
             ->has('warningCandidates.data', 1)
             ->where('warningCandidates.data.0.id', $gasalStudent->id),
         );
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=warnings&warning_period=2026%2F2027%20Gasal&list_period=2026%2F2027%20Genap')
+        ->assertInertia(fn ($page) => $page
+            ->where('filters.warning_period', '2026/2027 Gasal')
+            ->where('filters.list_period', '2026/2027 Genap')
+            ->where('filters.periode_semester', '2026/2027 Genap')
+            ->has('warningCandidates.data', 0),
+        );
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=warnings&warning_period=2026%2F2027%20Genap')
+        ->assertInertia(fn ($page) => $page
+            ->where('filters.warning_period', '2026/2027 Genap')
+            ->where('filters.periode_semester', '2026/2027 Genap')
+            ->has('warningPeriods', 2)
+            ->where('warningPeriods.0', '2026/2027 Genap')
+            ->where('warningPeriods.1', '2026/2027 Gasal'),
+        );
 });
 
 test('an admin cannot finalize an SP before the cutoff', function () {
@@ -359,6 +378,66 @@ test('an admin can roll back an SP without exposing it through the student API',
         ->and($warning->fresh()->letter_status)
         ->toBe(KompenResponHubWarningLetter::LetterStatusCancelled)
         ->and($warning->fresh()->cancelled_at)->not->toBeNull();
+});
+
+test('an admin can cancel a period finalization and preserve its audit trail', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $cutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize")
+        ->assertRedirect();
+
+    $warning = KompenResponHubWarningLetter::query()->sole();
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalization", [
+            'reason' => '<script>alert(1)</script>',
+        ])
+        ->assertSessionHasErrors([
+            'reason' => 'Kolom reason hanya boleh berisi teks pencarian biasa.',
+        ]);
+
+    expect($warning->fresh()->letter_status)
+        ->toBe(KompenResponHubWarningLetter::LetterStatusIssued);
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalization", [
+            'reason' => 'Data workbook periode ini perlu diperbaiki.',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Finalisasi SP dibatalkan untuk 1 mahasiswa. Riwayat tetap tersimpan dan data tidak lagi tersedia sebagai SP aktif pada API.');
+
+    expect($warning->fresh()->letter_status)
+        ->toBe(KompenResponHubWarningLetter::LetterStatusCancelled)
+        ->and($warning->fresh()->cancellation_source)
+        ->toBe(KompenResponHubWarningLetter::CancellationSourceFinalizationRollback)
+        ->and(app(KompenResponHubDataQuery::class)
+            ->warningCandidates(['periode_semester' => $student->periode_semester])
+            ->pluck('id'))
+        ->toContain($student->id)
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'period.finalization_rolled_back')
+            ->where('periode_semester', $student->periode_semester)
+            ->exists())
+        ->toBeTrue();
+
+    $this->getJson('/api/kompen-respon/students')
+        ->assertOk()
+        ->assertJsonPath('data.0.has_active_warning', false);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize")
+        ->assertRedirect();
+
+    expect($warning->fresh()->letter_status)
+        ->toBe(KompenResponHubWarningLetter::LetterStatusIssued)
+        ->and($warning->fresh()->cancellation_source)->toBeNull();
 });
 
 test('the warning list exposes only active fixed SP records with outstanding debt', function () {
