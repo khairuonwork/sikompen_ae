@@ -74,7 +74,7 @@ class ProcessKompenResponHubImport implements ShouldQueue
             $importTask,
             KompenResponHubImportTask::STATUS_PROCESSING,
             75,
-            'Menyimpan data ke database.',
+            'Menyimpan versi workbook untuk dipilih di List File.',
         );
 
         $result = $importer->execute(
@@ -96,7 +96,7 @@ class ProcessKompenResponHubImport implements ShouldQueue
             null,
             $result['periode_semester'],
             null,
-            'Workbook berhasil diimpor.',
+            'Workbook berhasil disimpan sebagai versi yang menunggu aktivasi.',
             metadata: [
                 'class_count' => $result['class_count'],
                 'student_count' => $result['student_count'],
@@ -109,7 +109,7 @@ class ProcessKompenResponHubImport implements ShouldQueue
             $importTask,
             KompenResponHubImportTask::STATUS_COMPLETED,
             100,
-            "Selesai: {$result['student_count']} mahasiswa dan {$result['detail_count']} detail kompen disimpan.",
+            "Selesai: versi file siap diaktifkan untuk periode {$result['periode_semester']}.",
             [
                 'kompen_respon_hub_import_id' => $result['import_id'],
                 'completed_at' => now(),

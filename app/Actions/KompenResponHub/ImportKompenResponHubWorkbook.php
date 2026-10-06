@@ -13,8 +13,6 @@ use Illuminate\Support\Facades\DB;
 
 class ImportKompenResponHubWorkbook
 {
-    public function __construct(private EnsureKompenResponHubPeriodIsOpen $periodLock) {}
-
     /**
      * @param  array{preview: array{periode_semester: ?string, classes: list<string>, class_count: int, student_count: int, detail_count: int}, students: list<array<string, mixed>>, details: list<array<string, mixed>>}  $payload
      * @return array{import_id: int, periode_semester: string, class_count: int, student_count: int, detail_count: int}
@@ -35,35 +33,24 @@ class ImportKompenResponHubWorkbook
             throw new \LogicException('Periode semester tidak ditemukan pada workbook.');
         }
 
-        if ($this->periodLock->isClosed($period)) {
-            throw new \LogicException('Periode telah ditutup dan tidak dapat menerima impor baru.');
-        }
-
         $result = DB::connection(config('kompen-respon-hub.database_connection'))
             ->transaction(function () use ($payload, $preview, $period, $originalFilename, $storedPath, $fileHash, $uploadedByAdminId, $uploaderName, $uploaderEmail): array {
-                $replacedImports = $this->currentImportsByClass($period, $preview['classes']);
-
                 $import = KompenResponHubImport::create([
                     'uploaded_by_admin_id' => $uploadedByAdminId,
                     'uploader_name' => $uploaderName,
                     'uploader_email' => $uploaderEmail,
                     'periode_semester' => $period,
                     'original_filename' => $originalFilename,
+                    'display_filename' => $originalFilename,
                     'stored_path' => $storedPath,
                     'file_hash' => $fileHash,
                     'class_count' => $preview['class_count'],
                     'student_count' => $preview['student_count'],
                     'detail_count' => $preview['detail_count'],
                     'quality_report' => $this->qualityReport($payload),
-                    'replaced_imports' => $replacedImports,
+                    'replaced_imports' => null,
                     'imported_at' => now(),
                 ]);
-
-                $this->replaceActiveData(
-                    $payload,
-                    $period,
-                    array_fill_keys($preview['classes'], $import->id),
-                );
 
                 KompenResponHubImportAuditLog::create([
                     'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
@@ -169,21 +156,6 @@ class ImportKompenResponHubWorkbook
             KompenResponHubStudentSummaryOverride::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
             KompenResponHubWarningLetter::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
         }
-    }
-
-    /** @param list<string> $classes
-     * @return array<string, int>
-     */
-    private function currentImportsByClass(string $period, array $classes): array
-    {
-        return KompenResponHubStudent::query()
-            ->where('periode_semester', $period)
-            ->whereIn('kelas', $classes)
-            ->get(['kelas', 'kompen_respon_hub_import_id'])
-            ->mapWithKeys(fn (KompenResponHubStudent $student): array => [
-                $student->kelas => $student->kompen_respon_hub_import_id,
-            ])
-            ->all();
     }
 
     /**

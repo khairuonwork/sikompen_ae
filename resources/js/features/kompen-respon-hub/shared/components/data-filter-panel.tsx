@@ -141,7 +141,7 @@ export function FilterPanel({
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl text-xs font-semibold">
-                        {[15, 30, 50, 100].map((option) => (
+                        {[15, 25, 50, 100].map((option) => (
                             <SelectItem
                                 key={option}
                                 value={option.toString()}

@@ -2,6 +2,7 @@
 
 namespace App\Actions\KompenResponHub;
 
+use App\Models\KompenResponHubActiveImport;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubStudent;
@@ -13,24 +14,19 @@ class ActivateKompenResponHubImportVersion
     public function __construct(
         private ParseKompenResponHubWorkbook $parser,
         private ImportKompenResponHubWorkbook $importer,
-        private EnsureKompenResponHubPeriodIsOpen $periodLock,
     ) {}
 
     /**
-     * Restore a selected historical workbook as the active version for only
-     * the classes contained by that workbook.
+     * Activate one workbook as the sole active source for its period.
      *
-     * @return array{import_id: int, periode_semester: string, original_filename: string, classes: list<string>, displaced_imports: list<array{id: int, original_filename: string}>}
+     * @return array{import_id: int, periode_semester: string, original_filename: string, classes: list<string>, previous_import: array{id: int, original_filename: string}|null}
      */
     public function execute(
         KompenResponHubImport $import,
         string $actorName,
         string $actorEmail,
+        ?int $actorAdminId = null,
     ): array {
-        if ($this->periodLock->isClosed($import->periode_semester)) {
-            throw new \LogicException('Periode telah ditutup dan versi impor tidak dapat dipulihkan.');
-        }
-
         if (! str_starts_with($import->stored_path, 'kompen-respon-hub/imports/') || ! Storage::disk('local')->exists($import->stored_path)) {
             throw new \LogicException('File workbook versi yang dipilih tidak tersedia.');
         }
@@ -52,48 +48,53 @@ class ActivateKompenResponHubImportVersion
         }
 
         return DB::connection(config('kompen-respon-hub.database_connection'))
-            ->transaction(function () use ($actorEmail, $actorName, $classes, $import, $payload): array {
+            ->transaction(function () use ($actorAdminId, $actorEmail, $actorName, $classes, $import, $payload): array {
                 $lockedImport = KompenResponHubImport::query()
                     ->lockForUpdate()
                     ->findOrFail($import->id);
 
-                if ($this->periodLock->isClosed($lockedImport->periode_semester)) {
-                    throw new \LogicException('Periode telah ditutup dan versi impor tidak dapat dipulihkan.');
-                }
-
-                $activeImportIdsByClass = KompenResponHubStudent::query()
+                KompenResponHubImport::query()
                     ->where('periode_semester', $lockedImport->periode_semester)
-                    ->whereIn('kelas', $classes)
                     ->lockForUpdate()
-                    ->get(['kelas', 'kompen_respon_hub_import_id'])
-                    ->groupBy('kelas')
-                    ->map(fn ($students): int => (int) $students->first()->kompen_respon_hub_import_id)
-                    ->all();
+                    ->get(['id']);
 
-                if ($activeImportIdsByClass !== [] && collect($classes)->every(
-                    fn (string $class): bool => ($activeImportIdsByClass[$class] ?? null) === $lockedImport->id,
-                )) {
+                $activeImport = KompenResponHubActiveImport::query()
+                    ->where('periode_semester', $lockedImport->periode_semester)
+                    ->lockForUpdate()
+                    ->with('importBatch:id,original_filename')
+                    ->first();
+
+                if ($activeImport?->kompen_respon_hub_import_id === $lockedImport->id) {
                     throw new \LogicException('Versi file yang dipilih sudah menjadi data aktif.');
                 }
 
-                $displacedImports = KompenResponHubImport::query()
-                    ->whereKey(array_values(array_unique($activeImportIdsByClass)))
-                    ->orderBy('id')
-                    ->get(['id', 'original_filename'])
-                    ->map(fn (KompenResponHubImport $activeImport): array => [
-                        'id' => $activeImport->id,
-                        'original_filename' => $activeImport->original_filename,
-                    ])
-                    ->all();
+                $previousImport = $activeImport?->importBatch === null ? null : [
+                    'id' => $activeImport->importBatch->id,
+                    'original_filename' => $activeImport->importBatch->original_filename,
+                ];
+
+                KompenResponHubStudent::query()
+                    ->where('periode_semester', $lockedImport->periode_semester)
+                    ->delete();
 
                 $this->importer->replaceActiveData(
                     $payload,
                     $lockedImport->periode_semester,
                     array_fill_keys($classes, $lockedImport->id),
+                    deleteCurrentData: false,
+                );
+
+                KompenResponHubActiveImport::query()->updateOrCreate(
+                    ['periode_semester' => $lockedImport->periode_semester],
+                    [
+                        'kompen_respon_hub_import_id' => $lockedImport->id,
+                        'activated_by_admin_id' => $actorAdminId,
+                        'activated_at' => now(),
+                    ],
                 );
 
                 KompenResponHubImportAuditLog::create([
-                    'event_type' => KompenResponHubImportAuditLog::EVENT_RESTORE,
+                    'event_type' => KompenResponHubImportAuditLog::EVENT_ACTIVATE,
                     'source_import_id' => $lockedImport->id,
                     'actor_name' => $actorName,
                     'actor_email' => $actorEmail,
@@ -103,8 +104,8 @@ class ActivateKompenResponHubImportVersion
                     'student_count' => $payload['preview']['student_count'],
                     'detail_count' => $payload['preview']['detail_count'],
                     'metadata' => [
-                        'restored_classes' => $classes,
-                        'displaced_imports' => $displacedImports,
+                        'activated_classes' => $classes,
+                        'previous_import' => $previousImport,
                     ],
                     'occurred_at' => now(),
                 ]);
@@ -114,7 +115,7 @@ class ActivateKompenResponHubImportVersion
                     'periode_semester' => $lockedImport->periode_semester,
                     'original_filename' => $lockedImport->original_filename,
                     'classes' => $classes,
-                    'displaced_imports' => $displacedImports,
+                    'previous_import' => $previousImport,
                 ];
             });
     }

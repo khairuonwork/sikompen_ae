@@ -5,6 +5,7 @@ use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Jobs\GenerateKompenResponHubExport;
 use App\Jobs\ProcessKompenResponHubImport;
+use App\Models\KompenResponHubActiveImport;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
@@ -14,6 +15,7 @@ use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
@@ -44,18 +46,15 @@ test('the public page and data API do not require a login', function () {
     $this->get('/admin/login')->assertOk();
 });
 
-test('the admin landing page provides a period-aware operational summary', function () {
+test('the admin landing page opens the Kompen and Respon table', function () {
     $student = createStudent();
     $admin = KompenResponHubAdmin::factory()->create();
 
     $this->actingAs($admin, 'admin')->get('/admin')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('activeTab', 'dashboard')
-            ->where('dashboard.summary.total_students', 1)
-            ->where('dashboard.summary.outstanding_students', 1)
-            ->has('dashboard.worklist.fixed_candidates')
-            ->has('dashboard.worklist.warnings_to_follow_up'),
+            ->where('activeTab', 'students')
+            ->has('students.data', 1),
         );
 
     $this->actingAs($admin, 'admin')->getJson("/admin/kompen-respon/students/{$student->id}/overview")
@@ -117,7 +116,7 @@ test('an admin student profile includes an interpretable before and after activi
         ->assertJsonPath('data.activities.0.reason', 'Kehadiran diverifikasi.');
 });
 
-test('the dashboard filters its summary and actions by class and level', function () {
+test('the Kompen and Respon table filters students by class and level', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     $firstStudent = createStudent();
     $secondStudent = $firstStudent->replicate();
@@ -135,14 +134,15 @@ test('the dashboard filters its summary and actions by class and level', functio
     ]);
 
     $this->actingAs($admin, 'admin')
-        ->get('/admin?tingkat=2&kelas=2AEA1')
+        ->get('/admin?tingkat=2&kelas=2AEA1&per_page=25')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('filters.tingkat', 2)
             ->where('filters.kelas', '2AEA1')
-            ->where('dashboard.summary.total_students', 1)
-            ->where('dashboard.summary.outstanding_students', 1)
-            ->where('dashboard.worklist.fixed_candidates.0.nim', '987654321'),
+            ->where('students.meta.page_name', 'page')
+            ->where('students.meta.per_page', 25)
+            ->where('activeTab', 'students')
+            ->where('students.data.0.nim', '987654321'),
         );
 });
 
@@ -321,7 +321,7 @@ test('a student cannot queue an export of warning letters', function () {
     ])->assertForbidden();
 });
 
-test('an authenticated admin can upload a valid workbook that replaces matching class data', function () {
+test('an authenticated admin can stage a valid workbook then activate it for its period', function () {
     Storage::fake('local');
     $oldStudent = createStudent('2026/2027 Gasal');
     $admin = KompenResponHubAdmin::factory()->create();
@@ -334,11 +334,7 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
         ),
     ])->assertRedirect('/admin?tab=upload');
 
-    expect(KompenResponHubStudent::query()->find($oldStudent->id))->toBeNull();
-
-    $student = KompenResponHubStudent::query()->sole();
-    expect($student->nim)->toBe('123456789')
-        ->and($student->total_hutang_jam)->toBe('3.5000');
+    expect(KompenResponHubStudent::query()->find($oldStudent->id))->not->toBeNull();
 
     $import = KompenResponHubImport::query()->latest('id')->firstOrFail();
     expect($import->periode_semester)->toBe('2026/2027 Gasal')
@@ -357,8 +353,19 @@ test('an authenticated admin can upload a valid workbook that replaces matching 
             ->where('imports.data.0.event_type', 'upload')
             ->where('imports.data.0.actor_name', 'Khairul Anwar')
             ->where('imports.data.0.actor_email', $admin->email)
+            ->where('imports.data.0.version_status', 'stored')
+            ->where('imports.data.0.version_imported_at', $import->imported_at->toIso8601String())
             ->where('imports.data.0.quality_report.status', 'passed'),
         );
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/imports/{$import->id}/activate")
+        ->assertRedirect('/admin?tab=files');
+
+    $student = KompenResponHubStudent::query()->sole();
+    expect($student->nim)->toBe('123456789')
+        ->and($student->total_hutang_jam)->toBe('3.5000')
+        ->and($student->kompen_respon_hub_import_id)->toBe($import->id);
 
     $this->getJson('/api/kompen-respon/details?nim=123456789')
         ->assertOk()
@@ -386,11 +393,208 @@ test('an admin can download an available workbook from its upload log', function
 
     $this->actingAs($admin, 'admin')
         ->get("/admin/kompen-respon/imports/{$import->id}/download")
-        ->assertDownload("sikompen-import-{$import->id}.xlsx");
+        ->assertDownload('source.xlsx');
 
     $this->actingAs($admin, 'admin')->get('/admin?tab=imports')
         ->assertInertia(fn ($page) => $page
             ->where('imports.data.0.can_download_file', true),
+        );
+});
+
+test('an admin can filter upload logs by workbook period, activity year, and activity month', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $matchingAudit = KompenResponHubImportAuditLog::factory()->create([
+        'source_import_id' => null,
+        'periode_semester' => '2026/2027 Gasal',
+        'original_filename' => 'oktober-gasal.xlsx',
+        'occurred_at' => CarbonImmutable::create(2026, 10, 4, 9, 30, 0, 'Asia/Jakarta'),
+    ]);
+    KompenResponHubImportAuditLog::factory()->create([
+        'source_import_id' => null,
+        'periode_semester' => '2026/2027 Gasal',
+        'original_filename' => 'september-gasal.xlsx',
+        'occurred_at' => CarbonImmutable::create(2026, 9, 30, 23, 59, 0, 'Asia/Jakarta'),
+    ]);
+    KompenResponHubImportAuditLog::factory()->create([
+        'source_import_id' => null,
+        'periode_semester' => '2026/2027 Genap',
+        'original_filename' => 'oktober-genap.xlsx',
+        'occurred_at' => CarbonImmutable::create(2026, 10, 4, 10, 0, 0, 'Asia/Jakarta'),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=imports&periode_semester=2026%2F2027%20Gasal&import_month=2026-10&import_year=2026')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('activeTab', 'imports')
+            ->where('filters.periode_semester', '2026/2027 Gasal')
+            ->where('filters.import_month', '2026-10')
+            ->where('filters.import_year', 2026)
+            ->where('importAuditPeriods', ['2026/2027 Genap', '2026/2027 Gasal'])
+            ->where('importAuditYears', [2026])
+            ->has('imports.data', 1)
+            ->where('imports.data.0.id', $matchingAudit->id),
+        );
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=imports&import_year=2026')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('filters.import_year', 2026)
+            ->has('imports.data', 3),
+        );
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=imports&import_month=2026-13')
+        ->assertSessionHasErrors('import_month');
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=imports&import_month=2026-10&import_year=2025')
+        ->assertSessionHasErrors('import_year');
+});
+
+test('an admin can rename an inactive workbook version and the audit trail remains interpretable', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $import = KompenResponHubImport::create([
+        'periode_semester' => '2026/2027 Genap',
+        'original_filename' => 'import-awal.xlsx',
+        'display_filename' => 'import-awal.xlsx',
+        'stored_path' => 'kompen-respon-hub/imports/import-awal.xlsx',
+        'file_hash' => str_repeat('b', 64),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 1,
+        'imported_at' => now(),
+    ]);
+    Storage::disk('local')->put($import->stored_path, 'workbook');
+
+    $this->actingAs($admin, 'admin')
+        ->put("/admin/kompen-respon/imports/{$import->id}", [
+            'display_filename' => 'rekap-kompen-genap.xlsx',
+        ])
+        ->assertRedirect('/admin?tab=files');
+
+    expect($import->refresh()->display_filename)->toBe('rekap-kompen-genap.xlsx')
+        ->and(KompenResponHubImportAuditLog::query()
+            ->where('event_type', KompenResponHubImportAuditLog::EVENT_RENAME)
+            ->where('source_import_id', $import->id)
+            ->where('original_filename', 'rekap-kompen-genap.xlsx')
+            ->exists())->toBeTrue()
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'import.renamed')
+            ->where('subject_reference', (string) $import->id)
+            ->exists())->toBeTrue();
+
+    $this->actingAs($admin, 'admin')
+        ->get("/admin/kompen-respon/imports/{$import->id}/download")
+        ->assertDownload('rekap-kompen-genap.xlsx');
+
+    $this->actingAs($admin, 'admin')
+        ->put("/admin/kompen-respon/imports/{$import->id}", [
+            'display_filename' => '../tidak-valid.xlsx',
+        ])
+        ->assertSessionHasErrors('display_filename');
+});
+
+test('an admin can delete an inactive workbook version while its audit trail remains', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $import = KompenResponHubImport::create([
+        'periode_semester' => '2026/2027 Genap',
+        'original_filename' => 'salah.xlsx',
+        'display_filename' => 'salah.xlsx',
+        'stored_path' => 'kompen-respon-hub/imports/salah.xlsx',
+        'file_hash' => str_repeat('c', 64),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 1,
+        'imported_at' => now(),
+    ]);
+    Storage::disk('local')->put($import->stored_path, 'workbook');
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/imports/{$import->id}")
+        ->assertRedirect('/admin?tab=files');
+
+    expect(KompenResponHubImport::query()->find($import->id))->toBeNull()
+        ->and(Storage::disk('local')->exists($import->stored_path))->toBeFalse()
+        ->and(KompenResponHubImportAuditLog::query()
+            ->where('event_type', KompenResponHubImportAuditLog::EVENT_DELETE)
+            ->where('source_import_id', $import->id)
+            ->where('original_filename', 'salah.xlsx')
+            ->exists())->toBeTrue()
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'import.deleted')
+            ->where('subject_reference', (string) $import->id)
+            ->exists())->toBeTrue();
+});
+
+test('an admin cannot delete the workbook version currently used by a period', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createStudent();
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/imports/{$student->kompen_respon_hub_import_id}")
+        ->assertUnprocessable();
+
+    expect(KompenResponHubImport::query()->find($student->kompen_respon_hub_import_id))->not->toBeNull();
+});
+
+test('the upload log identifies active data by import version instead of filename', function () {
+    $this->travelTo('2026-10-05 12:00:00');
+
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createStudent();
+    $activeImport = KompenResponHubImport::query()->findOrFail($student->kompen_respon_hub_import_id);
+    $archivedImport = KompenResponHubImport::create([
+        'periode_semester' => $activeImport->periode_semester,
+        'original_filename' => $activeImport->original_filename,
+        'stored_path' => 'kompen-respon-hub/imports/historical-source.xlsx',
+        'file_hash' => str_repeat('b', 64),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 0,
+        'imported_at' => now()->subHour(),
+    ]);
+
+    KompenResponHubImportAuditLog::create([
+        'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
+        'source_import_id' => $archivedImport->id,
+        'periode_semester' => $archivedImport->periode_semester,
+        'original_filename' => $archivedImport->original_filename,
+        'class_count' => $archivedImport->class_count,
+        'student_count' => $archivedImport->student_count,
+        'detail_count' => $archivedImport->detail_count,
+        'occurred_at' => $archivedImport->imported_at,
+    ]);
+    KompenResponHubImportAuditLog::create([
+        'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
+        'source_import_id' => $activeImport->id,
+        'periode_semester' => $activeImport->periode_semester,
+        'original_filename' => $activeImport->original_filename,
+        'class_count' => $activeImport->class_count,
+        'student_count' => $activeImport->student_count,
+        'detail_count' => $activeImport->detail_count,
+        'occurred_at' => $activeImport->imported_at,
+    ]);
+
+    $this->actingAs($admin, 'admin')->get('/admin?tab=imports')
+        ->assertInertia(fn ($page) => $page
+            ->where('imports.data.0.source_import_id', $activeImport->id)
+            ->where('imports.data.0.original_filename', 'source.xlsx')
+            ->where('imports.data.0.version_status', 'active')
+            ->where('imports.data.1.source_import_id', $archivedImport->id)
+            ->where('imports.data.1.original_filename', 'source.xlsx')
+            ->where('imports.data.1.version_status', 'stored'),
+        );
+
+    $this->actingAs($admin, 'admin')->get('/admin?tab=files')
+        ->assertInertia(fn ($page) => $page
+            ->where('activeImportVersions.0.id', $activeImport->id)
+            ->where('activeImportVersions.0.periode_semester', $activeImport->periode_semester)
+            ->where('activeImportVersions.0.is_active', true)
+            ->where('importVersions.data.0.id', $activeImport->id),
         );
 });
 
@@ -409,7 +613,7 @@ test('an admin must enter their name before importing a workbook', function () {
     ])->assertSessionHasErrors('uploader_name');
 });
 
-test('a completed import clears cached filter options', function () {
+test('activating a completed import clears cached filter options', function () {
     Cache::forget(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_KEY);
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
@@ -428,54 +632,19 @@ test('a completed import clears cached filter options', function () {
 
     $this->getJson('/api/kompen-respon/filter-options')
         ->assertOk()
+        ->assertJsonPath('periode_semester', []);
+
+    $import = KompenResponHubImport::query()->sole();
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/imports/{$import->id}/activate")
+        ->assertRedirect('/admin?tab=files');
+
+    $this->getJson('/api/kompen-respon/filter-options')
+        ->assertOk()
         ->assertJsonPath('periode_semester', ['2026/2027 Gasal']);
 });
 
-test('an admin can roll back an initial import while keeping its source workbook and audit trail', function () {
-    Storage::fake('local');
-    $admin = KompenResponHubAdmin::factory()->create();
-    $olderStudent = createStudent('2025/2026 Gasal');
-    $latestStudent = createStudent('2026/2027 Gasal');
-    $latestImport = KompenResponHubImport::query()
-        ->findOrFail($latestStudent->kompen_respon_hub_import_id);
-
-    Storage::disk('local')->put($latestImport->stored_path, 'workbook');
-
-    KompenResponHubDetail::create([
-        'kompen_respon_hub_student_id' => $latestStudent->id,
-        'tanggal' => '2026-09-01',
-        'mata_kuliah' => 'Algoritma',
-        'nama_dosen' => 'Ibu Sari',
-        'jenis_pertemuan' => 'Luring',
-        'presensi' => 'Terlambat',
-        'menit_keterlambatan' => 15,
-        'jam_kompensasi' => 1.5,
-        'jam_responsi' => 2,
-    ]);
-
-    $this->actingAs($admin, 'admin')
-        ->delete('/admin/kompen-respon/imports/latest')
-        ->assertRedirect('/admin?tab=imports');
-
-    expect(KompenResponHubImport::query()->find($latestImport->id))->not->toBeNull()
-        ->and(KompenResponHubStudent::query()->find($latestStudent->id))->toBeNull()
-        ->and(KompenResponHubDetail::query()->where('kompen_respon_hub_student_id', $latestStudent->id)->exists())->toBeFalse()
-        ->and(KompenResponHubStudent::query()->find($olderStudent->id))->not->toBeNull();
-
-    Storage::disk('local')->assertExists($latestImport->stored_path);
-
-    $auditLog = KompenResponHubImportAuditLog::query()->latest('id')->firstOrFail();
-    expect($auditLog->event_type)->toBe(KompenResponHubImportAuditLog::EVENT_ROLLBACK)
-        ->and($auditLog->source_import_id)->toBe($latestImport->id)
-        ->and($auditLog->actor_name)->toBe($admin->email)
-        ->and($auditLog->actor_email)->toBe($admin->email)
-        ->and($auditLog->student_count)->toBe(1)
-        ->and($auditLog->detail_count)->toBe(0)
-        ->and($auditLog->metadata['restored'])->toBeFalse()
-        ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.rolled_back')->exists())->toBeTrue();
-});
-
-test('an admin can roll back an incorrect workbook to the previous version for the same class', function () {
+test('an admin can switch the active source to a chosen prior workbook version', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
 
@@ -489,6 +658,10 @@ test('an admin can roll back an incorrect workbook to the previous version for t
 
     $previousImport = KompenResponHubImport::query()->sole();
 
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/imports/{$previousImport->id}/activate")
+        ->assertRedirect('/admin?tab=files');
+
     $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
         'uploader_name' => 'Khairul Anwar',
         'file' => UploadedFile::fake()->createWithContent(
@@ -498,119 +671,21 @@ test('an admin can roll back an incorrect workbook to the previous version for t
     ])->assertRedirect('/admin?tab=upload');
 
     $incorrectImport = KompenResponHubImport::query()->latest('id')->firstOrFail();
-    expect($incorrectImport->replaced_imports)->toBe(['1AEA1' => $previousImport->id])
-        ->and(KompenResponHubStudent::query()->sole()->total_hutang_jam)->toBe('13.7500');
+    expect(KompenResponHubStudent::query()->sole()->total_hutang_jam)->toBe('3.5000');
 
     $this->actingAs($admin, 'admin')
-        ->delete('/admin/kompen-respon/imports/latest')
-        ->assertRedirect('/admin?tab=imports');
-
-    $restoredStudent = KompenResponHubStudent::query()->sole();
-    expect($restoredStudent->kompen_respon_hub_import_id)->toBe($previousImport->id)
-        ->and($restoredStudent->total_hutang_jam)->toBe('3.5000')
-        ->and(KompenResponHubImport::query()->find($incorrectImport->id))->not->toBeNull();
-
-    Storage::disk('local')->assertExists($previousImport->stored_path);
-    Storage::disk('local')->assertExists($incorrectImport->stored_path);
-
-    $auditLog = KompenResponHubImportAuditLog::query()->latest('id')->firstOrFail();
-    expect($auditLog->event_type)->toBe(KompenResponHubImportAuditLog::EVENT_ROLLBACK)
-        ->and($auditLog->source_import_id)->toBe($incorrectImport->id)
-        ->and($auditLog->actor_email)->toBe($admin->email)
-        ->and($auditLog->metadata['restored'])->toBeTrue()
-        ->and($auditLog->metadata['restored_imports'][0]['id'])->toBe($previousImport->id)
-        ->and(KompenResponHubActivityLog::query()
-            ->where('event_type', 'import.rolled_back')
-            ->where('subject_reference', (string) $incorrectImport->id)
-            ->exists())->toBeTrue();
-});
-
-test('an admin can make a selected archived workbook version active again', function () {
-    Storage::fake('local');
-    $admin = KompenResponHubAdmin::factory()->create();
-
-    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
-        'uploader_name' => 'Khairul Anwar',
-        'file' => UploadedFile::fake()->createWithContent(
-            'versi-awal.xlsx',
-            workbookContents(compensationHours: 1.5, responseHours: 2),
-        ),
-    ])->assertRedirect('/admin?tab=upload');
-
-    $selectedImport = KompenResponHubImport::query()->sole();
-
-    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
-        'uploader_name' => 'Khairul Anwar',
-        'file' => UploadedFile::fake()->createWithContent(
-            'versi-terbaru.xlsx',
-            workbookContents(compensationHours: 4, responseHours: 3),
-        ),
-    ])->assertRedirect('/admin?tab=upload');
-
-    $this->actingAs($admin, 'admin')
-        ->post("/admin/kompen-respon/imports/{$selectedImport->id}/restore")
-        ->assertRedirect('/admin?tab=imports')
-        ->assertSessionHas('success', 'Versi versi-awal.xlsx kini menjadi data aktif untuk kelas 1AEA1.');
+        ->post("/admin/kompen-respon/imports/{$incorrectImport->id}/activate")
+        ->assertRedirect('/admin?tab=files');
 
     expect(KompenResponHubStudent::query()->sole())
-        ->kompen_respon_hub_import_id->toBe($selectedImport->id)
-        ->and(KompenResponHubStudent::query()->sole()->total_hutang_jam)->toBe('3.5000')
-        ->and(KompenResponHubImportAuditLog::query()->latest('id')->value('event_type'))->toBe(KompenResponHubImportAuditLog::EVENT_RESTORE)
-        ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.version_restored')->exists())->toBeTrue();
+        ->kompen_respon_hub_import_id->toBe($incorrectImport->id)
+        ->and(KompenResponHubStudent::query()->sole()->total_hutang_jam)->toBe('13.7500')
+        ->and(KompenResponHubActiveImport::query()->sole()->kompen_respon_hub_import_id)->toBe($incorrectImport->id)
+        ->and(KompenResponHubImportAuditLog::query()->latest('id')->value('event_type'))->toBe(KompenResponHubImportAuditLog::EVENT_ACTIVATE)
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.version_activated')->exists())->toBeTrue();
 });
 
-test('an admin cannot restore a selected workbook when its period is locked', function () {
-    Storage::fake('local');
-    $admin = KompenResponHubAdmin::factory()->create();
-    $student = createStudent();
-    $import = KompenResponHubImport::query()->findOrFail($student->kompen_respon_hub_import_id);
-    Storage::disk('local')->put($import->stored_path, workbookContents());
-    KompenResponHubPeriodCutoff::create([
-        'periode_semester' => $student->periode_semester,
-        'deadline_at' => now()->subDay(),
-        'timezone' => 'Asia/Jakarta',
-        'closed_at' => now(),
-    ]);
-
-    $this->actingAs($admin, 'admin')
-        ->post("/admin/kompen-respon/imports/{$import->id}/restore")
-        ->assertRedirect('/admin?tab=imports')
-        ->assertSessionHas('error', 'Periode telah ditutup dan versi impor tidak dapat dipulihkan.');
-
-    expect(KompenResponHubStudent::query()->sole()->kompen_respon_hub_import_id)
-        ->toBe($import->id);
-});
-
-test('a rollback clears cached filter options', function () {
-    Cache::forget(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_KEY);
-    Storage::fake('local');
-    $admin = KompenResponHubAdmin::factory()->create();
-    createStudent('2025/2026 Gasal');
-    $latestStudent = createStudent('2026/2027 Gasal');
-    $latestImport = KompenResponHubImport::query()
-        ->findOrFail($latestStudent->kompen_respon_hub_import_id);
-
-    Storage::disk('local')->put($latestImport->stored_path, 'workbook');
-
-    $this->getJson('/api/kompen-respon/filter-options')
-        ->assertOk()
-        ->assertJsonPath('periode_semester', ['2026/2027 Gasal', '2025/2026 Gasal']);
-
-    $this->actingAs($admin, 'admin')
-        ->delete('/admin/kompen-respon/imports/latest')
-        ->assertRedirect('/admin?tab=imports');
-
-    $this->getJson('/api/kompen-respon/filter-options')
-        ->assertOk()
-        ->assertJsonPath('periode_semester', ['2025/2026 Gasal']);
-});
-
-test('a guest cannot delete the latest upload', function () {
-    $this->delete('/admin/kompen-respon/imports/latest')
-        ->assertRedirect('/admin/login');
-});
-
-test('a guest cannot restore a selected upload version', function () {
+test('a guest cannot activate a selected upload version', function () {
     $import = KompenResponHubImport::create([
         'periode_semester' => '2026/2027 Ganjil',
         'original_filename' => 'guest-restore.xlsx',
@@ -622,7 +697,7 @@ test('a guest cannot restore a selected upload version', function () {
         'imported_at' => now(),
     ]);
 
-    $this->post("/admin/kompen-respon/imports/{$import->id}/restore")
+    $this->post("/admin/kompen-respon/imports/{$import->id}/activate")
         ->assertRedirect('/admin/login');
 });
 
@@ -661,8 +736,8 @@ test('an admin cannot delete an upload while another import is still active', fu
     ]);
 
     $this->actingAs($admin, 'admin')
-        ->delete('/admin/kompen-respon/imports/latest')
-        ->assertRedirect('/admin?tab=imports')
+        ->post("/admin/kompen-respon/imports/{$student->kompen_respon_hub_import_id}/activate")
+        ->assertRedirect('/admin?tab=files')
         ->assertSessionHas('error');
 
     expect(KompenResponHubStudent::query()->find($student->id))->not->toBeNull();
@@ -785,7 +860,7 @@ test('an import is rejected when it contains an identical detail twice', functio
         ->and($importTask->error_message)->toContain('Detail duplikat dengan baris 2 ditemukan.');
 });
 
-test('an admin can import a legacy workbook with its period in one cell', function () {
+test('an import rejects a legacy combined period value', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
 
@@ -797,7 +872,28 @@ test('an admin can import a legacy workbook with its period in one cell', functi
         ),
     ])->assertRedirect('/admin?tab=upload');
 
-    expect(KompenResponHubImport::query()->sole()->periode_semester)->toBe('2026/2027 Gasal');
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Semester wajib diisi dengan Gasal atau Genap.');
+});
+
+test('an import rejects semester names other than Gasal or Genap', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents('Ganjil', '2026/2027'),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Semester wajib diisi dengan Gasal atau Genap.');
 });
 
 test('an admin import reads the class and level metadata from the workbook', function () {
@@ -811,6 +907,11 @@ test('an admin import reads the class and level metadata from the workbook', fun
             workbookContents(classCode: '2AEA1', level: 2),
         ),
     ])->assertRedirect('/admin?tab=upload');
+
+    $import = KompenResponHubImport::query()->sole();
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/imports/{$import->id}/activate")
+        ->assertRedirect('/admin?tab=files');
 
     $student = KompenResponHubStudent::query()->sole();
     expect($student->kelas)->toBe('2AEA1')
@@ -847,7 +948,7 @@ function createStudent(string $period = '2026/2027 Ganjil'): KompenResponHubStud
         'imported_at' => now(),
     ]);
 
-    return KompenResponHubStudent::create([
+    $student = KompenResponHubStudent::create([
         'kompen_respon_hub_import_id' => $import->id,
         'nim' => '123456789',
         'periode_semester' => $period,
@@ -864,6 +965,16 @@ function createStudent(string $period = '2026/2027 Ganjil'): KompenResponHubStud
         'kompensasi_dikerjakan_jam' => 0,
         'sisa_hutang_jam' => 3.5,
     ]);
+
+    KompenResponHubActiveImport::query()->updateOrCreate(
+        ['periode_semester' => $period],
+        [
+            'kompen_respon_hub_import_id' => $import->id,
+            'activated_at' => $import->imported_at,
+        ],
+    );
+
+    return $student;
 }
 
 function workbookContents(

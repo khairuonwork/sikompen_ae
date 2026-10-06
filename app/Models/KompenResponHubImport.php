@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class KompenResponHubImport extends Model
 {
@@ -16,6 +17,7 @@ class KompenResponHubImport extends Model
         'uploader_email',
         'periode_semester',
         'original_filename',
+        'display_filename',
         'stored_path',
         'file_hash',
         'class_count',
@@ -48,5 +50,11 @@ class KompenResponHubImport extends Model
     public function uploadedByAdmin(): BelongsTo
     {
         return $this->belongsTo(KompenResponHubAdmin::class, 'uploaded_by_admin_id');
+    }
+
+    /** @return HasOne<KompenResponHubActiveImport, $this> */
+    public function activeReference(): HasOne
+    {
+        return $this->hasOne(KompenResponHubActiveImport::class, 'kompen_respon_hub_import_id');
     }
 }

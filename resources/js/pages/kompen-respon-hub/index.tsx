@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
 import { index as studentIndex } from "@/routes/student/kompen-respon";
-import { DashboardPanel, StudentOverviewPanel } from "@/features/kompen-respon-hub/dashboard/dashboard-panel";
+import { StudentOverviewPanel } from "@/features/kompen-respon-hub/dashboard/dashboard-panel";
 import { GlobalStudentSearch } from "@/features/kompen-respon-hub/dashboard/global-student-search";
 import { DetailCorrectionPanel } from "@/features/kompen-respon-hub/detail-kompen/detail-correction-panel";
 import { DetailTable } from "@/features/kompen-respon-hub/detail-kompen/detail-table";
@@ -30,6 +30,8 @@ import {
 } from "@/features/kompen-respon-hub/kompen-respon/student-correction-panel";
 import { StudentTable } from "@/features/kompen-respon-hub/kompen-respon/student-table";
 import { ImportAuditLogTable } from "@/features/kompen-respon-hub/log-upload/import-audit-log-table";
+import { ImportAuditFilterPanel } from "@/features/kompen-respon-hub/log-upload/import-audit-filter-panel";
+import { ImportVersionList } from "@/features/kompen-respon-hub/list-file/import-version-list";
 import { ActivityFilterPanel, ActivityLogTable } from "@/features/kompen-respon-hub/riwayat-aktivitas/activity-panel";
 import { EmptyTableState, TableGuide } from "@/features/kompen-respon-hub/shared/components/feedback";
 import { FilterPanel } from "@/features/kompen-respon-hub/shared/components/data-filter-panel";
@@ -50,16 +52,22 @@ export default function KompenResponHubIndex({
     isAdmin,
     filters,
     filterOptions,
+    importAuditPeriods,
+    importAuditYears,
     activityFilterOptions,
-    dashboard,
+    warningPeriods,
     flash,
     students,
     details,
     imports,
+    importVersions,
+    activeImportVersions,
     warnings,
-    fixedCandidates,
+    warningCandidates,
+    rolledBackWarnings,
     activityLogs,
     cutoffs,
+    managedPeriodHasActiveWarnings,
     activeImportTasks,
     exportTasks,
 }: KompenResponHubPageProps): React.JSX.Element {
@@ -170,15 +178,33 @@ export default function KompenResponHubIndex({
                                     onSelectStudent={openStudentOverview}
                                 />
                             ) : null}
-                            <Button
-                                type="button"
-                                variant="outline"
-                                disabled
-                                className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 disabled:opacity-100"
-                            >
-                                <ArrowLeft className="size-4" />
-                                Kembali
-                            </Button>
+                            {isAdmin ? (
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white active:scale-95"
+                                >
+                                    <Link
+                                        href={adminIndex.url({
+                                            query: { tab: "upload" },
+                                        })}
+                                        className="flex items-center gap-1.5"
+                                    >
+                                        <ArrowLeft className="size-4" />
+                                        Kembali
+                                    </Link>
+                                </Button>
+                            ) : (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled
+                                    className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 disabled:opacity-100"
+                                >
+                                    <ArrowLeft className="size-4" />
+                                    Kembali
+                                </Button>
+                            )}
                             {isAdmin ? (
                                 <>
                                     <Button
@@ -268,7 +294,7 @@ export default function KompenResponHubIndex({
                                 href={indexAction.url({
                                     query:
                                         tab === "upload" ||
-                                        tab === "dashboard" ||
+                                        tab === "files" ||
                                         tab === "imports" ||
                                         tab === "warnings" ||
                                         tab === "activity"
@@ -307,14 +333,6 @@ export default function KompenResponHubIndex({
                     ) : null}
 
                     {/* Main Views */}
-                    {activeTab === "dashboard" && isAdmin && dashboard ? (
-                        <DashboardPanel
-                            dashboard={dashboard}
-                            filters={filters}
-                            filterOptions={filterOptions}
-                        />
-                    ) : null}
-
                     {activeTab === "upload" ? (
                         <UploadPanel
                             onUploadRequestActivityChange={
@@ -328,31 +346,65 @@ export default function KompenResponHubIndex({
                             <div className="flex flex-col justify-between gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl sm:flex-row sm:items-center">
                                 <div>
                                     <h2 className="text-lg font-extrabold text-[#395886]">
-                                        Audit Impor
+                                        Log Upload
                                     </h2>
                                     <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
-                                        Pilih versi unggahan pada tabel untuk
-                                        menjadikannya data aktif. Hanya kelas
-                                        yang ada di versi tersebut yang akan
-                                        dipulihkan; file sumber dan audit tetap
-                                        tersimpan.
+                                        Riwayat permanen unggah dan pemilihan
+                                        workbook. Gunakan List File untuk melihat
+                                        sumber data yang sedang digunakan.
                                     </p>
                                 </div>
                             </div>
                             <TableGuide
                                 title="Panduan Log Upload"
                                 items={[
-                                    "Aksi menunjukkan unggahan, rollback, atau pemulihan versi.",
-                                    "Status versi menunjukkan apakah workbook masih dipakai sebagai data aktif.",
-                                    "Detail adalah jumlah baris Detail Kompen yang dibaca dari workbook, bukan catatan tambahan.",
-                                    "Jadikan aktif hanya mengganti kelas yang termuat pada file yang dipilih.",
+                                    "Setiap baris mencatat satu tindakan: unggah, aktivasi, rollback, atau pemulihan data.",
+                                    "Periode dan nama file menjelaskan workbook yang terdampak; nama file yang sama tetap dapat menjadi versi berbeda bila waktu unggahnya berbeda.",
+                                    "Waktu tindakan menunjukkan kapan aktivitas dilakukan. Log ini bersifat audit dan tidak menentukan sumber data aktif.",
+                                    "Untuk melihat workbook yang sedang dipakai pada setiap periode, buka List File.",
                                 ]}
+                            />
+                            <ImportAuditFilterPanel
+                                filters={filters}
+                                periods={importAuditPeriods}
+                                years={importAuditYears}
                             />
                             {imports?.data.length ? (
                                 <ImportAuditLogTable data={imports} />
                             ) : (
                                 <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-10 text-center text-xs font-bold text-[#395886]/70 backdrop-blur-xl">
-                                    Belum ada riwayat upload atau rollback.
+                                    Belum ada riwayat upload.
+                                </div>
+                            )}
+                        </section>
+                    ) : null}
+
+                    {activeTab === "files" && isAdmin ? (
+                        <section className="grid gap-4">
+                            <div className="rounded-3xl border border-white/80 bg-white/80 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl">
+                                <h2 className="text-lg font-extrabold text-[#395886]">
+                                    List File
+                                </h2>
+                                <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
+                                    Tentukan satu workbook yang digunakan untuk setiap periode. Mengganti versi hanya mengganti data sumber periode tersebut; koreksi manual, progres, SP, dan riwayat tetap dipertahankan.
+                                </p>
+                            </div>
+                            <TableGuide
+                                title="Panduan List File"
+                                items={[
+                                    "Bagian Sumber data yang digunakan merangkum satu workbook aktif pada setiap periode.",
+                                    "Setiap periode hanya dapat memiliki satu workbook aktif, sedangkan periode yang berbeda dapat memakai workbook aktif yang berbeda.",
+                                    "Daftar semua versi menyimpan riwayat workbook yang siap dipilih. Klik Jadikan aktif untuk mengganti sumber data periode terkait.",
+                                ]}
+                            />
+                            {importVersions?.data.length ? (
+                                <ImportVersionList
+                                    activeVersions={activeImportVersions}
+                                    data={importVersions}
+                                />
+                            ) : (
+                                <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-10 text-center text-xs font-bold text-[#395886]/70">
+                                    Belum ada workbook yang siap dipilih. Upload dokumen terlebih dahulu.
                                 </div>
                             )}
                         </section>
@@ -363,8 +415,13 @@ export default function KompenResponHubIndex({
                             cutoffs={cutoffs}
                             filterOptions={filterOptions}
                             filters={filters}
+                            warningPeriods={warningPeriods}
                             warnings={warnings}
-                            fixedCandidates={fixedCandidates}
+                            warningCandidates={warningCandidates}
+                            rolledBackWarnings={rolledBackWarnings}
+                            managedPeriodHasActiveWarnings={
+                                managedPeriodHasActiveWarnings
+                            }
                             selectedWarning={selectedWarning}
                             onSelectWarning={setSelectedWarning}
                             onCloseWarning={() => setSelectedWarning(null)}
