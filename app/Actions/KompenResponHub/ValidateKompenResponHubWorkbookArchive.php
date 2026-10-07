@@ -3,6 +3,7 @@
 namespace App\Actions\KompenResponHub;
 
 use InvalidArgumentException;
+use XMLReader;
 use ZipArchive;
 
 class ValidateKompenResponHubWorkbookArchive
@@ -30,6 +31,7 @@ class ValidateKompenResponHubWorkbookArchive
 
         try {
             $this->validateEntries($archive);
+            $this->rejectFormulaCells($archive);
         } finally {
             $archive->close();
         }
@@ -95,6 +97,39 @@ class ValidateKompenResponHubWorkbookArchive
             || str_starts_with($name, '/')
             || str_starts_with($name, '../')
             || str_contains($name, '/../');
+    }
+
+    private function rejectFormulaCells(ZipArchive $archive): void
+    {
+        for ($index = 0; $index < $archive->numFiles; $index++) {
+            $entry = $archive->statIndex($index);
+            $name = $entry['name'] ?? null;
+
+            if (! is_string($name) || preg_match('#^xl/worksheets/[^/]+\.xml$#', $name) !== 1) {
+                continue;
+            }
+
+            $worksheetXml = $archive->getFromIndex($index);
+
+            if (! is_string($worksheetXml)) {
+                throw new InvalidArgumentException('Workbook memiliki worksheet yang tidak dapat dibaca.');
+            }
+
+            $reader = new XMLReader;
+            if (! $reader->XML($worksheetXml, null, LIBXML_NONET | LIBXML_COMPACT)) {
+                throw new InvalidArgumentException('Workbook memiliki struktur worksheet yang tidak valid.');
+            }
+
+            try {
+                while ($reader->read()) {
+                    if ($reader->nodeType === XMLReader::ELEMENT && $reader->localName === 'f') {
+                        throw new InvalidArgumentException('Workbook tidak boleh berisi formula. Gunakan nilai statis pada seluruh cell data.');
+                    }
+                }
+            } finally {
+                $reader->close();
+            }
+        }
     }
 
     private function maximumUploadKilobytes(): int

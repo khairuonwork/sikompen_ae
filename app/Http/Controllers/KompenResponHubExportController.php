@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\KompenResponHubExportTaskAccessRequest;
 use App\Http\Requests\StoreKompenResponHubExportRequest;
 use App\Http\Resources\KompenResponHubExportTaskResource;
 use App\Jobs\GenerateKompenResponHubExport;
+use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubExportTask;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -18,6 +20,7 @@ class KompenResponHubExportController extends Controller
     public function store(
         StoreKompenResponHubExportRequest $request,
         SiAdminProxyAccess $access,
+        RecordKompenResponHubActivity $activity,
     ): RedirectResponse {
         $actor = $access->hasAdminAccess($request)
             ? $access->actor($request)
@@ -45,10 +48,24 @@ class KompenResponHubExportController extends Controller
             'progress' => 0,
             'progress_message' => 'Permintaan ekspor masuk ke antrean.',
             'queued_at' => now(),
-            'expires_at' => now()->addDay(),
+            'expires_at' => now()->addHours(max(1, (int) config('kompen-respon-hub.retention.export_hours', 24))),
         ]);
 
         GenerateKompenResponHubExport::dispatch($task->id);
+
+        $admin = is_int($actor['id'])
+            ? KompenResponHubAdmin::query()->find($actor['id'])
+            : null;
+        $activity->execute(
+            'export.requested',
+            'export',
+            (string) $task->id,
+            $admin,
+            $request,
+            period: is_string($filters['periode_semester'] ?? null) ? $filters['periode_semester'] : null,
+            metadata: ['resource' => $task->resource, 'format' => $task->format],
+            subjectName: $task->download_filename,
+        );
 
         return back()->with('success', 'Permintaan ekspor masuk ke antrean. File akan tersedia di halaman ini setelah selesai dibuat.');
     }

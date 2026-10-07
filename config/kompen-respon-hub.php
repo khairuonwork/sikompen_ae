@@ -16,4 +16,13 @@ return [
     ],
 
     'export_max_rows' => (int) env('SIKOMPEN_EXPORT_MAX_ROWS', 5000),
+
+    'retention' => [
+        'export_hours' => (int) env('SIKOMPEN_EXPORT_RETENTION_HOURS', 24),
+        'import_task_days' => (int) env('SIKOMPEN_IMPORT_TASK_RETENTION_DAYS', 30),
+    ],
+
+    'queue' => [
+        'stalled_task_minutes' => (int) env('SIKOMPEN_STALLED_TASK_MINUTES', 30),
+    ],
 ];

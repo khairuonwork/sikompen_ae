@@ -52,20 +52,21 @@ class ProcessKompenResponHubImport implements ShouldQueue
             $archiveValidator->execute($fullPath);
             $payload = $parser->execute($fullPath);
         } catch (\InvalidArgumentException $exception) {
-            $this->markAsFailed($importTask, $exception->getMessage());
+            $this->markAsFailed($importTask, $exception->getMessage(), $activity);
 
             return;
         } catch (Throwable) {
             $this->markAsFailed(
                 $importTask,
                 'Workbook tidak dapat dibaca. Simpan ulang sebagai XLSX dari template lalu unggah kembali.',
+                $activity,
             );
 
             return;
         }
 
         if ($payload['errors'] !== []) {
-            $this->markAsFailed($importTask, $this->validationErrorMessage($payload['errors']));
+            $this->markAsFailed($importTask, $this->validationErrorMessage($payload['errors']), $activity);
 
             return;
         }
@@ -135,6 +136,7 @@ class ProcessKompenResponHubImport implements ShouldQueue
         $this->markAsFailed(
             $importTask,
             'Proses impor berhenti karena terjadi kendala pada server. Silakan unggah kembali atau hubungi administrator.',
+            app(RecordKompenResponHubActivity::class),
         );
     }
 
@@ -167,8 +169,15 @@ class ProcessKompenResponHubImport implements ShouldQueue
         return "Workbook perlu diperbaiki. {$messages}";
     }
 
-    private function markAsFailed(KompenResponHubImportTask $importTask, string $message): void
-    {
+    private function markAsFailed(
+        KompenResponHubImportTask $importTask,
+        string $message,
+        RecordKompenResponHubActivity $activity,
+    ): void {
+        if (! $importTask->isActive()) {
+            return;
+        }
+
         $this->updateProgress(
             $importTask,
             KompenResponHubImportTask::STATUS_FAILED,
@@ -181,5 +190,16 @@ class ProcessKompenResponHubImport implements ShouldQueue
         );
 
         Storage::disk('local')->delete($importTask->stored_path);
+
+        $activity->execute(
+            'import.failed',
+            'import_task',
+            (string) $importTask->id,
+            KompenResponHubAdmin::query()->find($importTask->uploaded_by_admin_id),
+            period: null,
+            reason: $message,
+            metadata: ['original_filename' => $importTask->original_filename],
+            subjectName: $importTask->original_filename,
+        );
     }
 }

@@ -229,7 +229,8 @@ test('an export without filters is queued and produces a landscape XLSX', functi
     $task = KompenResponHubExportTask::query()->sole();
 
     expect($task->filters)->toBe([])
-        ->and($task->status)->toBe(KompenResponHubExportTask::StatusQueued);
+        ->and($task->status)->toBe(KompenResponHubExportTask::StatusQueued)
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'export.requested')->exists())->toBeTrue();
 
     Queue::assertPushed(
         GenerateKompenResponHubExport::class,
@@ -340,7 +341,8 @@ test('an export fails safely when its result exceeds the hard row limit', functi
     );
 
     expect($task->refresh()->status)->toBe(KompenResponHubExportTask::StatusFailed)
-        ->and($task->error_message)->toContain('maksimal 1 baris');
+        ->and($task->error_message)->toContain('maksimal 1 baris')
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'export.failed')->exists())->toBeTrue();
 });
 
 test('a student cannot queue an export of warning letters', function () {
@@ -824,6 +826,22 @@ test('an import rejects an XLSX archive with too many internal entries before st
     expect(KompenResponHubImportTask::query()->doesntExist())->toBeTrue();
 });
 
+test('an import rejects workbooks containing formulas before storage', function () {
+    Storage::fake('local');
+    Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(formulaCell: 'L4'),
+        ),
+    ])->assertSessionHasErrors('file');
+
+    expect(KompenResponHubImportTask::query()->doesntExist())->toBeTrue();
+});
+
 test('an import accepts worksheets expanded beyond the official template dimensions', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
@@ -840,6 +858,54 @@ test('an import accepts worksheets expanded beyond the official template dimensi
 
     expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_COMPLETED)
         ->and(KompenResponHubImport::query()->exists())->toBeTrue();
+});
+
+test('expired import task records are purged while imports and audit logs are retained', function () {
+    config(['kompen-respon-hub.retention.import_task_days' => 30]);
+    $oldCompletedTask = KompenResponHubImportTask::factory()->create([
+        'status' => KompenResponHubImportTask::STATUS_COMPLETED,
+        'completed_at' => now()->subDays(31),
+    ]);
+    $recentFailedTask = KompenResponHubImportTask::factory()->create([
+        'status' => KompenResponHubImportTask::STATUS_FAILED,
+        'failed_at' => now()->subDays(29),
+    ]);
+    $import = KompenResponHubImport::create([
+        'periode_semester' => '2026/2027 Gasal',
+        'original_filename' => 'source.xlsx',
+        'stored_path' => 'kompen-respon-hub/imports/source.xlsx',
+        'file_hash' => str_repeat('d', 64),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 0,
+        'imported_at' => now(),
+    ]);
+
+    $this->artisan('sikompen:purge-import-tasks')->assertSuccessful();
+
+    expect(KompenResponHubImportTask::query()->find($oldCompletedTask->id))->toBeNull()
+        ->and(KompenResponHubImportTask::query()->find($recentFailedTask->id))->not->toBeNull()
+        ->and(KompenResponHubImport::query()->find($import->id))->not->toBeNull()
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'maintenance.import_tasks_purged')->exists())->toBeTrue();
+});
+
+test('stalled import and export tasks are marked failed and added to the audit trail', function () {
+    config(['kompen-respon-hub.queue.stalled_task_minutes' => 15]);
+    $importTask = KompenResponHubImportTask::factory()->create([
+        'status' => KompenResponHubImportTask::STATUS_QUEUED,
+        'queued_at' => now()->subMinutes(16),
+    ]);
+    $exportTask = KompenResponHubExportTask::factory()->create([
+        'status' => KompenResponHubExportTask::StatusProcessing,
+        'started_at' => now()->subMinutes(16),
+    ]);
+
+    $this->artisan('sikompen:reconcile-tasks')->assertSuccessful();
+
+    expect($importTask->refresh()->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($exportTask->refresh()->status)->toBe(KompenResponHubExportTask::StatusFailed)
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.timed_out')->exists())->toBeTrue()
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'export.timed_out')->exists())->toBeTrue();
 });
 
 test('an admin can download the empty Sikompen import template', function () {
@@ -864,7 +930,8 @@ test('an invalid academic year marks the queued import as failed', function () {
 
     $importTask = KompenResponHubImportTask::query()->sole();
     expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
-        ->and($importTask->error_message)->toContain('Tahun ajaran wajib berformat');
+        ->and($importTask->error_message)->toContain('Tahun ajaran wajib berformat')
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.failed')->exists())->toBeTrue();
 });
 
 test('an import is rejected when summary hours do not match detail totals', function () {
@@ -1052,6 +1119,7 @@ function workbookContents(
     ?string $detailName = null,
     bool $duplicateDetail = false,
     ?string $summaryOutsideTemplateCell = null,
+    ?string $formulaCell = null,
 ): string {
     $totalHours = $compensationHours + $responseHours;
     $workbook = new Spreadsheet;
@@ -1070,6 +1138,10 @@ function workbookContents(
 
     if ($summaryOutsideTemplateCell !== null) {
         $summary->setCellValue($summaryOutsideTemplateCell, 'Di luar kapasitas template');
+    }
+
+    if ($formulaCell !== null) {
+        $summary->setCellValue($formulaCell, '=1+1');
     }
 
     $details = $workbook->createSheet();

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Models\KompenResponHubExportTask;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Storage;
 #[Description('Remove expired Sikompen export files and task records.')]
 class PurgeKompenResponHubExports extends Command
 {
-    public function handle(): int
+    public function handle(RecordKompenResponHubActivity $activity): int
     {
         $deletedCount = 0;
 
@@ -28,6 +29,17 @@ class PurgeKompenResponHubExports extends Command
                     $deletedCount++;
                 }
             });
+
+        if ($deletedCount > 0) {
+            $activity->execute(
+                'maintenance.exports_purged',
+                'export',
+                null,
+                null,
+                reason: 'File dan task ekspor kedaluwarsa dihapus.',
+                metadata: ['deleted_count' => $deletedCount],
+            );
+        }
 
         $this->components->info("{$deletedCount} ekspor kedaluwarsa dihapus.");
 

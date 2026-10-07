@@ -48,23 +48,15 @@ class GenerateKompenResponHubExport implements ShouldQueue
         try {
             $result = $builder->execute($task);
         } catch (DomainException $exception) {
-            $task->update([
-                'status' => KompenResponHubExportTask::StatusFailed,
-                'progress' => 100,
-                'progress_message' => 'Ekspor tidak dapat dibuat.',
-                'error_message' => $exception->getMessage(),
-                'failed_at' => now(),
-            ]);
+            $this->markAsFailed($task, $exception->getMessage(), $activity);
 
             return;
         } catch (Throwable) {
-            $task->update([
-                'status' => KompenResponHubExportTask::StatusFailed,
-                'progress' => 100,
-                'progress_message' => 'Ekspor gagal diproses.',
-                'error_message' => 'File tidak dapat dibuat. Coba ulangi dengan filter yang lebih spesifik atau hubungi administrator.',
-                'failed_at' => now(),
-            ]);
+            $this->markAsFailed(
+                $task,
+                'File tidak dapat dibuat. Coba ulangi dengan filter yang lebih spesifik atau hubungi administrator.',
+                $activity,
+            );
 
             return;
         }
@@ -76,7 +68,7 @@ class GenerateKompenResponHubExport implements ShouldQueue
             'output_path' => $result['output_path'],
             'download_filename' => $result['download_filename'],
             'completed_at' => now(),
-            'expires_at' => now()->addDay(),
+            'expires_at' => now()->addHours(max(1, (int) config('kompen-respon-hub.retention.export_hours', 24))),
         ]);
 
         $admin = $task->requested_by_admin_id === null
@@ -90,6 +82,53 @@ class GenerateKompenResponHubExport implements ShouldQueue
             $admin,
             null,
             period: $task->filters['periode_semester'] ?? null,
+            metadata: ['resource' => $task->resource, 'format' => $task->format],
+            subjectName: $task->download_filename,
+        );
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        $task = KompenResponHubExportTask::query()->find($this->exportTaskId);
+
+        if ($task === null || $task->status === KompenResponHubExportTask::StatusCompleted) {
+            return;
+        }
+
+        $this->markAsFailed(
+            $task,
+            'File tidak dapat dibuat. Coba ulangi dengan filter yang lebih spesifik atau hubungi administrator.',
+            app(RecordKompenResponHubActivity::class),
+        );
+    }
+
+    private function markAsFailed(
+        KompenResponHubExportTask $task,
+        string $message,
+        RecordKompenResponHubActivity $activity,
+    ): void {
+        if (! $task->isActive()) {
+            return;
+        }
+
+        $task->update([
+            'status' => KompenResponHubExportTask::StatusFailed,
+            'progress' => 100,
+            'progress_message' => 'Ekspor tidak dapat dibuat.',
+            'error_message' => $message,
+            'failed_at' => now(),
+        ]);
+
+        $admin = $task->requested_by_admin_id === null
+            ? null
+            : KompenResponHubAdmin::query()->find($task->requested_by_admin_id);
+        $activity->execute(
+            'export.failed',
+            'export',
+            (string) $task->id,
+            $admin,
+            period: is_string($task->filters['periode_semester'] ?? null) ? $task->filters['periode_semester'] : null,
+            reason: $message,
             metadata: ['resource' => $task->resource, 'format' => $task->format],
             subjectName: $task->download_filename,
         );
