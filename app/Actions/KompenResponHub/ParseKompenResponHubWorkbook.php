@@ -12,11 +12,11 @@ class ParseKompenResponHubWorkbook
 {
     private const NEW_CLASS_TEMPLATE_MARKER = 'TEMPLATE BLOK KELAS BARU';
 
-    /** @var array<string, array{maximum_rows: int, maximum_columns: int}> */
+    /** @var array<string, array{minimum_rows: int, minimum_columns: int}> */
     private const SHEET_DIMENSIONS = [
-        'Petunjuk' => ['maximum_rows' => 16, 'maximum_columns' => 8],
-        'Kompen dan Respon' => ['maximum_rows' => 680, 'maximum_columns' => 51],
-        'Detail Kompen' => ['maximum_rows' => 915, 'maximum_columns' => 13],
+        'Petunjuk' => ['minimum_rows' => 1, 'minimum_columns' => 1],
+        'Kompen dan Respon' => ['minimum_rows' => 3, 'minimum_columns' => 12],
+        'Detail Kompen' => ['minimum_rows' => 1, 'minimum_columns' => 13],
     ];
 
     private const SUMMARY_HEADERS = [
@@ -79,13 +79,6 @@ class ParseKompenResponHubWorkbook
      */
     private function validateWorkbookStructure(array $sheets, array &$errors): void
     {
-        if (count($sheets) > count(self::SHEET_DIMENSIONS)) {
-            $errors[] = [
-                'location' => 'Workbook',
-                'message' => 'Workbook melebihi jumlah sheet yang didukung template Sikompen.',
-            ];
-        }
-
         foreach ($sheets as $name => $sheet) {
             $limits = self::SHEET_DIMENSIONS[$name] ?? null;
 
@@ -101,10 +94,10 @@ class ParseKompenResponHubWorkbook
             $rowCount = $sheet->getHighestDataRow();
             $columnCount = Coordinate::columnIndexFromString($sheet->getHighestDataColumn());
 
-            if ($rowCount > $limits['maximum_rows'] || $columnCount > $limits['maximum_columns']) {
+            if ($rowCount < $limits['minimum_rows'] || $columnCount < $limits['minimum_columns']) {
                 $errors[] = [
                     'location' => $name,
-                    'message' => "Sheet melebihi kapasitas template: maksimal {$limits['maximum_rows']} baris dan {$limits['maximum_columns']} kolom.",
+                    'message' => "Dimensi sheet tidak memenuhi struktur minimum: {$limits['minimum_rows']} baris dan {$limits['minimum_columns']} kolom.",
                 ];
             }
         }

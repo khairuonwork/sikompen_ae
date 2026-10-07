@@ -824,7 +824,7 @@ test('an import rejects an XLSX archive with too many internal entries before st
     expect(KompenResponHubImportTask::query()->doesntExist())->toBeTrue();
 });
 
-test('an import rejects worksheets that exceed the official template capacity', function () {
+test('an import accepts worksheets expanded beyond the official template dimensions', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
 
@@ -838,8 +838,8 @@ test('an import rejects worksheets that exceed the official template capacity', 
 
     $importTask = KompenResponHubImportTask::query()->sole();
 
-    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
-        ->and($importTask->error_message)->toContain('melebihi kapasitas template');
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_COMPLETED)
+        ->and(KompenResponHubImport::query()->exists())->toBeTrue();
 });
 
 test('an admin can download the empty Sikompen import template', function () {
