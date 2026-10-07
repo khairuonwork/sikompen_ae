@@ -6,9 +6,9 @@ use App\Models\KompenResponHubActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/** @mixin KompenResponHubActivityLog */
 class KompenResponHubActivityLogResource extends JsonResource
 {
-    /** @mixin KompenResponHubActivityLog */
     /**
      * Transform the resource into an array.
      *

@@ -35,7 +35,7 @@ class KompenResponHubImportActivationController extends Controller
         try {
             $activatedVersion = $activateImportVersion->execute(
                 $import,
-                $admin?->email ?? $actor['email'],
+                $admin instanceof KompenResponHubAdmin ? $admin->email : $actor['email'],
                 $actor['email'],
                 $admin?->id,
             );

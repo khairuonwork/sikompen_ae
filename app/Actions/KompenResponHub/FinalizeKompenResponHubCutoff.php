@@ -181,10 +181,10 @@ class FinalizeKompenResponHubCutoff
     /** @return array<string, float> */
     private function snapshot(KompenResponHubStudent $student): array
     {
-        $totalKompen = (float) ($student->summaryOverride?->total_kompensasi_jam ?? $student->total_kompensasi_jam);
-        $totalResponsi = (float) ($student->summaryOverride?->total_responsi_jam ?? $student->total_responsi_jam);
-        $workedKompen = (float) ($student->progress?->kompensasi_dikerjakan_jam ?? 0);
-        $workedResponsi = (float) ($student->progress?->responsi_dikerjakan_jam ?? 0);
+        $totalKompen = (float) $student->effective_total_kompensasi_jam;
+        $totalResponsi = (float) $student->effective_total_responsi_jam;
+        $workedKompen = (float) $student->effective_kompensasi_dikerjakan_jam;
+        $workedResponsi = (float) $student->effective_responsi_dikerjakan_jam;
 
         return [
             'total_kompensasi_jam' => $totalKompen,

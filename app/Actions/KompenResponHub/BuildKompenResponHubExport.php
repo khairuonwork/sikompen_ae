@@ -2,11 +2,13 @@
 
 namespace App\Actions\KompenResponHub;
 
+use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubExportTask;
+use App\Models\KompenResponHubStudent;
+use App\Models\KompenResponHubWarningLetter;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -34,9 +36,12 @@ class BuildKompenResponHubExport
     public function execute(KompenResponHubExportTask $task): array
     {
         $filters = $task->filters;
-        $definition = $this->definition($task->resource);
-        $records = $this->records($task->resource, $filters);
-        $period = $filters['periode_semester'] ?? 'Semua Periode';
+        $resource = $this->validatedResource($task->resource);
+        $definition = $this->definition($resource);
+        $records = $this->records($resource, $filters);
+        $period = is_string($filters['periode_semester'] ?? null)
+            ? $filters['periode_semester']
+            : 'Semua Periode';
         $periodForFilename = Str::slug(str_replace('/', '-', $period));
         $filename = "{$definition['slug']}-{$periodForFilename}-{$task->id}.{$task->format}";
         $outputPath = "kompen-respon-hub/exports/{$task->access_token}.{$task->format}";
@@ -64,7 +69,11 @@ class BuildKompenResponHubExport
         return ['output_path' => $outputPath, 'download_filename' => $filename];
     }
 
-    /** @param array<string, mixed> $filters */
+    /**
+     * @param  'students'|'details'|'warnings'  $resource
+     * @param  array<string, mixed>  $filters
+     * @return Collection<int, KompenResponHubStudent>|Collection<int, KompenResponHubDetail>|Collection<int, KompenResponHubWarningLetter>
+     */
     private function records(string $resource, array $filters): Collection
     {
         return match ($resource) {
@@ -75,6 +84,7 @@ class BuildKompenResponHubExport
     }
 
     /**
+     * @param  'students'|'details'|'warnings'  $resource
      * @return array{slug: string, title: string, columns: list<array{field: string, heading: string, type: 'text'|'integer'|'hours'|'date', width: int}>}
      */
     private function definition(string $resource): array
@@ -98,10 +108,18 @@ class BuildKompenResponHubExport
         };
     }
 
+    /** @return 'students'|'details'|'warnings' */
+    private function validatedResource(string $resource): string
+    {
+        if (! in_array($resource, ['students', 'details', 'warnings'], true)) {
+            throw new \InvalidArgumentException('Unsupported export resource.');
+        }
+
+        return $resource;
+    }
+
     /**
-     * @template TModel of Model
-     *
-     * @param  Collection<int, TModel>  $records
+     * @param  Collection<int, KompenResponHubStudent>|Collection<int, KompenResponHubDetail>|Collection<int, KompenResponHubWarningLetter>  $records
      * @param  list<array{field: string, heading: string, type: 'text'|'integer'|'hours'|'date', width: int}>  $columns
      */
     private function writeSpreadsheet(string $path, string $title, string $period, Collection $records, array $columns): void
@@ -140,9 +158,7 @@ class BuildKompenResponHubExport
     }
 
     /**
-     * @template TModel of Model
-     *
-     * @param  Collection<int, TModel>  $records
+     * @param  Collection<int, KompenResponHubStudent>|Collection<int, KompenResponHubDetail>|Collection<int, KompenResponHubWarningLetter>  $records
      * @param  list<array{field: string, heading: string, type: 'text'|'integer'|'hours'|'date', width: int}>  $columns
      */
     private function writePdf(string $path, string $title, string $period, Collection $records, array $columns): void

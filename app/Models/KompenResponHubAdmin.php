@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Database\Factories\KompenResponHubAdminFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -9,6 +10,10 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 /**
  * @property int $id
  * @property string $email
+ * @property string $password
+ * @property string|null $remember_token
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
  */
 class KompenResponHubAdmin extends Authenticatable
 {

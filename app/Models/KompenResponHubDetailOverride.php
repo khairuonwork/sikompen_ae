@@ -2,10 +2,20 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Database\Factories\KompenResponHubDetailOverrideFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int $id
+ * @property string $source_key
+ * @property array<string, mixed> $override_values
+ * @property string $reason
+ * @property int|null $updated_by_admin_id
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ */
 class KompenResponHubDetailOverride extends Model
 {
     /** @use HasFactory<KompenResponHubDetailOverrideFactory> */

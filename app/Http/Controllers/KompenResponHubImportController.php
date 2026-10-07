@@ -74,7 +74,7 @@ class KompenResponHubImportController extends Controller
         KompenResponHubImportAuditLog::create([
             'event_type' => KompenResponHubImportAuditLog::EVENT_RENAME,
             'source_import_id' => $import->id,
-            'actor_name' => $admin?->email ?? $actor['email'],
+            'actor_name' => $admin instanceof KompenResponHubAdmin ? $admin->email : $actor['email'],
             'actor_email' => $actor['email'],
             'periode_semester' => $import->periode_semester,
             'original_filename' => $displayFilename,
@@ -145,7 +145,7 @@ class KompenResponHubImportController extends Controller
                 KompenResponHubImportAuditLog::create([
                     'event_type' => KompenResponHubImportAuditLog::EVENT_DELETE,
                     'source_import_id' => $lockedImport->id,
-                    'actor_name' => $admin?->email ?? $actor['email'],
+                    'actor_name' => $admin instanceof KompenResponHubAdmin ? $admin->email : $actor['email'],
                     'actor_email' => $actor['email'],
                     'periode_semester' => $lockedImport->periode_semester,
                     'original_filename' => $snapshot['display_filename'],

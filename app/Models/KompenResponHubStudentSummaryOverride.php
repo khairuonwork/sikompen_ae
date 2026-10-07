@@ -2,11 +2,26 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Database\Factories\KompenResponHubStudentSummaryOverrideFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int|null $current_student_id
+ * @property string $nim
+ * @property string $periode_semester
+ * @property string $kelas
+ * @property string $total_kompensasi_jam
+ * @property string $total_responsi_jam
+ * @property string $reason
+ * @property int|null $updated_by_admin_id
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ * @property-read KompenResponHubStudent|null $student
+ */
 class KompenResponHubStudentSummaryOverride extends Model
 {
     /** @use HasFactory<KompenResponHubStudentSummaryOverrideFactory> */

@@ -7,8 +7,8 @@ use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubExportTask;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Throwable;
 
 class GenerateKompenResponHubExport implements ShouldQueue

@@ -226,24 +226,28 @@ class KompenResponHubController extends Controller
                 ? $this->resourcePaginator(
                     $this->dataQuery->students($filters)->paginate($this->perPage($filters))->withQueryString(),
                     KompenResponHubStudentResource::class,
+                    'page',
                 )
                 : null,
             'details' => $activeTab === 'details'
                 ? $this->resourcePaginator(
                     $this->dataQuery->details($filters)->paginate($this->perPage($filters))->withQueryString(),
                     KompenResponHubDetailResource::class,
+                    'page',
                 )
                 : null,
             'imports' => $isAdmin && $activeTab === 'imports'
                 ? $this->resourcePaginator(
                     $this->dataQuery->importAuditLogs($filters)->paginate($this->perPage($filters))->withQueryString(),
                     KompenResponHubImportAuditLogResource::class,
+                    'page',
                 )
                 : null,
             'importVersions' => $isAdmin && $activeTab === 'files'
                 ? $this->resourcePaginator(
                     $this->dataQuery->importVersions($filters)->paginate($this->perPage($filters))->withQueryString(),
                     KompenResponHubImportVersionResource::class,
+                    'page',
                 )
                 : null,
             'activeImportVersions' => $isAdmin && $activeTab === 'files'
@@ -255,24 +259,28 @@ class KompenResponHubController extends Controller
                 ? $this->resourcePaginator(
                     $this->dataQuery->warnings($filters)->paginate($this->perPage($filters))->withQueryString(),
                     KompenResponHubWarningLetterResource::class,
+                    'page',
                 )
                 : null,
             'warningCandidates' => $isAdmin && $activeTab === 'warnings'
                 ? $this->resourcePaginator(
                     $this->dataQuery->warningCandidates($filters)->paginate($this->perPage($filters), ['*'], 'warning_candidate_page')->withQueryString(),
                     KompenResponHubStudentResource::class,
+                    'warning_candidate_page',
                 )
                 : null,
             'rolledBackWarnings' => $isAdmin && $activeTab === 'warnings'
                 ? $this->resourcePaginator(
                     $this->dataQuery->rolledBackWarnings($filters)->paginate($this->perPage($filters), ['*'], 'warning_history_page')->withQueryString(),
                     KompenResponHubWarningLetterResource::class,
+                    'warning_history_page',
                 )
                 : null,
             'activityLogs' => $isAdmin && $activeTab === 'activity'
                 ? $this->resourcePaginator(
                     $this->dataQuery->activityLogs($filters)->paginate($this->perPage($filters))->withQueryString(),
                     KompenResponHubActivityLogResource::class,
+                    'page',
                 )
                 : null,
         ]);
@@ -334,9 +342,12 @@ class KompenResponHubController extends Controller
         $hasRequestedWarningPeriod = filled($requestedWarningPeriod)
             && in_array($requestedWarningPeriod, $warningPeriods, true);
 
+        $firstCutoff = $cutoffs->first();
         $warningPeriod = $hasRequestedWarningPeriod
             ? $requestedWarningPeriod
-            : $cutoffs->first()?->periode_semester ?? $warningPeriods[0];
+            : ($firstCutoff instanceof KompenResponHubPeriodCutoff
+                ? $firstCutoff->periode_semester
+                : $warningPeriods[0]);
         $requestedListPeriod = $filters['list_period'] ?? $warningPeriod;
         $hasRequestedListPeriod = filled($requestedListPeriod)
             && in_array($requestedListPeriod, $warningPeriods, true);
@@ -361,10 +372,10 @@ class KompenResponHubController extends Controller
      * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource|KompenResponHubImportVersionResource|KompenResponHubWarningLetterResource|KompenResponHubActivityLogResource>  $resource
      * @return array<string, mixed>
      */
-    private function resourcePaginator(LengthAwarePaginator $paginator, string $resource): array
+    private function resourcePaginator(LengthAwarePaginator $paginator, string $resource, string $pageName): array
     {
         $pagination = $resource::collection($paginator)->response()->getData(true);
-        $pagination['meta']['page_name'] = $paginator->getPageName();
+        $pagination['meta']['page_name'] = $pageName;
 
         return $pagination;
     }

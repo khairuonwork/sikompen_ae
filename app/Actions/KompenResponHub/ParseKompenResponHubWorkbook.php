@@ -35,7 +35,7 @@ class ParseKompenResponHubWorkbook
             $sheets[$sheet->getTitle()] = $sheet;
         }
 
-        $errors = [];
+        $errors = $this->newErrorList();
         foreach (['Kompen dan Respon', 'Detail Kompen'] as $requiredSheet) {
             if (! isset($sheets[$requiredSheet])) {
                 $errors[] = [
@@ -448,7 +448,10 @@ class ParseKompenResponHubWorkbook
         ];
     }
 
-    /** @return list<array{class: string, column: int, row: int, location: string}> */
+    /**
+     * @param  list<array{location: string, message: string}>  $errors
+     * @return list<array{class: string, column: int, row: int, location: string}>
+     */
     private function findClassMarkers(Worksheet $sheet, array &$errors): array
     {
         $markers = [];
@@ -485,6 +488,12 @@ class ParseKompenResponHubWorkbook
         }
 
         return $markers;
+    }
+
+    /** @return list<array{location: string, message: string}> */
+    private function newErrorList(): array
+    {
+        return [];
     }
 
     /**

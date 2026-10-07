@@ -6,9 +6,9 @@ use App\Models\KompenResponHubStudent;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/** @mixin KompenResponHubStudent */
 class KompenResponHubStudentSearchResource extends JsonResource
 {
-    /** @mixin KompenResponHubStudent */
     /**
      * Transform the resource into an array.
      *
