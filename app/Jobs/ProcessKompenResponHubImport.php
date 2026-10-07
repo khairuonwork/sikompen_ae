@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Actions\KompenResponHub\ImportKompenResponHubWorkbook;
 use App\Actions\KompenResponHub\ParseKompenResponHubWorkbook;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Actions\KompenResponHub\ValidateKompenResponHubWorkbookArchive;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImportTask;
 use Carbon\CarbonInterface;
@@ -29,6 +30,7 @@ class ProcessKompenResponHubImport implements ShouldQueue
         ParseKompenResponHubWorkbook $parser,
         ImportKompenResponHubWorkbook $importer,
         RecordKompenResponHubActivity $activity,
+        ValidateKompenResponHubWorkbookArchive $archiveValidator,
     ): void {
         $importTask = KompenResponHubImportTask::query()->find($this->importTaskId);
 
@@ -47,7 +49,12 @@ class ProcessKompenResponHubImport implements ShouldQueue
         $fullPath = Storage::disk('local')->path($importTask->stored_path);
 
         try {
+            $archiveValidator->execute($fullPath);
             $payload = $parser->execute($fullPath);
+        } catch (\InvalidArgumentException $exception) {
+            $this->markAsFailed($importTask, $exception->getMessage());
+
+            return;
         } catch (Throwable) {
             $this->markAsFailed(
                 $importTask,

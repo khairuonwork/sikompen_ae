@@ -6,6 +6,7 @@ use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubExportTask;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubWarningLetter;
+use DomainException;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Database\Eloquent\Collection;
@@ -76,11 +77,20 @@ class BuildKompenResponHubExport
      */
     private function records(string $resource, array $filters): Collection
     {
-        return match ($resource) {
-            'students' => $this->dataQuery->students($filters)->get(),
-            'details' => $this->dataQuery->details($filters)->get(),
-            'warnings' => $this->dataQuery->warnings($filters)->get(),
+        $maximumRows = max(1, (int) config('kompen-respon-hub.export_max_rows', 5000));
+        $records = match ($resource) {
+            'students' => $this->dataQuery->students($filters)->limit($maximumRows + 1)->get(),
+            'details' => $this->dataQuery->details($filters)->limit($maximumRows + 1)->get(),
+            'warnings' => $this->dataQuery->warnings($filters)->limit($maximumRows + 1)->get(),
         };
+
+        if ($records->count() > $maximumRows) {
+            throw new DomainException(
+                "Ekspor dibatasi maksimal {$maximumRows} baris. Gunakan filter periode, kelas, atau pencarian lalu coba lagi.",
+            );
+        }
+
+        return $records;
     }
 
     /**

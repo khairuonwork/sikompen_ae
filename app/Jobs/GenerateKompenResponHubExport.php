@@ -6,6 +6,7 @@ use App\Actions\KompenResponHub\BuildKompenResponHubExport;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubExportTask;
+use DomainException;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
@@ -46,6 +47,16 @@ class GenerateKompenResponHubExport implements ShouldQueue
 
         try {
             $result = $builder->execute($task);
+        } catch (DomainException $exception) {
+            $task->update([
+                'status' => KompenResponHubExportTask::StatusFailed,
+                'progress' => 100,
+                'progress_message' => 'Ekspor tidak dapat dibuat.',
+                'error_message' => $exception->getMessage(),
+                'failed_at' => now(),
+            ]);
+
+            return;
         } catch (Throwable) {
             $task->update([
                 'status' => KompenResponHubExportTask::StatusFailed,

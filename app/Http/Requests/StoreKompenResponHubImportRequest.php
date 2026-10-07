@@ -17,7 +17,12 @@ class StoreKompenResponHubImportRequest extends FormRequest
     {
         return [
             'uploader_name' => ['required', 'string', 'max:100', new SafeSearchTerm],
-            'file' => ['required', 'file', 'mimes:xlsx', 'max:20480'],
+            'file' => [
+                'required',
+                'file',
+                'mimes:xlsx',
+                'max:'.max(1, (int) config('kompen-respon-hub.import.max_upload_kilobytes', 5120)),
+            ],
         ];
     }
 }

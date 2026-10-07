@@ -56,8 +56,8 @@ RUN rm -f public/hot \
     && chown -R www-data:www-data bootstrap/cache storage \
     && chmod +x /usr/local/bin/docker-entrypoint \
     && { \
-        echo 'upload_max_filesize=25M'; \
-        echo 'post_max_size=25M'; \
+        echo 'upload_max_filesize=5M'; \
+        echo 'post_max_size=5M'; \
         echo 'max_execution_time=600'; \
         echo 'max_input_time=600'; \
         echo 'memory_limit=512M'; \

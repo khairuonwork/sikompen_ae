@@ -6,4 +6,14 @@ return [
      * tetapi semua tabelnya memakai awalan kompen_respon_hub_.
      */
     'database_connection' => env('KOMPEN_RESPON_HUB_DB_CONNECTION', 'kompen_db'),
+
+    'import' => [
+        'max_upload_kilobytes' => (int) env('SIKOMPEN_IMPORT_MAX_UPLOAD_KILOBYTES', 5120),
+        'max_archive_entries' => (int) env('SIKOMPEN_IMPORT_MAX_ARCHIVE_ENTRIES', 64),
+        'max_archive_uncompressed_bytes' => (int) env('SIKOMPEN_IMPORT_MAX_ARCHIVE_UNCOMPRESSED_BYTES', 8 * 1024 * 1024),
+        'max_archive_entry_bytes' => (int) env('SIKOMPEN_IMPORT_MAX_ARCHIVE_ENTRY_BYTES', 4 * 1024 * 1024),
+        'max_archive_compression_ratio' => (int) env('SIKOMPEN_IMPORT_MAX_ARCHIVE_COMPRESSION_RATIO', 100),
+    ],
+
+    'export_max_rows' => (int) env('SIKOMPEN_EXPORT_MAX_ROWS', 5000),
 ];

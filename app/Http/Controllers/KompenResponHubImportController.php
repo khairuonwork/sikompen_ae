@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Actions\KompenResponHub\ValidateKompenResponHubWorkbookArchive;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\DestroyKompenResponHubImportRequest;
 use App\Http\Requests\StoreKompenResponHubImportRequest;
@@ -14,6 +15,7 @@ use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubStudent;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -186,9 +188,25 @@ class KompenResponHubImportController extends Controller
     public function store(
         StoreKompenResponHubImportRequest $request,
         SiAdminProxyAccess $access,
+        ValidateKompenResponHubWorkbookArchive $archiveValidator,
     ): RedirectResponse {
         $actor = $access->actor($request);
         $file = $request->file('file');
+
+        if (! $file instanceof UploadedFile) {
+            throw ValidationException::withMessages([
+                'file' => 'Workbook wajib diunggah dalam format XLSX.',
+            ]);
+        }
+
+        try {
+            $archiveValidator->execute($file->getPathname());
+        } catch (\InvalidArgumentException $exception) {
+            throw ValidationException::withMessages([
+                'file' => $exception->getMessage(),
+            ]);
+        }
+
         $storedPath = $file->store('kompen-respon-hub/imports');
 
         if ($storedPath === false) {

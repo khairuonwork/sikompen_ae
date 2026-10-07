@@ -24,6 +24,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use ZipArchive;
 
 test('the public page and data API do not require a login', function () {
     $student = createStudent();
@@ -312,6 +313,34 @@ test('an export produces a landscape PDF for detail kompen', function () {
         ->assertHeaderContains('Content-Type', 'application/pdf');
 
     expect($response->streamedContent())->toStartWith('%PDF-');
+});
+
+test('an export fails safely when its result exceeds the hard row limit', function () {
+    Storage::fake('local');
+    Queue::fake();
+    config(['kompen-respon-hub.export_max_rows' => 1]);
+    $student = createStudent();
+
+    $secondStudent = $student->replicate();
+    $secondStudent->fill([
+        'nim' => '987654321',
+        'nama_mahasiswa' => 'Dani Pratama',
+    ])->save();
+
+    $this->post('/exports', [
+        'resource' => 'students',
+        'format' => 'xlsx',
+    ])->assertRedirect();
+
+    $task = KompenResponHubExportTask::query()->sole();
+
+    (new GenerateKompenResponHubExport($task->id))->handle(
+        app(BuildKompenResponHubExport::class),
+        app(RecordKompenResponHubActivity::class),
+    );
+
+    expect($task->refresh()->status)->toBe(KompenResponHubExportTask::StatusFailed)
+        ->and($task->error_message)->toContain('maksimal 1 baris');
 });
 
 test('a student cannot queue an export of warning letters', function () {
@@ -750,7 +779,7 @@ test('an uploaded workbook is queued and its progress remains available outside 
 
     $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
         'uploader_name' => 'Khairul Anwar',
-        'file' => UploadedFile::fake()->create('kompen-respon.xlsx', 100),
+        'file' => UploadedFile::fake()->createWithContent('kompen-respon.xlsx', workbookContents()),
     ])->assertRedirect('/admin?tab=upload');
 
     $importTask = KompenResponHubImportTask::query()->sole();
@@ -777,6 +806,40 @@ test('an uploaded workbook is queued and its progress remains available outside 
         ->assertOk()
         ->assertJsonPath('data.id', $importTask->id)
         ->assertJsonPath('data.progress', 0);
+});
+
+test('an import rejects an XLSX archive with too many internal entries before storage', function () {
+    Storage::fake('local');
+    Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContentsWithExtraArchiveEntries(64),
+        ),
+    ])->assertSessionHasErrors('file');
+
+    expect(KompenResponHubImportTask::query()->doesntExist())->toBeTrue();
+});
+
+test('an import rejects worksheets that exceed the official template capacity', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(summaryOutsideTemplateCell: 'A681'),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('melebihi kapasitas template');
 });
 
 test('an admin can download the empty Sikompen import template', function () {
@@ -988,6 +1051,7 @@ function workbookContents(
     ?float $detailResponseHours = null,
     ?string $detailName = null,
     bool $duplicateDetail = false,
+    ?string $summaryOutsideTemplateCell = null,
 ): string {
     $totalHours = $compensationHours + $responseHours;
     $workbook = new Spreadsheet;
@@ -1003,6 +1067,10 @@ function workbookContents(
         [1, '123456789', 'Rina Utami', 0.5, 0, 0, 0, $compensationHours, $responseHours, $totalHours, 0, $totalHours],
     ], null, 'A3');
     $summary->setCellValue('A6', 'TEMPLATE BLOK KELAS BARU — SALIN LALU GANTI KODE');
+
+    if ($summaryOutsideTemplateCell !== null) {
+        $summary->setCellValue($summaryOutsideTemplateCell, 'Di luar kapasitas template');
+    }
 
     $details = $workbook->createSheet();
     $details->setTitle('Detail Kompen');
@@ -1038,4 +1106,31 @@ function workbookContents(
     $writer->save('php://output');
 
     return (string) ob_get_clean();
+}
+
+function workbookContentsWithExtraArchiveEntries(int $extraEntries): string
+{
+    $temporaryFile = tempnam(sys_get_temp_dir(), 'sikompen-archive-');
+
+    if ($temporaryFile === false) {
+        throw new RuntimeException('Temporary workbook cannot be created.');
+    }
+
+    file_put_contents($temporaryFile, workbookContents());
+    $archive = new ZipArchive;
+    $archive->open($temporaryFile);
+
+    for ($index = 0; $index < $extraEntries; $index++) {
+        $archive->addFromString("xl/media/unexpected-{$index}.bin", 'x');
+    }
+
+    $archive->close();
+    $contents = file_get_contents($temporaryFile);
+    unlink($temporaryFile);
+
+    if (! is_string($contents)) {
+        throw new RuntimeException('Temporary workbook cannot be read.');
+    }
+
+    return $contents;
 }
