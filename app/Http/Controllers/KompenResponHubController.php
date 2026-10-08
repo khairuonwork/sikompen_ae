@@ -22,6 +22,7 @@ use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
+use App\Models\KompenResponHubSystemSetting;
 use App\Models\KompenResponHubWarningLetter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
@@ -218,10 +219,18 @@ class KompenResponHubController extends Controller
                 KompenResponHubExportTask::query()
                     ->where('request_session_id', $request->session()->getId())
                     ->where('expires_at', '>', now())
+                    ->when(
+                        $this->dismissedExportTaskIds($request),
+                        fn ($query, array $taskIds) => $query->whereNotIn('id', $taskIds),
+                    )
                     ->latest('id')
                     ->limit(5)
                     ->get(),
             )->resolve(),
+            'exportStalledAfterMinutes' => max(15, (int) config('kompen-respon-hub.queue.stalled_task_minutes', 15)),
+            'activityRetentionDays' => $isAdmin
+                ? KompenResponHubSystemSetting::current()->activity_log_retention_days
+                : null,
             'students' => $activeTab === 'students'
                 ? $this->resourcePaginator(
                     $this->dataQuery->students($filters)->paginate($this->perPage($filters))->withQueryString(),
@@ -290,6 +299,18 @@ class KompenResponHubController extends Controller
     private function perPage(array $filters): int
     {
         return (int) ($filters['per_page'] ?? 15);
+    }
+
+    /** @return list<int> */
+    private function dismissedExportTaskIds(KompenResponHubTableRequest $request): array
+    {
+        $dismissedTaskIds = $request->session()->get('sikompen.dismissed_export_task_ids', []);
+
+        if (! is_array($dismissedTaskIds)) {
+            return [];
+        }
+
+        return array_values(array_filter($dismissedTaskIds, static fn (mixed $taskId): bool => is_int($taskId)));
     }
 
     /** @return array<string, mixed> */

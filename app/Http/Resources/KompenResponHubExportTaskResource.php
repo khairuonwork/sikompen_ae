@@ -23,6 +23,7 @@ class KompenResponHubExportTaskResource extends JsonResource
             'download_filename' => $this->download_filename,
             'error_message' => $this->error_message,
             'queued_at' => $this->queued_at?->toIso8601String(),
+            'started_at' => $this->started_at?->toIso8601String(),
             'completed_at' => $this->completed_at?->toIso8601String(),
             'expires_at' => $this->expires_at?->toIso8601String(),
         ];

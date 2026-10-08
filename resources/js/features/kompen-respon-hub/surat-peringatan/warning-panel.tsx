@@ -3,8 +3,6 @@ import {
     CalendarClock,
     ChevronDown,
     Clock3,
-    FileSpreadsheet,
-    FileText,
     Save,
     Search,
     Archive,
@@ -44,7 +42,6 @@ import type {
     Warning,
 } from "../shared/types";
 import { Pager } from "../shared/components/pagination";
-import { queueExport } from "../export/export-progress-panel";
 
 export function WarningStatusBadge({
     warning,
@@ -323,30 +320,6 @@ export function WarningPanel({
                             {isInspectionMode
                                 ? "Kembali ke periode SP"
                                 : "Lihat periode lain"}
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                                queueExport("warnings", "xlsx", filters)
-                            }
-                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
-                        >
-                            <FileSpreadsheet className="mr-1.5 size-3.5" />
-                            Buat XLSX
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                                queueExport("warnings", "pdf", filters)
-                            }
-                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
-                        >
-                            <FileText className="mr-1.5 size-3.5" />
-                            Buat PDF
                         </Button>
                     </div>
                 </div>

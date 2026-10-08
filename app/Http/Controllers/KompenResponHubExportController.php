@@ -67,7 +67,7 @@ class KompenResponHubExportController extends Controller
             subjectName: $task->download_filename,
         );
 
-        return back()->with('success', 'Permintaan ekspor masuk ke antrean. File akan tersedia di halaman ini setelah selesai dibuat.');
+        return back();
     }
 
     public function show(
@@ -94,6 +94,76 @@ class KompenResponHubExportController extends Controller
             $exportTask->download_filename,
             ['X-Content-Type-Options' => 'nosniff'],
         );
+    }
+
+    public function destroy(
+        KompenResponHubExportTaskAccessRequest $request,
+        KompenResponHubExportTask $exportTask,
+        SiAdminProxyAccess $access,
+        RecordKompenResponHubActivity $activity,
+    ): RedirectResponse {
+        $this->authorizeAccess($request, $exportTask);
+
+        $wasCancelled = KompenResponHubExportTask::query()
+            ->whereKey($exportTask->id)
+            ->whereIn('status', [
+                KompenResponHubExportTask::StatusQueued,
+                KompenResponHubExportTask::StatusProcessing,
+            ])
+            ->update([
+                'status' => KompenResponHubExportTask::StatusCancelled,
+                'progress' => 100,
+                'progress_message' => 'Ekspor dibatalkan oleh pengguna.',
+                'error_message' => null,
+                'expires_at' => now()->addHours(max(1, (int) config('kompen-respon-hub.retention.export_hours', 24))),
+            ]);
+
+        abort_unless($wasCancelled === 1, 409, 'Ekspor ini sudah selesai atau tidak dapat dibatalkan.');
+
+        $exportTask->refresh();
+        if ($exportTask->output_path !== null && str_starts_with($exportTask->output_path, 'kompen-respon-hub/exports/')) {
+            Storage::disk('local')->delete($exportTask->output_path);
+        }
+
+        $actor = $access->hasAdminAccess($request)
+            ? $access->actor($request)
+            : ['id' => null];
+        $admin = is_int($actor['id'])
+            ? KompenResponHubAdmin::query()->find($actor['id'])
+            : null;
+        $activity->execute(
+            'export.cancelled',
+            'export',
+            (string) $exportTask->id,
+            $admin,
+            $request,
+            period: is_string($exportTask->filters['periode_semester'] ?? null)
+                ? $exportTask->filters['periode_semester']
+                : null,
+            metadata: ['resource' => $exportTask->resource, 'format' => $exportTask->format],
+            subjectName: $exportTask->download_filename,
+        );
+
+        return back();
+    }
+
+    public function dismiss(
+        KompenResponHubExportTaskAccessRequest $request,
+        KompenResponHubExportTask $exportTask,
+    ): RedirectResponse {
+        $this->authorizeAccess($request, $exportTask);
+        abort_if($exportTask->isActive(), 409, 'Ekspor yang masih diproses tidak dapat ditutup. Gunakan Batalkan bila diperlukan.');
+
+        $dismissedTaskIds = $request->session()->get('sikompen.dismissed_export_task_ids', []);
+        $dismissedTaskIds = is_array($dismissedTaskIds) ? $dismissedTaskIds : [];
+        $dismissedTaskIds = array_values(array_filter($dismissedTaskIds, static fn (mixed $taskId): bool => is_int($taskId)));
+        $dismissedTaskIds[] = $exportTask->id;
+        $dismissedTaskIds = array_values(array_unique($dismissedTaskIds));
+        $dismissedTaskIds = array_slice($dismissedTaskIds, -50);
+
+        $request->session()->put('sikompen.dismissed_export_task_ids', $dismissedTaskIds);
+
+        return back();
     }
 
     private function authorizeAccess(KompenResponHubExportTaskAccessRequest $request, KompenResponHubExportTask $exportTask): void

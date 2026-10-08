@@ -17,7 +17,7 @@ class ReconcileKompenResponHubTasks extends Command
 {
     public function handle(RecordKompenResponHubActivity $activity): int
     {
-        $stalledAfterMinutes = max(15, (int) config('kompen-respon-hub.queue.stalled_task_minutes', 30));
+        $stalledAfterMinutes = max(15, (int) config('kompen-respon-hub.queue.stalled_task_minutes', 15));
         $threshold = now()->subMinutes($stalledAfterMinutes);
         $importCount = $this->reconcileImports($threshold, $stalledAfterMinutes, $activity);
         $exportCount = $this->reconcileExports($threshold, $stalledAfterMinutes, $activity);

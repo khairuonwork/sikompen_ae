@@ -23,6 +23,6 @@ return [
     ],
 
     'queue' => [
-        'stalled_task_minutes' => (int) env('SIKOMPEN_STALLED_TASK_MINUTES', 30),
+        'stalled_task_minutes' => (int) env('SIKOMPEN_STALLED_TASK_MINUTES', 15),
     ],
 ];

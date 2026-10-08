@@ -10,6 +10,7 @@ use DomainException;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -39,7 +40,7 @@ class BuildKompenResponHubExport
         $filters = $task->filters;
         $resource = $this->validatedResource($task->resource);
         $definition = $this->definition($resource);
-        $records = $this->records($resource, $filters);
+        $records = $this->records($task, $resource, $filters);
         $period = is_string($filters['periode_semester'] ?? null)
             ? $filters['periode_semester']
             : 'Semua Periode';
@@ -75,22 +76,87 @@ class BuildKompenResponHubExport
      * @param  array<string, mixed>  $filters
      * @return Collection<int, KompenResponHubStudent>|Collection<int, KompenResponHubDetail>|Collection<int, KompenResponHubWarningLetter>
      */
-    private function records(string $resource, array $filters): Collection
+    private function records(KompenResponHubExportTask $task, string $resource, array $filters): Collection
     {
-        $maximumRows = max(1, (int) config('kompen-respon-hub.export_max_rows', 5000));
-        $records = match ($resource) {
-            'students' => $this->dataQuery->students($filters)->limit($maximumRows + 1)->get(),
-            'details' => $this->dataQuery->details($filters)->limit($maximumRows + 1)->get(),
-            'warnings' => $this->dataQuery->warnings($filters)->limit($maximumRows + 1)->get(),
+        return match ($resource) {
+            'students' => $this->studentRecords($task, $filters),
+            'details' => $this->detailRecords($task, $filters),
+            'warnings' => $this->warningRecords($task, $filters),
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return Collection<int, KompenResponHubStudent>
+     */
+    private function studentRecords(KompenResponHubExportTask $task, array $filters): Collection
+    {
+        $query = $this->dataQuery->students($filters);
+
+        if ($task->format === 'pdf') {
+            return $query->get();
+        }
+
+        return $this->limitedSpreadsheetRecords($task, $query->limit($this->maximumRowsFor($task->format) + 1)->get());
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return Collection<int, KompenResponHubDetail>
+     */
+    private function detailRecords(KompenResponHubExportTask $task, array $filters): Collection
+    {
+        $query = $this->dataQuery->details($filters);
+
+        if ($task->format === 'pdf') {
+            return $query->get();
+        }
+
+        return $this->limitedSpreadsheetRecords($task, $query->limit($this->maximumRowsFor($task->format) + 1)->get());
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return Collection<int, KompenResponHubWarningLetter>
+     */
+    private function warningRecords(KompenResponHubExportTask $task, array $filters): Collection
+    {
+        $query = $this->dataQuery->warnings($filters);
+
+        if ($task->format === 'pdf') {
+            return $query->get();
+        }
+
+        return $this->limitedSpreadsheetRecords($task, $query->limit($this->maximumRowsFor($task->format) + 1)->get());
+    }
+
+    /**
+     * @template TModel of Model
+     *
+     * @param  Collection<int, TModel>  $records
+     * @return Collection<int, TModel>
+     */
+    private function limitedSpreadsheetRecords(KompenResponHubExportTask $task, Collection $records): Collection
+    {
+        $maximumRows = $this->maximumRowsFor($task->format);
 
         if ($records->count() > $maximumRows) {
             throw new DomainException(
-                "Ekspor dibatasi maksimal {$maximumRows} baris. Gunakan filter periode, kelas, atau pencarian lalu coba lagi.",
+                "Ekspor {$this->formatLabel($task->format)} dibatasi maksimal {$maximumRows} baris. Gunakan filter periode, kelas, atau pencarian lalu coba lagi.",
             );
         }
 
         return $records;
+    }
+
+    private function maximumRowsFor(string $format): int
+    {
+        return max(1, (int) config('kompen-respon-hub.export_max_rows', 5000));
+    }
+
+    private function formatLabel(string $format): string
+    {
+        return strtoupper($format);
     }
 
     /**

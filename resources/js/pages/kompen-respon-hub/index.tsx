@@ -16,7 +16,9 @@ import { destroy as logout } from "@/actions/App/Http/Controllers/AdminAuthentic
 import { settings as adminSettings } from "@/actions/App/Http/Controllers/KompenResponHubAdminSetupController";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { sikompenUrl } from "@/lib/sikompen-url";
 import { cn } from "@/lib/utils";
+import { home } from "@/routes";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
 import { index as studentIndex } from "@/routes/student/kompen-respon";
 import { StudentOverviewPanel } from "@/features/kompen-respon-hub/dashboard/dashboard-panel";
@@ -24,6 +26,7 @@ import { GlobalStudentSearch } from "@/features/kompen-respon-hub/dashboard/glob
 import { DetailCorrectionPanel } from "@/features/kompen-respon-hub/detail-kompen/detail-correction-panel";
 import { DetailTable } from "@/features/kompen-respon-hub/detail-kompen/detail-table";
 import { ExportProgressPanel } from "@/features/kompen-respon-hub/export/export-progress-panel";
+import { ExportPanel } from "@/features/kompen-respon-hub/export/export-panel";
 import { EditModeControl } from "@/features/kompen-respon-hub/kompen-respon/edit-mode-control";
 import {
     StudentCorrectionPanel,
@@ -32,7 +35,7 @@ import { StudentTable } from "@/features/kompen-respon-hub/kompen-respon/student
 import { ImportAuditLogTable } from "@/features/kompen-respon-hub/log-upload/import-audit-log-table";
 import { ImportAuditFilterPanel } from "@/features/kompen-respon-hub/log-upload/import-audit-filter-panel";
 import { ImportVersionList } from "@/features/kompen-respon-hub/list-file/import-version-list";
-import { ActivityFilterPanel, ActivityLogTable } from "@/features/kompen-respon-hub/riwayat-aktivitas/activity-panel";
+import { ActivityFilterPanel, ActivityLogTable, ActivityRetentionPanel } from "@/features/kompen-respon-hub/riwayat-aktivitas/activity-panel";
 import { EmptyTableState, TableGuide } from "@/features/kompen-respon-hub/shared/components/feedback";
 import { FilterPanel } from "@/features/kompen-respon-hub/shared/components/data-filter-panel";
 import { adminTabs, studentTabs } from "@/features/kompen-respon-hub/shared/constants";
@@ -66,10 +69,12 @@ export default function KompenResponHubIndex({
     warningCandidates,
     rolledBackWarnings,
     activityLogs,
+    activityRetentionDays,
     cutoffs,
     managedPeriodHasActiveWarnings,
     activeImportTasks,
     exportTasks,
+    exportStalledAfterMinutes,
 }: KompenResponHubPageProps): React.JSX.Element {
     const indexAction = isAdmin ? adminIndex : studentIndex;
     const tabs = isAdmin ? adminTabs : studentTabs;
@@ -196,13 +201,17 @@ export default function KompenResponHubIndex({
                                 </Button>
                             ) : (
                                 <Button
-                                    type="button"
+                                    asChild
                                     variant="outline"
-                                    disabled
-                                    className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 disabled:opacity-100"
+                                    className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white active:scale-95"
                                 >
-                                    <ArrowLeft className="size-4" />
-                                    Kembali
+                                    <Link
+                                        href={sikompenUrl(home.url())}
+                                        className="flex items-center gap-1.5"
+                                    >
+                                        <LogOut className="size-4" />
+                                        Keluar
+                                    </Link>
                                 </Button>
                             )}
                             {isAdmin ? (
@@ -281,7 +290,10 @@ export default function KompenResponHubIndex({
                             initialImportTasks={activeImportTasks}
                         />
                     ) : null}
-                    <ExportProgressPanel initialExportTasks={exportTasks} />
+                    <ExportProgressPanel
+                        initialExportTasks={exportTasks}
+                        stalledAfterMinutes={exportStalledAfterMinutes}
+                    />
 
                     {/* Navigation Tabs */}
                     <nav
@@ -411,21 +423,28 @@ export default function KompenResponHubIndex({
                     ) : null}
 
                     {activeTab === "warnings" && isAdmin ? (
-                        <WarningPanel
-                            cutoffs={cutoffs}
-                            filterOptions={filterOptions}
-                            filters={filters}
-                            warningPeriods={warningPeriods}
-                            warnings={warnings}
-                            warningCandidates={warningCandidates}
-                            rolledBackWarnings={rolledBackWarnings}
-                            managedPeriodHasActiveWarnings={
-                                managedPeriodHasActiveWarnings
-                            }
-                            selectedWarning={selectedWarning}
-                            onSelectWarning={setSelectedWarning}
-                            onCloseWarning={() => setSelectedWarning(null)}
-                        />
+                        <section className="grid gap-4">
+                            <ExportPanel
+                                defaultResource="warnings"
+                                filterOptions={filterOptions}
+                                isAdmin={isAdmin}
+                            />
+                            <WarningPanel
+                                cutoffs={cutoffs}
+                                filterOptions={filterOptions}
+                                filters={filters}
+                                warningPeriods={warningPeriods}
+                                warnings={warnings}
+                                warningCandidates={warningCandidates}
+                                rolledBackWarnings={rolledBackWarnings}
+                                managedPeriodHasActiveWarnings={
+                                    managedPeriodHasActiveWarnings
+                                }
+                                selectedWarning={selectedWarning}
+                                onSelectWarning={setSelectedWarning}
+                                onCloseWarning={() => setSelectedWarning(null)}
+                            />
+                        </section>
                     ) : null}
 
                     {activeTab === "activity" && isAdmin ? (
@@ -442,6 +461,11 @@ export default function KompenResponHubIndex({
                                     Belum ada aktivitas yang tercatat.
                                 </div>
                             )}
+                            {activityRetentionDays !== null ? (
+                                <ActivityRetentionPanel
+                                    retentionDays={activityRetentionDays}
+                                />
+                            ) : null}
                         </section>
                     ) : null}
 
@@ -473,6 +497,13 @@ export default function KompenResponHubIndex({
                                 isAdmin={isAdmin}
                                 filters={filters}
                                 filterOptions={filterOptions}
+                            />
+                            <ExportPanel
+                                defaultResource={
+                                    activeTab === "details" ? "details" : "students"
+                                }
+                                filterOptions={filterOptions}
+                                isAdmin={isAdmin}
                             />
                             <TableGuide
                                 title={

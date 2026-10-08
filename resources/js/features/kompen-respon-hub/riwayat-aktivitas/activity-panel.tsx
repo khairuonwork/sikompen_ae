@@ -1,6 +1,6 @@
 import { Form, Link } from "@inertiajs/react";
-import { Search } from "lucide-react";
-import { useState } from "react";
+import { Clock3, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -11,6 +11,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
+import { update as updateActivityRetention } from "@/actions/App/Http/Controllers/KompenResponHubActivityRetentionController";
 import type { ActivityLog, FilterOptions, Filters, Pagination } from "../shared/types";
 import { Pager } from "../shared/components/pagination";
 
@@ -35,7 +36,13 @@ export function activityLabel(eventType: string): string {
         "warning.classification_fixed": "SP masuk periode cutoff",
         "warning.classification_temporary": "SP kembali ke masa pengerjaan",
         "warning.resolution_updated": "Penyelesaian SP diperbarui",
+        "export.requested": "Ekspor diminta",
         "export.completed": "Ekspor selesai",
+        "export.failed": "Ekspor gagal",
+        "export.cancelled": "Ekspor dibatalkan",
+        "export.timed_out": "Ekspor dihentikan karena waktu habis",
+        "maintenance.activity_log_retention_updated":
+            "Retensi riwayat diperbarui",
     };
 
     return descriptions[eventType] ?? "Aktivitas sistem";
@@ -278,6 +285,84 @@ export function ActivityLogTable({
                 </table>
             </div>
             <Pager data={data} />
+        </section>
+    );
+}
+
+export function ActivityRetentionPanel({
+    retentionDays,
+}: {
+    retentionDays: number;
+}): React.JSX.Element {
+    const [selectedRetentionDays, setSelectedRetentionDays] = useState(
+        String(retentionDays),
+    );
+
+    useEffect(() => {
+        setSelectedRetentionDays(String(retentionDays));
+    }, [retentionDays]);
+
+    return (
+        <section className="rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 className="text-base font-extrabold text-[#395886]">
+                        Retensi riwayat aktivitas
+                    </h2>
+                    <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
+                        Log yang lebih lama dari masa simpan akan dihapus otomatis setiap hari.
+                    </p>
+                </div>
+                <span className="rounded-full bg-[#B1C9EF]/30 px-2.5 py-1 text-xs font-bold text-[#395886]">
+                    Saat ini: {retentionDays} hari
+                </span>
+            </div>
+            <Form
+                {...updateActivityRetention.form()}
+                className="mt-4 flex flex-wrap items-end gap-3 border-t border-[#D5DEEF] pt-4"
+            >
+                <input
+                    name="activity_log_retention_days"
+                    type="hidden"
+                    value={selectedRetentionDays}
+                />
+                <div className="grid min-w-52 gap-1.5">
+                    <Label
+                        htmlFor="activity-log-retention"
+                        className="text-xs font-bold text-[#395886]"
+                    >
+                        Simpan riwayat selama
+                    </Label>
+                    <Select
+                        value={selectedRetentionDays}
+                        onValueChange={setSelectedRetentionDays}
+                    >
+                        <SelectTrigger
+                            id="activity-log-retention"
+                            className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]"
+                        >
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl text-xs font-semibold">
+                            {[30, 90, 180, 365, 730, 1095].map((days) => (
+                                <SelectItem key={days} value={String(days)}>
+                                    {days} hari
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <Button
+                    type="submit"
+                    className="h-10 rounded-2xl bg-[#395886] px-4 text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
+                >
+                    <Clock3 className="mr-1.5 size-3.5" />
+                    Simpan retensi
+                </Button>
+            </Form>
+            <p className="mt-3 text-xs font-medium text-amber-800">
+                Penghapusan bersifat permanen dan berlaku pada log yang sudah melewati masa simpan.
+            </p>
         </section>
     );
 }

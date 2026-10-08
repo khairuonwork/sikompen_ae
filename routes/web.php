@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminAuthenticationController;
+use App\Http\Controllers\KompenResponHubActivityRetentionController;
 use App\Http\Controllers\KompenResponHubAdminSetupController;
 use App\Http\Controllers\KompenResponHubController;
 use App\Http\Controllers\KompenResponHubExportController;
@@ -47,6 +48,12 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
         ->name('kompen-respon.exports.show');
     Route::get('exports/{exportTask}/download', [KompenResponHubExportController::class, 'download'])
         ->name('kompen-respon.exports.download');
+    Route::delete('exports/{exportTask}', [KompenResponHubExportController::class, 'destroy'])
+        ->middleware('throttle:10,15')
+        ->name('kompen-respon.exports.destroy');
+    Route::post('exports/{exportTask}/dismiss', [KompenResponHubExportController::class, 'dismiss'])
+        ->middleware('throttle:20,1')
+        ->name('kompen-respon.exports.dismiss');
 
     Route::middleware('sikompen.admin')->prefix('admin')->name('admin.')->group(function (): void {
         Route::get('/', [KompenResponHubController::class, 'adminIndex'])
@@ -101,6 +108,9 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
         Route::delete('kompen-respon/warnings/{warning}', [KompenResponHubLifecycleController::class, 'destroyWarning'])
             ->middleware('throttle:20,1')
             ->name('kompen-respon.warnings.destroy');
+        Route::put('kompen-respon/activity-retention', [KompenResponHubActivityRetentionController::class, 'update'])
+            ->middleware('throttle:10,1')
+            ->name('kompen-respon.activity-retention.update');
         Route::middleware('sikompen.standalone')->group(function (): void {
             Route::get('settings', [KompenResponHubAdminSetupController::class, 'settings'])->name('settings');
             Route::post('settings/admin-setup', [KompenResponHubAdminSetupController::class, 'enable'])

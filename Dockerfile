@@ -53,6 +53,8 @@ RUN rm -f public/hot \
     && mkdir -p \
         bootstrap/cache \
         storage/app/private/kompen-respon-hub/imports \
+        storage/app/private/kompen-respon-hub/exports \
+        storage/logs \
     && chown -R www-data:www-data bootstrap/cache storage \
     && chmod +x /usr/local/bin/docker-entrypoint \
     && { \
@@ -60,7 +62,7 @@ RUN rm -f public/hot \
         echo 'post_max_size=5M'; \
         echo 'max_execution_time=600'; \
         echo 'max_input_time=600'; \
-        echo 'memory_limit=512M'; \
+        echo 'memory_limit=1024M'; \
     } > /usr/local/etc/php/conf.d/sikompen.ini
 
 ENTRYPOINT ["docker-entrypoint"]

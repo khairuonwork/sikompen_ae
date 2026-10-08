@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property 'students'|'details'|'warnings' $resource
  * @property 'xlsx'|'pdf' $format
  * @property array<string, mixed> $filters
- * @property 'queued'|'processing'|'completed'|'failed' $status
+ * @property 'queued'|'processing'|'completed'|'failed'|'cancelled' $status
  * @property int $progress
  * @property string|null $progress_message
  * @property string|null $output_path
@@ -42,6 +42,8 @@ class KompenResponHubExportTask extends Model
     public const StatusCompleted = 'completed';
 
     public const StatusFailed = 'failed';
+
+    public const StatusCancelled = 'cancelled';
 
     protected $table = 'sikompen_export_tasks';
 
