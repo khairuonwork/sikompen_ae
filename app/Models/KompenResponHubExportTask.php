@@ -2,10 +2,34 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Database\Factories\KompenResponHubExportTaskFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int $id
+ * @property string $request_session_id
+ * @property string $access_token
+ * @property int|null $requested_by_admin_id
+ * @property 'students'|'details'|'warnings' $resource
+ * @property 'xlsx'|'pdf' $format
+ * @property array<string, mixed> $filters
+ * @property 'queued'|'processing'|'completed'|'failed'|'cancelled' $status
+ * @property int $progress
+ * @property string|null $progress_message
+ * @property string|null $output_path
+ * @property string|null $download_filename
+ * @property string|null $error_message
+ * @property CarbonImmutable|null $queued_at
+ * @property CarbonImmutable|null $started_at
+ * @property CarbonImmutable|null $completed_at
+ * @property CarbonImmutable|null $failed_at
+ * @property CarbonImmutable|null $expires_at
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ */
 class KompenResponHubExportTask extends Model
 {
     /** @use HasFactory<KompenResponHubExportTaskFactory> */
@@ -18,6 +42,8 @@ class KompenResponHubExportTask extends Model
     public const StatusCompleted = 'completed';
 
     public const StatusFailed = 'failed';
+
+    public const StatusCancelled = 'cancelled';
 
     protected $table = 'sikompen_export_tasks';
 

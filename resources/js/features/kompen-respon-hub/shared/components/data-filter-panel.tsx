@@ -1,5 +1,5 @@
 import { Form, Link } from "@inertiajs/react";
-import { FileSpreadsheet, FileText, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
 import { index as studentIndex } from "@/routes/student/kompen-respon";
 import type { FilterOptions, Filters } from "../types";
-import { queueExport } from "../../export/export-progress-panel";
 
 export function FilterPanel({
     activeTab,
@@ -169,31 +168,6 @@ export function FilterPanel({
                 >
                     Reset filter
                 </Link>
-                <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-semibold text-[#395886]/70">
-                        Tanpa filter berarti seluruh data.
-                    </span>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => queueExport(activeTab, "xlsx", filters)}
-                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs hover:bg-[#395886] hover:text-white"
-                    >
-                        <FileSpreadsheet className="mr-1.5 size-3.5" />
-                        Buat XLSX
-                    </Button>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => queueExport(activeTab, "pdf", filters)}
-                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] shadow-2xs hover:bg-[#395886] hover:text-white"
-                    >
-                        <FileText className="mr-1.5 size-3.5" />
-                        Buat PDF
-                    </Button>
-                </div>
             </div>
         </Form>
     );

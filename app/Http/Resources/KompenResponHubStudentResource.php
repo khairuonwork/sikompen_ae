@@ -2,11 +2,14 @@
 
 namespace App\Http\Resources;
 
+use App\Models\KompenResponHubStudent;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/** @mixin KompenResponHubStudent */
 class KompenResponHubStudentResource extends JsonResource
 {
+    /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         $hasActiveWarning = $this->hasActiveWarning();

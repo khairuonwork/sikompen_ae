@@ -2,9 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Models\KompenResponHubImport;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/** @mixin KompenResponHubImport */
 class KompenResponHubImportResource extends JsonResource
 {
     /**
@@ -23,7 +25,7 @@ class KompenResponHubImportResource extends JsonResource
             'class_count' => $this->class_count,
             'student_count' => $this->student_count,
             'detail_count' => $this->detail_count,
-            'imported_at' => $this->imported_at?->toIso8601String(),
+            'imported_at' => $this->imported_at->toIso8601String(),
         ];
     }
 }

@@ -2,10 +2,23 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Database\Factories\KompenResponHubPeriodCutoffFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int $id
+ * @property string $periode_semester
+ * @property CarbonImmutable $deadline_at
+ * @property string $timezone
+ * @property int|null $updated_by_admin_id
+ * @property CarbonImmutable|null $closed_at
+ * @property int|null $closed_by_admin_id
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ */
 class KompenResponHubPeriodCutoff extends Model
 {
     /** @use HasFactory<KompenResponHubPeriodCutoffFactory> */

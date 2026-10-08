@@ -3,8 +3,9 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
-class StoreAdminLoginRequest extends FormRequest
+class UpdateKompenResponHubActivityRetentionRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -15,8 +16,7 @@ class StoreAdminLoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email:rfc', 'max:255'],
-            'password' => ['required', 'string', 'max:255'],
+            'activity_log_retention_days' => ['required', 'integer', Rule::in([30, 90, 180, 365, 730, 1095])],
         ];
     }
 }

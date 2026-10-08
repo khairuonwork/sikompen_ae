@@ -2,9 +2,21 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property string $periode_semester
+ * @property int $kompen_respon_hub_import_id
+ * @property int|null $activated_by_admin_id
+ * @property CarbonInterface $activated_at
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ * @property-read KompenResponHubImport|null $importBatch
+ * @property-read KompenResponHubAdmin|null $activatedByAdmin
+ */
 class KompenResponHubActiveImport extends Model
 {
     protected $table = 'sikompen_active_imports';

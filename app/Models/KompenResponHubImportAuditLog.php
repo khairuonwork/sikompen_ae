@@ -19,7 +19,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $class_count
  * @property int $student_count
  * @property int $detail_count
+ * @property array<string, mixed>|null $metadata
  * @property CarbonInterface $occurred_at
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ * @property-read KompenResponHubImport|null $sourceImport
  */
 class KompenResponHubImportAuditLog extends Model
 {

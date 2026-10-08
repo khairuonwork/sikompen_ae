@@ -26,6 +26,7 @@ class KompenResponHubTableRequest extends FormRequest
         );
     }
 
+    /** @return array<string, list<mixed>> */
     public function rules(): array
     {
         return [

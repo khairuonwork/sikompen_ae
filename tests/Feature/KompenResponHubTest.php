@@ -15,15 +15,20 @@ use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
+use App\Models\KompenResponHubSystemSetting;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Mockery;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use RuntimeException;
+use ZipArchive;
 
 test('the public page and data API do not require a login', function () {
     $student = createStudent();
@@ -222,13 +227,13 @@ test('an export without filters is queued and produces a landscape XLSX', functi
         'resource' => 'students',
         'format' => 'xlsx',
     ])
-        ->assertRedirect()
-        ->assertSessionHas('success');
+        ->assertRedirect();
 
     $task = KompenResponHubExportTask::query()->sole();
 
     expect($task->filters)->toBe([])
-        ->and($task->status)->toBe(KompenResponHubExportTask::StatusQueued);
+        ->and($task->status)->toBe(KompenResponHubExportTask::StatusQueued)
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'export.requested')->exists())->toBeTrue();
 
     Queue::assertPushed(
         GenerateKompenResponHubExport::class,
@@ -273,6 +278,91 @@ test('an export without filters is queued and produces a landscape XLSX', functi
     }
 });
 
+test('an export task can be cancelled by its requesting session', function () {
+    Queue::fake();
+
+    $this->post('/exports', [
+        'resource' => 'students',
+        'format' => 'xlsx',
+    ])->assertRedirect();
+
+    $task = KompenResponHubExportTask::query()->sole();
+
+    $this->withCookie(config('session.cookie'), $task->request_session_id)
+        ->delete("/exports/{$task->id}?token={$task->access_token}")
+        ->assertRedirect();
+
+    expect($task->refresh()->status)->toBe(KompenResponHubExportTask::StatusCancelled)
+        ->and($task->progress)->toBe(100)
+        ->and($task->progress_message)->toBe('Ekspor dibatalkan oleh pengguna.')
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'export.cancelled')->exists())->toBeTrue();
+
+    (new GenerateKompenResponHubExport($task->id))->handle(
+        app(BuildKompenResponHubExport::class),
+        app(RecordKompenResponHubActivity::class),
+    );
+
+    expect($task->refresh()->status)->toBe(KompenResponHubExportTask::StatusCancelled);
+});
+
+test('a terminal export notification can be dismissed without deleting its audit task', function () {
+    Queue::fake();
+
+    $this->post('/exports', [
+        'resource' => 'students',
+        'format' => 'xlsx',
+    ])->assertRedirect();
+
+    $task = KompenResponHubExportTask::query()->sole();
+    $task->update([
+        'status' => KompenResponHubExportTask::StatusFailed,
+        'progress' => 100,
+        'failed_at' => now(),
+    ]);
+
+    $this->withCookie(config('session.cookie'), $task->request_session_id)
+        ->post("/exports/{$task->id}/dismiss?token={$task->access_token}")
+        ->assertRedirect()
+        ->assertSessionHas('sikompen.dismissed_export_task_ids', [$task->id]);
+
+    $this->withCookie(config('session.cookie'), $task->request_session_id)
+        ->get('/kompen-respon')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('exportTasks', 0));
+
+    $this->assertModelExists($task);
+});
+
+test('an admin can configure activity log retention and expired logs are purged', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $expiredLog = KompenResponHubActivityLog::create([
+        'event_type' => 'import.completed',
+        'subject_type' => 'import',
+        'actor_type' => 'system',
+        'occurred_at' => now()->subDays(31),
+    ]);
+    $retainedLog = KompenResponHubActivityLog::create([
+        'event_type' => 'import.completed',
+        'subject_type' => 'import',
+        'actor_type' => 'system',
+        'occurred_at' => now()->subDays(29),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->put('/admin/kompen-respon/activity-retention', [
+            'activity_log_retention_days' => 30,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Retensi riwayat aktivitas berhasil diperbarui.');
+
+    expect(KompenResponHubSystemSetting::current()->activity_log_retention_days)->toBe(30);
+
+    $this->artisan('sikompen:purge-activity-logs')->assertSuccessful();
+
+    $this->assertModelMissing($expiredLog);
+    $this->assertModelExists($retainedLog);
+});
+
 test('an export produces a landscape PDF for detail kompen', function () {
     Storage::fake('local');
     Queue::fake();
@@ -312,6 +402,91 @@ test('an export produces a landscape PDF for detail kompen', function () {
         ->assertHeaderContains('Content-Type', 'application/pdf');
 
     expect($response->streamedContent())->toStartWith('%PDF-');
+});
+
+test('an export fails safely when its result exceeds the hard row limit', function () {
+    Storage::fake('local');
+    Queue::fake();
+    config(['kompen-respon-hub.export_max_rows' => 1]);
+    $student = createStudent();
+
+    $secondStudent = $student->replicate();
+    $secondStudent->fill([
+        'nim' => '987654321',
+        'nama_mahasiswa' => 'Dani Pratama',
+    ])->save();
+
+    $this->post('/exports', [
+        'resource' => 'students',
+        'format' => 'xlsx',
+    ])->assertRedirect();
+
+    $task = KompenResponHubExportTask::query()->sole();
+
+    (new GenerateKompenResponHubExport($task->id))->handle(
+        app(BuildKompenResponHubExport::class),
+        app(RecordKompenResponHubActivity::class),
+    );
+
+    expect($task->refresh()->status)->toBe(KompenResponHubExportTask::StatusFailed)
+        ->and($task->error_message)->toContain('maksimal 1 baris')
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'export.failed')->exists())->toBeTrue();
+});
+
+test('a PDF export is not limited by the XLSX row limit', function () {
+    Storage::fake('local');
+    Queue::fake();
+    config(['kompen-respon-hub.export_max_rows' => 1]);
+    $student = createStudent();
+
+    $secondStudent = $student->replicate();
+    $secondStudent->fill([
+        'nim' => '987654321',
+        'nama_mahasiswa' => 'Dani Pratama',
+    ])->save();
+
+    $this->post('/exports', [
+        'resource' => 'students',
+        'format' => 'pdf',
+    ])->assertRedirect();
+
+    $task = KompenResponHubExportTask::query()->sole();
+
+    (new GenerateKompenResponHubExport($task->id))->handle(
+        app(BuildKompenResponHubExport::class),
+        app(RecordKompenResponHubActivity::class),
+    );
+
+    expect($task->refresh()->status)->toBe(KompenResponHubExportTask::StatusCompleted)
+        ->and($task->output_path)->not->toBeNull()
+        ->and(Storage::disk('local')->exists($task->output_path))->toBeTrue();
+});
+
+test('an unexpected export failure is logged with task context while keeping its message safe', function () {
+    $task = KompenResponHubExportTask::factory()->create();
+    $builder = Mockery::mock(BuildKompenResponHubExport::class);
+    $builder->shouldReceive('execute')
+        ->once()
+        ->andThrow(new RuntimeException('The export volume is not writable.'));
+    Log::spy();
+
+    (new GenerateKompenResponHubExport($task->id))->handle(
+        $builder,
+        app(RecordKompenResponHubActivity::class),
+    );
+
+    expect($task->refresh()->status)->toBe(KompenResponHubExportTask::StatusFailed)
+        ->and($task->error_message)->toBe('File tidak dapat dibuat. Coba ulangi dengan filter yang lebih spesifik atau hubungi administrator.');
+
+    Log::shouldHaveReceived('error')
+        ->once()
+        ->with(
+            'Sikompen export generation failed.',
+            Mockery::on(fn (array $context): bool => $context['export_task_id'] === $task->id
+                && $context['resource'] === 'students'
+                && $context['format'] === 'xlsx'
+                && $context['exception'] instanceof RuntimeException),
+        );
 });
 
 test('a student cannot queue an export of warning letters', function () {
@@ -750,7 +925,7 @@ test('an uploaded workbook is queued and its progress remains available outside 
 
     $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
         'uploader_name' => 'Khairul Anwar',
-        'file' => UploadedFile::fake()->create('kompen-respon.xlsx', 100),
+        'file' => UploadedFile::fake()->createWithContent('kompen-respon.xlsx', workbookContents()),
     ])->assertRedirect('/admin?tab=upload');
 
     $importTask = KompenResponHubImportTask::query()->sole();
@@ -779,6 +954,104 @@ test('an uploaded workbook is queued and its progress remains available outside 
         ->assertJsonPath('data.progress', 0);
 });
 
+test('an import rejects an XLSX archive with too many internal entries before storage', function () {
+    Storage::fake('local');
+    Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContentsWithExtraArchiveEntries(64),
+        ),
+    ])->assertSessionHasErrors('file');
+
+    expect(KompenResponHubImportTask::query()->doesntExist())->toBeTrue();
+});
+
+test('an import rejects workbooks containing formulas before storage', function () {
+    Storage::fake('local');
+    Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(formulaCell: 'L4'),
+        ),
+    ])->assertSessionHasErrors('file');
+
+    expect(KompenResponHubImportTask::query()->doesntExist())->toBeTrue();
+});
+
+test('an import accepts worksheets expanded beyond the official template dimensions', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'kompen-respon.xlsx',
+            workbookContents(summaryOutsideTemplateCell: 'A681'),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_COMPLETED)
+        ->and(KompenResponHubImport::query()->exists())->toBeTrue();
+});
+
+test('expired import task records are purged while imports and audit logs are retained', function () {
+    config(['kompen-respon-hub.retention.import_task_days' => 30]);
+    $oldCompletedTask = KompenResponHubImportTask::factory()->create([
+        'status' => KompenResponHubImportTask::STATUS_COMPLETED,
+        'completed_at' => now()->subDays(31),
+    ]);
+    $recentFailedTask = KompenResponHubImportTask::factory()->create([
+        'status' => KompenResponHubImportTask::STATUS_FAILED,
+        'failed_at' => now()->subDays(29),
+    ]);
+    $import = KompenResponHubImport::create([
+        'periode_semester' => '2026/2027 Gasal',
+        'original_filename' => 'source.xlsx',
+        'stored_path' => 'kompen-respon-hub/imports/source.xlsx',
+        'file_hash' => str_repeat('d', 64),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 0,
+        'imported_at' => now(),
+    ]);
+
+    $this->artisan('sikompen:purge-import-tasks')->assertSuccessful();
+
+    expect(KompenResponHubImportTask::query()->find($oldCompletedTask->id))->toBeNull()
+        ->and(KompenResponHubImportTask::query()->find($recentFailedTask->id))->not->toBeNull()
+        ->and(KompenResponHubImport::query()->find($import->id))->not->toBeNull()
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'maintenance.import_tasks_purged')->exists())->toBeTrue();
+});
+
+test('stalled import and export tasks are marked failed and added to the audit trail', function () {
+    config(['kompen-respon-hub.queue.stalled_task_minutes' => 15]);
+    $importTask = KompenResponHubImportTask::factory()->create([
+        'status' => KompenResponHubImportTask::STATUS_QUEUED,
+        'queued_at' => now()->subMinutes(16),
+    ]);
+    $exportTask = KompenResponHubExportTask::factory()->create([
+        'status' => KompenResponHubExportTask::StatusProcessing,
+        'started_at' => now()->subMinutes(16),
+    ]);
+
+    $this->artisan('sikompen:reconcile-tasks')->assertSuccessful();
+
+    expect($importTask->refresh()->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($exportTask->refresh()->status)->toBe(KompenResponHubExportTask::StatusFailed)
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.timed_out')->exists())->toBeTrue()
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'export.timed_out')->exists())->toBeTrue();
+});
+
 test('an admin can download the empty Sikompen import template', function () {
     $admin = KompenResponHubAdmin::factory()->create();
 
@@ -801,7 +1074,8 @@ test('an invalid academic year marks the queued import as failed', function () {
 
     $importTask = KompenResponHubImportTask::query()->sole();
     expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
-        ->and($importTask->error_message)->toContain('Tahun ajaran wajib berformat');
+        ->and($importTask->error_message)->toContain('Tahun ajaran wajib berformat')
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.failed')->exists())->toBeTrue();
 });
 
 test('an import is rejected when summary hours do not match detail totals', function () {
@@ -988,6 +1262,8 @@ function workbookContents(
     ?float $detailResponseHours = null,
     ?string $detailName = null,
     bool $duplicateDetail = false,
+    ?string $summaryOutsideTemplateCell = null,
+    ?string $formulaCell = null,
 ): string {
     $totalHours = $compensationHours + $responseHours;
     $workbook = new Spreadsheet;
@@ -1003,6 +1279,14 @@ function workbookContents(
         [1, '123456789', 'Rina Utami', 0.5, 0, 0, 0, $compensationHours, $responseHours, $totalHours, 0, $totalHours],
     ], null, 'A3');
     $summary->setCellValue('A6', 'TEMPLATE BLOK KELAS BARU — SALIN LALU GANTI KODE');
+
+    if ($summaryOutsideTemplateCell !== null) {
+        $summary->setCellValue($summaryOutsideTemplateCell, 'Di luar kapasitas template');
+    }
+
+    if ($formulaCell !== null) {
+        $summary->setCellValue($formulaCell, '=1+1');
+    }
 
     $details = $workbook->createSheet();
     $details->setTitle('Detail Kompen');
@@ -1038,4 +1322,31 @@ function workbookContents(
     $writer->save('php://output');
 
     return (string) ob_get_clean();
+}
+
+function workbookContentsWithExtraArchiveEntries(int $extraEntries): string
+{
+    $temporaryFile = tempnam(sys_get_temp_dir(), 'sikompen-archive-');
+
+    if ($temporaryFile === false) {
+        throw new RuntimeException('Temporary workbook cannot be created.');
+    }
+
+    file_put_contents($temporaryFile, workbookContents());
+    $archive = new ZipArchive;
+    $archive->open($temporaryFile);
+
+    for ($index = 0; $index < $extraEntries; $index++) {
+        $archive->addFromString("xl/media/unexpected-{$index}.bin", 'x');
+    }
+
+    $archive->close();
+    $contents = file_get_contents($temporaryFile);
+    unlink($temporaryFile);
+
+    if (! is_string($contents)) {
+        throw new RuntimeException('Temporary workbook cannot be read.');
+    }
+
+    return $contents;
 }

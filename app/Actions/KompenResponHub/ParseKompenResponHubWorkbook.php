@@ -12,6 +12,13 @@ class ParseKompenResponHubWorkbook
 {
     private const NEW_CLASS_TEMPLATE_MARKER = 'TEMPLATE BLOK KELAS BARU';
 
+    /** @var array<string, array{minimum_rows: int, minimum_columns: int}> */
+    private const SHEET_DIMENSIONS = [
+        'Petunjuk' => ['minimum_rows' => 1, 'minimum_columns' => 1],
+        'Kompen dan Respon' => ['minimum_rows' => 3, 'minimum_columns' => 12],
+        'Detail Kompen' => ['minimum_rows' => 1, 'minimum_columns' => 13],
+    ];
+
     private const SUMMARY_HEADERS = [
         'NO.', 'NIM', 'NAMA MAHASISWA', 'T[J]', 'S[J]', 'I[J]', 'B[J]',
         'KOMPENSASI[J]', 'RESPONSI[J]', 'TOTAL[J]', 'KOMPENSASI DIKERJAKAN[J]', 'SISA KOMPEN[J]',
@@ -35,7 +42,9 @@ class ParseKompenResponHubWorkbook
             $sheets[$sheet->getTitle()] = $sheet;
         }
 
-        $errors = [];
+        $errors = $this->newErrorList();
+        $this->validateWorkbookStructure($sheets, $errors);
+
         foreach (['Kompen dan Respon', 'Detail Kompen'] as $requiredSheet) {
             if (! isset($sheets[$requiredSheet])) {
                 $errors[] = [
@@ -62,6 +71,36 @@ class ParseKompenResponHubWorkbook
         $this->validateDetailHourTotals($students, $details, $errors);
 
         return $this->result($errors, $classes, $students, $details, $period);
+    }
+
+    /**
+     * @param  array<string, Worksheet>  $sheets
+     * @param  list<array{location: string, message: string}>  $errors
+     */
+    private function validateWorkbookStructure(array $sheets, array &$errors): void
+    {
+        foreach ($sheets as $name => $sheet) {
+            $limits = self::SHEET_DIMENSIONS[$name] ?? null;
+
+            if ($limits === null) {
+                $errors[] = [
+                    'location' => 'Workbook',
+                    'message' => "Sheet '{$name}' tidak dikenal. Gunakan hanya sheet bawaan template Sikompen.",
+                ];
+
+                continue;
+            }
+
+            $rowCount = $sheet->getHighestDataRow();
+            $columnCount = Coordinate::columnIndexFromString($sheet->getHighestDataColumn());
+
+            if ($rowCount < $limits['minimum_rows'] || $columnCount < $limits['minimum_columns']) {
+                $errors[] = [
+                    'location' => $name,
+                    'message' => "Dimensi sheet tidak memenuhi struktur minimum: {$limits['minimum_rows']} baris dan {$limits['minimum_columns']} kolom.",
+                ];
+            }
+        }
     }
 
     /**
@@ -448,7 +487,10 @@ class ParseKompenResponHubWorkbook
         ];
     }
 
-    /** @return list<array{class: string, column: int, row: int, location: string}> */
+    /**
+     * @param  list<array{location: string, message: string}>  $errors
+     * @return list<array{class: string, column: int, row: int, location: string}>
+     */
     private function findClassMarkers(Worksheet $sheet, array &$errors): array
     {
         $markers = [];
@@ -485,6 +527,12 @@ class ParseKompenResponHubWorkbook
         }
 
         return $markers;
+    }
+
+    /** @return list<array{location: string, message: string}> */
+    private function newErrorList(): array
+    {
+        return [];
     }
 
     /**

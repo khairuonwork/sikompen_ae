@@ -156,12 +156,13 @@ export type ExportTask = {
     access_token: string;
     resource: "students" | "details" | "warnings";
     format: "xlsx" | "pdf";
-    status: "queued" | "processing" | "completed" | "failed";
+    status: "queued" | "processing" | "completed" | "failed" | "cancelled";
     progress: number;
     progress_message: string;
     download_filename: string | null;
     error_message: string | null;
     queued_at: string | null;
+    started_at: string | null;
     completed_at: string | null;
     expires_at: string | null;
 };
@@ -266,8 +267,10 @@ export type KompenResponHubPageProps = {
     warningCandidates: Pagination<Student> | null;
     rolledBackWarnings: Pagination<Warning> | null;
     activityLogs: Pagination<ActivityLog> | null;
+    activityRetentionDays: number | null;
     cutoffs: Cutoff[];
     activeImportTasks: ImportTask[];
     exportTasks: ExportTask[];
+    exportStalledAfterMinutes: number;
     managedPeriodHasActiveWarnings: boolean;
 };

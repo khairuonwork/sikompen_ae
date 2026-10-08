@@ -10,13 +10,25 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
+ * @property int|null $uploaded_by_admin_id
+ * @property string|null $uploader_name
+ * @property string|null $uploader_email
  * @property string $original_filename
+ * @property string $stored_path
+ * @property string $file_hash
  * @property string $status
  * @property int $progress
  * @property string $progress_message
  * @property string|null $error_message
  * @property CarbonInterface|null $queued_at
+ * @property CarbonInterface|null $started_at
  * @property CarbonInterface|null $completed_at
+ * @property CarbonInterface|null $failed_at
+ * @property int|null $kompen_respon_hub_import_id
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ * @property-read KompenResponHubImport|null $importBatch
+ * @property-read KompenResponHubAdmin|null $uploadedByAdmin
  */
 class KompenResponHubImportTask extends Model
 {

@@ -175,8 +175,12 @@ class KompenResponHubLifecycleController extends Controller
     {
         $validated = $request->validated();
         $override = KompenResponHubStudentSummaryOverride::query()->where('current_student_id', $student->id)->first();
-        $totalKompen = (float) ($override?->total_kompensasi_jam ?? $student->total_kompensasi_jam);
-        $totalResponsi = (float) ($override?->total_responsi_jam ?? $student->total_responsi_jam);
+        $totalKompen = $override instanceof KompenResponHubStudentSummaryOverride
+            ? (float) $override->total_kompensasi_jam
+            : (float) $student->total_kompensasi_jam;
+        $totalResponsi = $override instanceof KompenResponHubStudentSummaryOverride
+            ? (float) $override->total_responsi_jam
+            : (float) $student->total_responsi_jam;
 
         abort_if((float) $validated['kompensasi_dikerjakan_jam'] > $totalKompen || (float) $validated['responsi_dikerjakan_jam'] > $totalResponsi, 422, 'Jam yang dikerjakan tidak boleh melebihi total hutang efektif.');
         abort_if(((float) $validated['kompensasi_dikerjakan_jam'] + (float) $validated['responsi_dikerjakan_jam']) > 0 && empty($validated['last_worked_at']), 422, 'Tanggal terakhir dikerjakan wajib diisi ketika ada jam yang dikerjakan.');
@@ -203,7 +207,14 @@ class KompenResponHubLifecycleController extends Controller
     {
         $validated = $request->validated();
         $progress = KompenResponHubStudentProgress::query()->where('current_student_id', $student->id)->first();
-        abort_if((float) $validated['total_kompensasi_jam'] < (float) ($progress?->kompensasi_dikerjakan_jam ?? 0) || (float) $validated['total_responsi_jam'] < (float) ($progress?->responsi_dikerjakan_jam ?? 0), 422, 'Total hutang tidak boleh lebih kecil dari jam yang sudah dikerjakan.');
+        $workedKompen = $progress instanceof KompenResponHubStudentProgress
+            ? (float) $progress->kompensasi_dikerjakan_jam
+            : 0.0;
+        $workedResponsi = $progress instanceof KompenResponHubStudentProgress
+            ? (float) $progress->responsi_dikerjakan_jam
+            : 0.0;
+
+        abort_if((float) $validated['total_kompensasi_jam'] < $workedKompen || (float) $validated['total_responsi_jam'] < $workedResponsi, 422, 'Total hutang tidak boleh lebih kecil dari jam yang sudah dikerjakan.');
 
         $override = KompenResponHubStudentSummaryOverride::query()->firstOrNew($this->studentIdentity($student));
         $before = $override->exists ? $override->only(['total_kompensasi_jam', 'total_responsi_jam', 'reason']) : null;
@@ -283,10 +294,10 @@ class KompenResponHubLifecycleController extends Controller
     /** @return array<string, string|float|null> */
     private function studentSnapshot(KompenResponHubStudent $student): array
     {
-        $totalKompen = (float) ($student->summaryOverride?->total_kompensasi_jam ?? $student->total_kompensasi_jam);
-        $totalResponsi = (float) ($student->summaryOverride?->total_responsi_jam ?? $student->total_responsi_jam);
-        $workedKompen = (float) ($student->progress?->kompensasi_dikerjakan_jam ?? 0);
-        $workedResponsi = (float) ($student->progress?->responsi_dikerjakan_jam ?? 0);
+        $totalKompen = (float) $student->effective_total_kompensasi_jam;
+        $totalResponsi = (float) $student->effective_total_responsi_jam;
+        $workedKompen = (float) $student->effective_kompensasi_dikerjakan_jam;
+        $workedResponsi = (float) $student->effective_responsi_dikerjakan_jam;
 
         return ['total_kompensasi_jam' => $totalKompen, 'total_responsi_jam' => $totalResponsi, 'kompensasi_dikerjakan_jam' => $workedKompen, 'responsi_dikerjakan_jam' => $workedResponsi, 'sisa_hutang_jam' => max(0, $totalKompen + $totalResponsi - $workedKompen - $workedResponsi)];
     }

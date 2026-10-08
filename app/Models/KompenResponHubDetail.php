@@ -2,10 +2,38 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * @property int $id
+ * @property int $kompen_respon_hub_student_id
+ * @property string|null $source_key
+ * @property CarbonInterface|null $tanggal
+ * @property string $mata_kuliah
+ * @property string $nama_dosen
+ * @property string $jenis_pertemuan
+ * @property string $presensi
+ * @property int $menit_keterlambatan
+ * @property string|null $keterangan
+ * @property string $jam_kompensasi
+ * @property string $jam_responsi
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ * @property-read KompenResponHubStudent|null $student
+ * @property-read KompenResponHubDetailOverride|null $override
+ * @property-read string $effective_mata_kuliah
+ * @property-read string $effective_nama_dosen
+ * @property-read string $effective_tanggal
+ * @property-read string $effective_jenis_pertemuan
+ * @property-read string $effective_presensi
+ * @property-read int $effective_menit_keterlambatan
+ * @property-read string|null $effective_keterangan
+ * @property-read string $effective_jam_kompensasi
+ * @property-read string $effective_jam_responsi
+ */
 class KompenResponHubDetail extends Model
 {
     protected $table = 'sikompen_detail_kompen';
@@ -39,6 +67,7 @@ class KompenResponHubDetail extends Model
         return config('kompen-respon-hub.database_connection');
     }
 
+    /** @return BelongsTo<KompenResponHubStudent, $this> */
     public function student(): BelongsTo
     {
         return $this->belongsTo(
@@ -47,6 +76,7 @@ class KompenResponHubDetail extends Model
         );
     }
 
+    /** @return HasOne<KompenResponHubDetailOverride, $this> */
     public function override(): HasOne
     {
         return $this->hasOne(KompenResponHubDetailOverride::class, 'source_key', 'source_key');

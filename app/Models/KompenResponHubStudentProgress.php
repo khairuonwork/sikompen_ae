@@ -2,11 +2,28 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Database\Factories\KompenResponHubStudentProgressFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int|null $current_student_id
+ * @property string $nim
+ * @property string $periode_semester
+ * @property string $kelas
+ * @property string $kompensasi_dikerjakan_jam
+ * @property string $responsi_dikerjakan_jam
+ * @property CarbonImmutable|null $last_worked_at
+ * @property string $reason
+ * @property int|null $updated_by_admin_id
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ * @property-read KompenResponHubStudent|null $student
+ */
 class KompenResponHubStudentProgress extends Model
 {
     /** @use HasFactory<KompenResponHubStudentProgressFactory> */

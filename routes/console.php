@@ -11,3 +11,15 @@ Artisan::command('inspire', function () {
 Schedule::command('sikompen:purge-exports')
     ->hourly()
     ->withoutOverlapping();
+
+Schedule::command('sikompen:purge-import-tasks')
+    ->daily()
+    ->withoutOverlapping();
+
+Schedule::command('sikompen:purge-activity-logs')
+    ->daily()
+    ->withoutOverlapping();
+
+Schedule::command('sikompen:reconcile-tasks')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
