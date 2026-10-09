@@ -1,76 +1,70 @@
-# Frontend guide
+# Panduan Perubahan UI Sikompen
 
-Panduan ini menjelaskan lokasi perubahan bila UI Sikompen ingin didesain ulang tanpa mengubah kontrak backend.
+Panduan ini untuk perubahan UI tanpa melanggar kontrak backend. Sebelum mengubah layout, baca [frontend-explained.md](frontend-explained.md) agar perubahan ditempatkan di feature yang tepat.
 
-## Peta perubahan UI
+## Peta perubahan
 
-| Kebutuhan | File utama | Catatan |
+| Kebutuhan | Lokasi utama | Catatan |
 | --- | --- | --- |
-| Mengubah halaman pemilih akses | `resources/js/pages/welcome.tsx` | Pertahankan tautan Wayfinder untuk Admin, Mahasiswa, dan setup. |
-| Mengubah layout tabel/filter/tab Sikompen | `resources/js/pages/kompen-respon-hub/index.tsx` | Ini halaman inti bersama untuk mode admin dan mahasiswa. Jangan menghapus pembatasan `isAdmin`. |
-| Mengubah tampilan login | `resources/js/pages/auth/admin-login.tsx` | Pertahankan field `email`, `password`, form action, dan tampilan error server. |
-| Mengubah tampilan setup admin | `resources/js/pages/auth/admin-setup.tsx` | Pertahankan `email`, `password`, `password_confirmation`, dan `activation_code` kondisional. |
-| Mengubah layar pengaturan admin | `resources/js/pages/admin/settings.tsx` | Jangan tampilkan ulang kode aktivasi dari state permanen; kode memang hanya flash sekali. |
-| Mengubah warna, font, radius, mode gelap | `resources/css/app.css` | Ubah CSS variable dalam `:root` dan `.dark`, atau `@theme` bila menambah token Tailwind. |
-| Mengubah bentuk tombol/card/input/select | `resources/js/components/ui/*.tsx` | Dampaknya global; cek seluruh halaman setelah mengubahnya. |
-| Menambah icon | File halaman terkait | Import icon dari `lucide-react`. |
+| Landing/pemilih akses | `resources/js/pages/welcome.tsx` | Pertahankan navigasi Wayfinder serta context proxy/standalone. |
+| Header, navigasi tab, state lintas panel | `pages/kompen-respon-hub/index.tsx` | Jangan memindahkan tabel/form domain besar kembali ke sini. |
+| Ringkasan mahasiswa | `features/.../kompen-respon/student-table.tsx` | Gunakan type `Student` dan formatter jam yang ada. |
+| Detail Kompen | `features/.../detail-kompen/` | Pisahkan tabel dan correction panel. |
+| Upload/progress import | `features/.../upload/` | Jangan hilangkan polling task atau guard drop file. |
+| List File | `features/.../list-file/import-version-list.tsx` | Pastikan tindakan rename/delete/activate memakai Wayfinder dan feedback server. |
+| Log Upload | `features/.../log-upload/` | Pertahankan filter periode serta bulan/tahun aktivitas. |
+| Cutoff/SP | `features/.../surat-peringatan/warning-panel.tsx` | Jangan menyatukan periode SP dikelola dengan periode list tanpa label yang jelas. |
+| Riwayat aktivitas | `features/.../riwayat-aktivitas/activity-panel.tsx` | Subject/jenis aktivitas harus tetap interpretabel. |
+| Export | `features/.../export/` | Jangan mengganti queue/polling menjadi request sinkron. |
+| Tema global | `resources/css/app.css` | Perubahan akan memengaruhi semua feature. |
+| Primitive UI | `resources/js/components/ui/` | Dampak global; lakukan visual check seluruh aplikasi. |
 
-## Menambah section atau tab baru
+## Menambah tab baru
 
-Contoh jika menambah tampilan statistik untuk admin:
+1. Tambahkan nilai tab di `features/kompen-respon-hub/shared/constants.ts`.
+2. Tambahkan nilai yang sama pada rule `tab` di `KompenResponHubTableRequest`.
+3. Sediakan prop backend hanya pada tab tersebut di `KompenResponHubController::index()`.
+4. Tambahkan type prop di `shared/types.ts`.
+5. Buat feature folder/file bila tanggung jawabnya mandiri, lalu rangkai di `index.tsx`.
+6. Gunakan route/aksi Wayfinder dan tambahkan test feature untuk akses/data.
 
-1. Tambahkan nilai tab di `adminTabs` pada `index.tsx`.
-2. Tambahkan nilai yang sama ke rule `tab` pada `app/Http/Requests/KompenResponHubTableRequest.php`.
-3. Tambahkan data prop yang diperlukan pada `KompenResponHubController::index()`.
-4. Tambahkan type prop dan section JSX pada `index.tsx`.
-5. Jika butuh route baru, daftarkan di `routes/web.php`, jalankan generator Wayfinder, lalu import fungsi route hasil generate ke React.
-6. Tambahkan feature test untuk akses admin dan perilaku data.
+Jangan hanya menambah JSX tab. Backend harus mengenali tab supaya URL, validasi, keamanan, dan ukuran response tetap benar.
 
-Jangan hanya menambah tab di JSX: server perlu mengenali tab tersebut agar URL, validasi, dan data awal tetap konsisten.
+## Menambah atau mengubah kolom
 
-## Menambah atau mengubah kolom tabel
+1. Ubah JSON Resource backend yang relevan.
+2. Ubah type di `shared/types.ts`.
+3. Ubah komponen tabel feature terkait.
+4. Untuk jam/angka, gunakan formatter yang ada agar locale dan presisi konsisten.
+5. Jika harus diekspor, ubah descriptor di `app/Actions/KompenResponHub/BuildKompenResponHubExport.php`—bukan controller lama atau file generated.
+6. Tambahkan test resource/export yang terdampak.
 
-1. Ubah kontrak JSON pada Resource backend yang relevan.
-2. Tambahkan properti di type `Student` atau `Detail` pada `index.tsx`.
-3. Tambahkan header dan cell tabel di komponen `StudentTable` atau `DetailTable`.
-4. Bila kolom adalah jam, pakai helper `number()` agar format Indonesia konsisten.
-5. Bila kolom harus muncul di ekspor, perbarui descriptor kolom pada `KompenResponHubDownloadController` dan template PDF.
+## Konvensi UX
 
-## Menambah komponen UI domain
+- Form perbaikan muncul sebagai panel yang bisa ditutup, tidak terus-menerus memenuhi halaman.
+- Button biru gelap harus memiliki ikon dan teks putih.
+- Dropdown/select memakai permukaan putih dan icon arrow konsisten.
+- Filter melekat pada tabel yang dipengaruhinya; jangan menyebarkan filter yang sama ke card tidak terkait.
+- Gunakan empty state yang menjelaskan langkah selanjutnya untuk admin, dan penjelasan read-only yang sederhana untuk mahasiswa.
+- Pesan keberhasilan/kegagalan datang dari server dan ditampilkan melalui flash alert/toast; jangan menyembunyikan error backend.
 
-- Untuk komponen yang hanya dipakai satu halaman, buat di dekat halaman tersebut atau di folder domain yang eksplisit, misalnya `resources/js/components/kompen-respon-hub/`.
-- Beri props TypeScript yang kecil dan eksplisit; jangan mengoper seluruh page props jika komponen hanya butuh sebagian data.
-- Gunakan `cn()` dari `@/lib/utils` untuk class kondisional.
-- Utamakan `Button`, `Card`, `Input`, `Select`, dan `Alert` yang sudah tersedia daripada menyalin markup.
-
-## Build dan verifikasi
-
-Untuk pengembangan lokal:
-
-```bash
-npm run dev
-```
-
-Untuk pengecekan dan produksi:
+## Verifikasi
 
 ```bash
 npm run check
-npm run types:check
 npm run build
 ```
 
-Pada Docker Compose, asset dibangun saat image dibuat. Setelah UI berubah, rebuild service aplikasi dan web:
-
-```bash
-docker compose up -d --build app web queue
-```
-
-## Jangan edit file generate
-
-`resources/js/actions/` dan `resources/js/routes/` merupakan output Wayfinder. Setelah perubahan route/controller, jalankan:
+Jika route/controller berubah:
 
 ```bash
 php artisan wayfinder:generate --with-form --no-interaction
 ```
 
-Lalu commit output generate bersama perubahan route tersebut.
+Untuk Docker, asset dibangun saat image dibangun ulang:
+
+```bash
+docker compose up -d --build app web queue
+```
+
+Jangan mengedit `resources/js/actions/` atau `resources/js/routes/` secara manual karena keduanya output Wayfinder.

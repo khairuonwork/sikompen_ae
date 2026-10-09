@@ -2,67 +2,62 @@
 
 ## Tujuan
 
-Frontend dipisahkan agar page Inertia tetap tipis, tiap modul mudah diuji/dibaca, dan perubahan pada satu tab tidak berisiko mengubah tab lain. Struktur ini mempertahankan satu entry page karena Laravel mengirim satu kontrak props untuk admin dan mahasiswa, tetapi tidak lagi menaruh seluruh implementasi UI pada satu file. Modul ditempatkan di `resources/js/features/`, bukan di bawah `pages/`, agar resolver Inertia tidak memperlakukan komponen sebagai halaman mandiri.
-
-## Struktur
+Frontend dipisahkan per feature supaya `pages/kompen-respon-hub/index.tsx` tetap menjadi page shell yang kecil dan tiap tab dapat berubah tanpa memengaruhi tab lain. Laravel mengirim satu kontrak page props untuk admin/mahasiswa, tetapi implementasi visual/domain tidak dikumpulkan pada satu file.
 
 ```text
 resources/js/
-├── pages/kompen-respon-hub/
-│   └── index.tsx                      # Entry Inertia: page shell, state lintas-tab, header, navigasi
-└── features/kompen-respon-hub/
-    ├── dashboard/
-    │   └── dashboard-panel.tsx         # Ringkasan dan profil mahasiswa
-    ├── upload/
-    │   ├── upload-panel.tsx            # Form upload workbook
-    │   ├── upload-progress-panel.tsx   # Progres pengiriman browser
-    │   └── import-progress-panel.tsx   # Polling antrean impor
-    ├── kompen-respon/
-    │   ├── student-table.tsx           # Tabel Kompen dan Respon
-    │   ├── edit-mode-control.tsx       # Sakelar mode perbaikan
-    │   └── student-correction-panel.tsx # Koreksi total/progres mahasiswa
-    ├── detail-kompen/
-    │   ├── detail-table.tsx            # Tabel Detail Kompen
-    │   └── detail-correction-panel.tsx # Koreksi detail manual
-    ├── log-upload/
-    │   └── import-audit-log-table.tsx  # Riwayat dan pemulihan versi upload
-    ├── surat-peringatan/
-    │   └── warning-panel.tsx           # Cutoff, kandidat, dan Surat Peringatan
-    ├── riwayat-aktivitas/
-    │   └── activity-panel.tsx          # Filter, label, dan tabel aktivitas
-    ├── export/
-    │   └── export-progress-panel.tsx   # Antrean dan progres ekspor
-    └── shared/
-        ├── constants.ts                 # Tab berdasarkan peran
-        ├── types.ts                     # Kontrak data Laravel/Inertia
-        ├── lib/formatters.ts            # Format jam dan tanggal
-        └── components/                  # Pagination, filter bersama, feedback, progress
+├── app.tsx
+├── pages/
+│   ├── welcome.tsx
+│   ├── auth/                         # login dan setup
+│   ├── admin/settings.tsx
+│   └── kompen-respon-hub/index.tsx   # Inertia entry / page shell
+├── features/kompen-respon-hub/
+│   ├── dashboard/                    # global search dan profil mahasiswa
+│   ├── upload/                       # upload/progress import
+│   ├── kompen-respon/                # ringkasan + koreksi
+│   ├── detail-kompen/                # detail + koreksi
+│   ├── list-file/                    # versi aktif/rename/delete
+│   ├── log-upload/                   # audit lifecycle workbook
+│   ├── surat-peringatan/             # cutoff, kandidat, SP
+│   ├── riwayat-aktivitas/            # audit dan retensi
+│   ├── export/                       # task export
+│   └── shared/                       # type, constant, formatter, component lintas feature
+├── components/ui/                    # primitive UI global
+├── actions/                          # generated Wayfinder actions
+└── routes/                           # generated Wayfinder routes
 ```
 
 ## Batas tanggung jawab
 
-- `index.tsx` tidak boleh berisi definisi tabel, form domain, atau polling. Ia hanya merangkai komponen dan mengelola state yang dipakai lintas panel, seperti mode perbaikan serta mahasiswa yang sedang dibuka.
-- `shared/types.ts` adalah satu-satunya sumber kontrak frontend domain. Bila payload Laravel berubah, perbarui type ini terlebih dahulu sebelum menyentuh komponen.
-- Komponen memakai action/route Wayfinder yang dihasilkan, bukan URL hard-coded. Setelah route atau controller berubah, jalankan `php artisan wayfinder:generate --no-interaction`.
-- Folder `upload/` dan `export/` mempertahankan polling progres hanya ketika task aktif. Ekspor diproses berurutan oleh backend queue; UI hanya membaca statusnya.
-- Folder tiap tab menangani presentasi dan form untuk domainnya sendiri. Tabel tidak memuat data sendiri sehingga tetap deterministik dari props Inertia.
+- `index.tsx` menyusun header, tab, state lintas panel, panel yang dipilih, dan page props. Tidak ada definisi tabel bisnis atau form besar di sini.
+- Feature panel menangani presentasi dan interaksi domennya sendiri; data tetap berasal dari props Inertia atau endpoint spesifik seperti global student search/task polling.
+- `shared/types.ts` merupakan sumber kontrak frontend domain. Perubahan Resource Laravel harus dimulai dari type ini.
+- `shared/components/` hanya menampung primitive domain lintas feature (filter, pager, empty state, progress), bukan komponen satu tab.
+- `components/ui/` adalah primitive visual global. Ubah di sana hanya bila seluruh aplikasi memang harus berubah.
+- `actions/` dan `routes/` adalah code generated Wayfinder; jangan diedit manual.
 
 ## Alur data
 
 ```mermaid
 flowchart LR
-    Laravel["Laravel controller"] --> Props["Inertia page props"]
-    Props --> Page["index.tsx page shell"]
-    Page --> Panels["Panel per tab"]
-    Panels --> Tables["Tabel / form / filter"]
-    Panels --> Wayfinder["Wayfinder action atau route"]
-    Wayfinder --> Laravel
+    C[Laravel controller] --> P[Inertia page props]
+    P --> S[index.tsx page shell]
+    S --> F[Feature panel]
+    F --> Q[Wayfinder form / router]
+    Q --> C
+    F --> T[Task polling API]
+    T --> C
 ```
 
-## Checklist perubahan frontend
+Task polling digunakan hanya untuk import/export yang aktif. Perpindahan tab tidak menghentikan worker backend maupun kehilangan state task dari page props berikutnya.
 
-1. Tambahkan atau sesuaikan kontrak di `shared/types.ts`.
-2. Pilih folder tab yang tepat; buat file baru bila tanggung jawabnya berbeda, bukan menambah blok besar ke `index.tsx` atau folder tab lain.
-3. Gunakan komponen UI bersama dari `resources/js/components/ui/`.
-4. Gunakan Wayfinder untuk navigasi dan form.
-5. Jalankan `npm run build`; bila route/controller ikut berubah, generate Wayfinder dan jalankan test Laravel terkait.
+## Aturan pengembangan
+
+1. Letakkan feature baru di folder domain terdekat.
+2. Ubah type domain sebelum JSX yang memakai payload baru.
+3. Gunakan Wayfinder dan `router` Inertia, bukan URL string manual.
+4. Pertahankan `isAdmin` untuk UI, tetapi selalu tambah middleware/authorization backend untuk akses baru.
+5. Setelah route/controller berubah, generate Wayfinder. Setelah UI berubah, jalankan typecheck dan production build.
+
+Lihat [frontend-files-explained.md](frontend-files-explained.md) untuk daftar file dan [frontend-guide.md](frontend-guide.md) untuk prosedur perubahan UI.

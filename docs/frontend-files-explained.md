@@ -1,66 +1,60 @@
-# Frontend files explained
+# Peta File Frontend
 
-## Entry point dan halaman
+## Entry page dan halaman
 
-| File | Isi dan tanggung jawab |
+| File | Tanggung jawab |
 | --- | --- |
-| `resources/js/app.tsx` | Membuat aplikasi Inertia React, judul dokumen, progress navigation, `TooltipProvider`, dan toast global. |
-| `resources/js/pages/welcome.tsx` | Halaman pemilih akses Admin/Mahasiswa. |
-| `resources/js/pages/kompen-respon-hub/index.tsx` | Page shell Sikompen: menerima props Inertia, menyimpan state lintas-tab, menyusun header/navigasi, lalu memasang panel tab yang sesuai. Tidak menyimpan implementasi tabel atau form domain. |
-| `resources/js/pages/auth/admin-login.tsx` | Form login admin dan kontrol tampil/sembunyikan password. |
-| `resources/js/pages/auth/admin-setup.tsx` | Form setup admin pertama atau pendaftaran admin baru memakai kode aktivasi. |
-| `resources/js/pages/admin/settings.tsx` | Pengaturan pembukaan jendela pendaftaran admin dan penyalinan kode aktivasi. |
+| `resources/js/app.tsx` | Bootstrap Inertia React, title, navigation progress, tooltip, dan Sonner toast. |
+| `pages/kompen-respon-hub/index.tsx` | Shell admin/mahasiswa; header, tab, global search, panel task, dan perakitan feature. |
+| `pages/welcome.tsx` | Landing/pemilih akses. |
+| `pages/auth/admin-login.tsx` | Login admin dan kontrol tampilkan password. |
+| `pages/auth/admin-setup.tsx` | Setup akun admin pertama/tambahan. |
+| `pages/admin/settings.tsx` | Pembukaan/penutupan pendaftaran admin. |
 
-## Styling dan komponen bersama
+## Feature Sikompen
 
-| Lokasi | Isi dan tanggung jawab |
+| Lokasi | File penting | Tanggung jawab |
+| --- | --- | --- |
+| `dashboard/` | `global-student-search.tsx`, `dashboard-panel.tsx`, `student-activity-history.tsx` | Pencarian global admin, profil mahasiswa, dan timeline perubahan. |
+| `upload/` | `upload-panel.tsx`, `upload-progress-panel.tsx`, `import-progress-panel.tsx` | Input file/nama pengunggah, proteksi drag drop ke field teks, progres browser, dan polling worker. |
+| `kompen-respon/` | `student-table.tsx`, `edit-mode-control.tsx`, `student-correction-panel.tsx` | Tabel ringkasan, badge status, sakelar mode perbaikan, progress, dan override ringkasan. |
+| `detail-kompen/` | `detail-table.tsx`, `detail-correction-panel.tsx` | Tabel kejadian Detail Kompen dan override manual. |
+| `list-file/` | `import-version-list.tsx` | Versi workbook; rename, download, delete, dan aktivasi versi per periode. |
+| `log-upload/` | `import-audit-filter-panel.tsx`, `import-audit-log-table.tsx` | Filter periode/bulan/tahun serta lifecycle audit workbook. |
+| `surat-peringatan/` | `warning-panel.tsx` | Periode SP dikelola, cutoff, kandidat/list, finalisasi, edit/rollback SP, dan riwayat surat. |
+| `riwayat-aktivitas/` | `activity-panel.tsx` | Label kegiatan yang dapat dibaca, filter actor/event/periode, pagination, dan retensi. |
+| `export/` | `export-panel.tsx`, `export-progress-panel.tsx` | Memulai ekspor serta polling/download/cancel/dismiss task. |
+
+## Shared domain dan UI
+
+| Lokasi | Tanggung jawab |
 | --- | --- |
-| `resources/css/app.css` | Entry Tailwind, token warna/radius, source scanning, dan varian dark mode. Ini tempat utama untuk mengubah tema global. |
-| `resources/js/components/ui/` | Komponen presentasi generik seperti `button.tsx`, `card.tsx`, `input.tsx`, `select.tsx`, `alert.tsx`, `dialog.tsx`, `sonner.tsx`, dan `tooltip.tsx`. Gunakan ulang sebelum membuat komponen baru. |
-| `resources/js/lib/utils.ts` | Helper `cn()` untuk menggabungkan class Tailwind dengan aman. |
-| `resources/js/hooks/use-appearance.tsx` | Penyimpanan dan penerapan preferensi tampilan terang/gelap. |
-| `resources/js/hooks/use-flash-toast.ts` | Helper pembacaan flash message untuk toast. |
-| `resources/js/hooks/use-mobile*.tsx` | Helper responsif/mobil yang disediakan starter kit. |
+| `features/.../shared/types.ts` | Kontrak semua data domain: props Inertia, paginator, mahasiswa, detail, import, cutoff/SP, activity, dan export task. |
+| `shared/constants.ts` | Daftar tab berdasarkan peran. |
+| `shared/lib/formatters.ts` | Format jam/angka dan tanggal berbasis zona waktu. |
+| `shared/components/data-filter-panel.tsx` | Form filter tabel reusable. |
+| `shared/components/pagination.tsx` | Pager 15/25/50/100 dan nomor halaman. |
+| `shared/components/feedback.tsx` | Guide/collapsible note dan empty state yang kontekstual. |
+| `shared/components/progress-bar.tsx` | Visual progres yang dipakai task. |
+| `components/ui/` | Primitive aksesibel berbasis Radix/CVA: button, input, select, dialog, card, alert, dan lain-lain. |
+| `lib/utils.ts` | `cn()` untuk menggabungkan Tailwind class. |
+| `lib/sikompen-url.ts` | Helper URL ketika Sikompen berada di public path gateway. |
+| `resources/css/app.css` | Token theme, Tailwind source, palette, dan style global. |
 
-## Modul halaman Sikompen
+## Generated code dan aturan edit
 
-Halaman Sikompen dipecah berdasarkan batas tanggung jawab. Semua file domain berada di `resources/js/features/kompen-respon-hub/`, bukan di bawah `pages/`, sehingga resolver Inertia hanya memuat entry page yang sebenarnya.
-
-| Lokasi | Isi dan tanggung jawab |
+| Lokasi | Aturan |
 | --- | --- |
-| `resources/js/features/kompen-respon-hub/shared/types.ts` | Kontrak TypeScript untuk props halaman, paginator, mahasiswa, detail, SP, task, audit impor, filter, dan dashboard. |
-| `…/shared/constants.ts` | Definisi tab admin dan mahasiswa. |
-| `…/shared/lib/formatters.ts` | Format angka jam dan nilai `datetime-local` berbasis zona waktu. |
-| `…/shared/components/` | Komponen lintas-tab yang benar-benar generik bagi domain Sikompen: pagination, filter data, panduan/empty state, dan progress bar. |
-| `…/dashboard/` | Ringkasan dashboard, cutoff terdekat, worklist, dan profil mahasiswa. |
-| `…/upload/` | Form upload workbook, nama file, progres kirim, serta polling antrean impor. |
-| `…/kompen-respon/` | Tabel Kompen/Respon, mode perbaikan, dan koreksi mahasiswa. |
-| `…/detail-kompen/` | Tabel Detail Kompen serta koreksi detail manual. |
-| `…/log-upload/` | Tabel audit upload, download workbook, status versi, dan pemulihan versi yang dipilih. |
-| `…/surat-peringatan/` | Kandidat/SP, pengaturan cutoff, penerbitan, edit, dan pembatalan SP. |
-| `…/riwayat-aktivitas/` | Kamus label aktivitas, filter riwayat, dan tabel riwayat aktivitas. |
-| `…/export/` | Antrean, polling progres, dan download hasil ekspor. |
+| `resources/js/actions/` | Generated Wayfinder controller actions. Jangan edit manual. |
+| `resources/js/routes/` | Generated Wayfinder named routes. Jangan edit manual. |
+| `resources/js/types/` | Type umum starter/app, bukan tempat kontrak domain utama. |
 
-## Routing type-safe
+Setelah perubahan route/controller, jalankan:
 
-| Lokasi | Isi dan aturan |
-| --- | --- |
-| `resources/js/actions/` | Hasil generate Wayfinder untuk controller actions, termasuk `.form()` untuk POST/DELETE dan `.url()` untuk tautan. Jangan edit manual; jalankan `php artisan wayfinder:generate --with-form --no-interaction` setelah route/controller berubah. |
-| `resources/js/routes/` | Hasil generate Wayfinder untuk named routes. Jangan edit manual. |
-| `vite.config.ts` | Mengaktifkan plugin Wayfinder, Inertia, React, Tailwind, dan aturan build/lint. |
+```bash
+php artisan wayfinder:generate --with-form --no-interaction
+npm run check
+npm run build
+```
 
-## TypeScript
-
-| File | Isi dan tanggung jawab |
-| --- | --- |
-| `resources/js/types/index.ts` | Re-export type bersama. |
-| `resources/js/types/ui.ts` | Type UI starter-kit yang dipakai komponen umum. |
-| `resources/js/types/global.d.ts` | Deklarasi global/props Inertia. |
-| `resources/js/types/vite-env.d.ts` | Type environment Vite. |
-
-## Catatan perubahan aman
-
-- Ubah halaman domain di `resources/js/pages/…`, bukan output Wayfinder.
-- Jika sebuah komponen dipakai hanya di halaman Sikompen, letakkan komponen baru dekat halaman atau buat folder komponen domain yang jelas setelah benar-benar diperlukan.
-- Bila mengubah JSX atau kelas Tailwind, jalankan `npm run check` dan `npm run build` sebelum deployment.
-- Tambahkan komponen baru ke folder domain yang paling dekat dengan tanggung jawabnya; jangan mengembalikan implementasi tabel/form besar ke `index.tsx`.
+Saat menambah UI baru, tempatkan di folder feature yang paling dekat. Jangan mengumpulkan tabel/form panjang ke `pages/kompen-respon-hub/index.tsx`.

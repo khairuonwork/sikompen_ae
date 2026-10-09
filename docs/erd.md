@@ -1,133 +1,151 @@
 # ERD Sikompen
 
-Seluruh tabel domain Sikompen berada pada koneksi `kompen_db` dan memakai awalan `sikompen_`. Tabel `jobs`, `job_batches`, dan `failed_jobs` adalah infrastruktur Laravel Queue pada koneksi yang sama.
+Seluruh tabel domain memakai koneksi `kompen_db` dan awalan fisik `sikompen_`. Kolom bernama `kompen_respon_hub_*` dipertahankan untuk kompatibilitas namespace/migrasi lama, tetapi tetap mengarah ke entitas Sikompen.
 
 ```mermaid
 erDiagram
-    sikompen_admins {
-        bigint id PK
-        varchar email UK
-        varchar password
-        timestamp created_at
-        timestamp updated_at
-    }
-
-    sikompen_admin_setup_windows {
-        bigint id PK
-        varchar activation_code_hash
-        timestamp expires_at
-        bigint opened_by_admin_id FK
-    }
+    sikompen_admins ||--o{ sikompen_imports : uploads
+    sikompen_admins ||--o{ sikompen_import_tasks : starts
+    sikompen_admins ||--o{ sikompen_activity_logs : acts
+    sikompen_imports ||--o| sikompen_active_imports : selected_as_active
+    sikompen_imports ||--o{ sikompen_mahasiswa : sources
+    sikompen_imports ||--o{ sikompen_import_audit_logs : audited
+    sikompen_mahasiswa ||--o{ sikompen_detail_kompen : owns
+    sikompen_mahasiswa ||--o| sikompen_mahasiswa_progress : has
+    sikompen_mahasiswa ||--o| sikompen_mahasiswa_summary_overrides : has
+    sikompen_mahasiswa ||--o{ sikompen_surat_peringatan : receives
+    sikompen_periode_cutoffs ||--o{ sikompen_surat_peringatan : governs
 
     sikompen_imports {
         bigint id PK
         bigint uploaded_by_admin_id FK
-        varchar uploader_name
-        varchar uploader_email
         varchar periode_semester
         varchar original_filename
+        varchar display_filename
         varchar stored_path
         char file_hash
-        int class_count
-        int student_count
-        int detail_count
+        json quality_report
         timestamp imported_at
     }
-
+    sikompen_active_imports {
+        bigint id PK
+        varchar periode_semester UK
+        bigint kompen_respon_hub_import_id FK
+        bigint activated_by_admin_id FK
+        timestamp activated_at
+    }
     sikompen_mahasiswa {
         bigint id PK
         bigint kompen_respon_hub_import_id FK
         varchar nim
         varchar periode_semester
-        varchar nama_mahasiswa
         varchar kelas
         int tingkat
-        decimal total_jam_terlambat
-        decimal total_jam_sakit
-        decimal total_jam_izin
-        decimal total_jam_bolos
         decimal total_kompensasi_jam
         decimal total_responsi_jam
-        decimal total_hutang_jam
-        decimal kompensasi_dikerjakan_jam
-        decimal sisa_hutang_jam
     }
-
     sikompen_detail_kompen {
         bigint id PK
         bigint kompen_respon_hub_student_id FK
+        varchar source_key
         date tanggal
-        varchar mata_kuliah
-        varchar nama_dosen
-        varchar jenis_pertemuan
-        varchar presensi
-        int menit_keterlambatan
-        text keterangan
         decimal jam_kompensasi
         decimal jam_responsi
     }
-
+    sikompen_mahasiswa_progress {
+        bigint id PK
+        bigint current_student_id FK
+        varchar nim
+        varchar periode_semester
+        varchar kelas
+        decimal kompensasi_dikerjakan_jam
+        decimal responsi_dikerjakan_jam
+        timestamp last_worked_at
+    }
+    sikompen_mahasiswa_summary_overrides {
+        bigint id PK
+        bigint current_student_id FK
+        varchar nim
+        varchar periode_semester
+        varchar kelas
+        decimal total_kompensasi_jam
+        decimal total_responsi_jam
+    }
+    sikompen_detail_kompen_overrides {
+        bigint id PK
+        varchar source_key UK
+        json override_values
+    }
+    sikompen_periode_cutoffs {
+        bigint id PK
+        varchar periode_semester UK
+        timestamp deadline_at
+        varchar timezone
+    }
+    sikompen_surat_peringatan {
+        bigint id PK
+        bigint cutoff_id FK
+        bigint current_student_id FK
+        varchar nim
+        varchar periode_semester
+        varchar kelas
+        varchar classification
+        varchar letter_status
+        varchar resolution
+        json snapshot
+    }
     sikompen_import_tasks {
         bigint id PK
         bigint uploaded_by_admin_id FK
-        bigint kompen_respon_hub_import_id FK
-        varchar original_filename
-        varchar stored_path
-        char file_hash
         varchar status
         int progress
-        text progress_message
-        text error_message
-        timestamp queued_at
-        timestamp started_at
-        timestamp completed_at
-        timestamp failed_at
+        varchar stored_path
     }
-
+    sikompen_export_tasks {
+        bigint id PK
+        varchar request_session_id
+        varchar access_token UK
+        varchar resource
+        varchar format
+        varchar status
+        json filters
+        varchar output_path
+        timestamp expires_at
+    }
     sikompen_import_audit_logs {
         bigint id PK
         bigint source_import_id FK
         varchar event_type
-        varchar actor_name
-        varchar actor_email
         varchar periode_semester
-        varchar original_filename
-        int class_count
-        int student_count
-        int detail_count
         timestamp occurred_at
     }
-
-    sikompen_sessions {
-        varchar id PK
-        bigint user_id
-        varchar ip_address
-        text user_agent
-        text payload
-        int last_activity
+    sikompen_activity_logs {
+        bigint id PK
+        varchar event_type
+        varchar subject_type
+        varchar subject_reference
+        varchar nim
+        varchar periode_semester
+        varchar actor_email
+        json before_state
+        json after_state
+        timestamp occurred_at
     }
-
-    sikompen_admins o|--o{ sikompen_imports : "mengunggah"
-    sikompen_admins o|--o{ sikompen_import_tasks : "memulai"
-    sikompen_admins o|--o{ sikompen_admin_setup_windows : "membuka"
-    sikompen_imports ||--o{ sikompen_mahasiswa : "asal impor"
-    sikompen_mahasiswa ||--o{ sikompen_detail_kompen : "memiliki"
-    sikompen_imports o|--o{ sikompen_import_tasks : "hasil tugas"
-    sikompen_imports o|--o{ sikompen_import_audit_logs : "direferensikan"
+    sikompen_system_settings {
+        bigint id PK
+        int activity_log_retention_days
+    }
 ```
 
-## Relasi dan perilaku penghapusan
+## Aturan identitas dan indeks penting
 
-- Menghapus satu `sikompen_imports` menghapus mahasiswa asal impor tersebut, lalu seluruh detailnya (`cascade`). Ini yang dipakai oleh rollback unggahan terakhir.
-- Admin yang dihapus tidak menghapus data impor. Kolom admin pada impor, tugas, dan jendela setup menjadi `NULL` (`nullOnDelete`).
-- Audit log mempertahankan catatan rollback walaupun impor asal sudah dihapus. Karena itu `source_import_id` dapat bernilai `NULL` atau tidak lagi merujuk berkas yang bisa diunduh.
-- Berkas XLSX tidak disimpan sebagai BLOB di MariaDB. Metadata dan hash-nya berada pada `sikompen_imports`/`sikompen_import_tasks`; berkas berada di volume Docker `sikompen_import_storage`.
+- Satu data mahasiswa efektif unik pada `(nim, periode_semester, kelas)`; identity ini membuat progress, summary override, dan SP dapat dihubungkan ulang ketika versi periode diganti.
+- `sikompen_active_imports.periode_semester` unik: tepat satu workbook aktif untuk satu periode.
+- SP unik pada `(cutoff_id, current_student_id)`; satu mahasiswa hanya dapat memiliki satu record SP untuk satu cutoff.
+- Detail override unik pada `source_key`; override menempel pada detail asal tanpa mengubah snapshot workbook.
+- Task export memiliki `access_token` unik dan index session/status untuk polling serta pembersihan.
+- Activity log memiliki index periode+waktu, event+waktu, dan identitas mahasiswa untuk audit/pencarian.
 
-## Index penting
+## Penyimpanan file
 
-- Mahasiswa unik pada `(nim, periode_semester, kelas)`.
-- Index mahasiswa untuk filter dan urutan tabel: periode, tingkat, kelas, nama, dan NIM.
-- Detail memiliki index mahasiswa dan index `(tanggal, id)` untuk daftar detail terbaru.
-- Impor diurutkan oleh `(imported_at, id)`; audit log oleh `occurred_at`; import task oleh `(status, created_at)`.
-
-Nama PHP masih menggunakan `KompenResponHub…` agar namespace aplikasi stabil, sedangkan nama tabel fisiknya sudah menggunakan `sikompen_…`.
+XLSX tidak disimpan di database. `sikompen_imports.stored_path` menunjuk file pada private storage/volume import; `sikompen_export_tasks.output_path` menunjuk hasil export pada volume export. Database hanya menyimpan metadata, checksum/path, status, dan audit.
