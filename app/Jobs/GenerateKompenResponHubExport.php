@@ -107,8 +107,7 @@ class GenerateKompenResponHubExport implements ShouldQueue
             $admin,
             null,
             period: $task->filters['periode_semester'] ?? null,
-            metadata: ['resource' => $task->resource, 'format' => $task->format],
-            subjectName: $task->download_filename,
+            metadata: $task->activityMetadata(),
         );
     }
 
@@ -166,8 +165,7 @@ class GenerateKompenResponHubExport implements ShouldQueue
             $admin,
             period: is_string($task->filters['periode_semester'] ?? null) ? $task->filters['periode_semester'] : null,
             reason: $message,
-            metadata: ['resource' => $task->resource, 'format' => $task->format],
-            subjectName: $task->download_filename,
+            metadata: $task->activityMetadata(),
         );
     }
 

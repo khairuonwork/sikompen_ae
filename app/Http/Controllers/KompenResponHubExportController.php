@@ -63,8 +63,7 @@ class KompenResponHubExportController extends Controller
             $admin,
             $request,
             period: is_string($filters['periode_semester'] ?? null) ? $filters['periode_semester'] : null,
-            metadata: ['resource' => $task->resource, 'format' => $task->format],
-            subjectName: $task->download_filename,
+            metadata: $task->activityMetadata(),
         );
 
         return back();
@@ -140,8 +139,7 @@ class KompenResponHubExportController extends Controller
             period: is_string($exportTask->filters['periode_semester'] ?? null)
                 ? $exportTask->filters['periode_semester']
                 : null,
-            metadata: ['resource' => $exportTask->resource, 'format' => $exportTask->format],
-            subjectName: $exportTask->download_filename,
+            metadata: $exportTask->activityMetadata(),
         );
 
         return back();

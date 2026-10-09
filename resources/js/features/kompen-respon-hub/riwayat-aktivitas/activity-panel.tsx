@@ -258,20 +258,14 @@ export function ActivityLogTable({
                                     {activityDescription(log)}
                                 </td>
                                 <td className="px-4 py-3 text-xs">
-                                    {log.subject_name ? (
-                                        <>
-                                            <p className="font-semibold text-[#395886]">
-                                                {log.subject_name}
-                                            </p>
-                                            {log.nim ? (
-                                                <p className="font-mono text-[11px] text-[#628ECB]">
-                                                    {log.nim}
-                                                </p>
-                                            ) : null}
-                                        </>
-                                    ) : (
-                                        (log.nim ?? log.subject_type)
-                                    )}
+                                    <p className="font-semibold text-[#395886]">
+                                        {log.subject_label}
+                                    </p>
+                                    {log.subject_context ? (
+                                        <p className="text-[11px] text-[#628ECB]">
+                                            {log.subject_context}
+                                        </p>
+                                    ) : null}
                                 </td>
                                 <td className="px-4 py-3 text-xs">
                                     {log.actor_name ?? "Sistem"}

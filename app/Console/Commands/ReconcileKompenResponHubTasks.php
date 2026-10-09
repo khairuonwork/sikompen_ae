@@ -99,11 +99,9 @@ class ReconcileKompenResponHubTasks extends Command
                         null,
                         reason: $message,
                         metadata: [
-                            'resource' => $task->resource,
-                            'format' => $task->format,
+                            ...$task->activityMetadata(),
                             'stalled_after_minutes' => $stalledAfterMinutes,
                         ],
-                        subjectName: $task->download_filename,
                     );
                     $count++;
                 }
