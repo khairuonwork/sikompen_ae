@@ -89,4 +89,14 @@ class KompenResponHubExportTask extends Model
     {
         return in_array($this->status, [self::StatusQueued, self::StatusProcessing], true);
     }
+
+    /** @return array{resource: string, format: string, filters: array<string, mixed>} */
+    public function activityMetadata(): array
+    {
+        return [
+            'resource' => $this->resource,
+            'format' => $this->format,
+            'filters' => $this->filters,
+        ];
+    }
 }

@@ -66,6 +66,8 @@ export type ActivityLog = {
     subject_type: string;
     nim: string | null;
     subject_name: string | null;
+    subject_label: string;
+    subject_context: string | null;
     periode_semester: string | null;
     kelas: string | null;
     actor_type: string;

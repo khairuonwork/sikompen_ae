@@ -44,8 +44,7 @@ class BuildKompenResponHubExport
         $period = is_string($filters['periode_semester'] ?? null)
             ? $filters['periode_semester']
             : 'Semua Periode';
-        $periodForFilename = Str::slug(str_replace('/', '-', $period));
-        $filename = "{$definition['slug']}-{$periodForFilename}-{$task->id}.{$task->format}";
+        $filename = $this->downloadFilename($definition['slug'], $filters, $task);
         $outputPath = "kompen-respon-hub/exports/{$task->access_token}.{$task->format}";
 
         Storage::disk('local')->makeDirectory('kompen-respon-hub/exports');
@@ -157,6 +156,41 @@ class BuildKompenResponHubExport
     private function formatLabel(string $format): string
     {
         return strtoupper($format);
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function downloadFilename(string $resourceSlug, array $filters, KompenResponHubExportTask $task): string
+    {
+        $filterSegments = [
+            'periode_semester' => 'periode',
+            'tingkat' => 'tingkat',
+            'kelas' => 'kelas',
+            'nim' => 'nim',
+            'nama' => 'nama',
+            'search' => 'pencarian',
+            'mata_kuliah' => 'mata-kuliah',
+            'nama_dosen' => 'dosen',
+        ];
+
+        $segments = [$resourceSlug];
+
+        foreach ($filterSegments as $filter => $label) {
+            $value = $filters[$filter] ?? null;
+
+            if (! is_scalar($value) || ! filled((string) $value)) {
+                continue;
+            }
+
+            $segments[] = $label.'-'.Str::limit(Str::slug(str_replace('/', '-', (string) $value)), 40, '');
+        }
+
+        if (count($segments) === 1) {
+            $segments[] = 'semua-data';
+        }
+
+        $baseFilename = Str::limit(implode('--', $segments), 180, '');
+
+        return "{$baseFilename}--ekspor-{$task->id}.{$task->format}";
     }
 
     /**

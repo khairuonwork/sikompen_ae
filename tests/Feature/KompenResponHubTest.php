@@ -254,7 +254,7 @@ test('an export without filters is queued and produces a landscape XLSX', functi
 
     $response
         ->assertOk()
-        ->assertDownload("kompen-dan-respon-semua-periode-{$task->id}.xlsx")
+        ->assertDownload("kompen-dan-respon--semua-data--ekspor-{$task->id}.xlsx")
         ->assertHeaderContains(
             'Content-Type',
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -303,6 +303,26 @@ test('an export task can be cancelled by its requesting session', function () {
     );
 
     expect($task->refresh()->status)->toBe(KompenResponHubExportTask::StatusCancelled);
+});
+
+test('an export filename captures active filters in a predictable order', function () {
+    Storage::fake('local');
+    $student = createStudent();
+    $task = KompenResponHubExportTask::factory()->create([
+        'filters' => [
+            'periode_semester' => $student->periode_semester,
+            'tingkat' => $student->tingkat,
+            'kelas' => $student->kelas,
+            'nim' => $student->nim,
+            'search' => 'Rina Utami',
+        ],
+    ]);
+
+    $result = app(BuildKompenResponHubExport::class)->execute($task);
+
+    expect($result['download_filename'])->toBe(
+        "kompen-dan-respon--periode-2026-2027-ganjil--tingkat-1--kelas-1aea1--nim-123456789--pencarian-rina-utami--ekspor-{$task->id}.xlsx",
+    );
 });
 
 test('a terminal export notification can be dismissed without deleting its audit task', function () {
@@ -363,6 +383,56 @@ test('an admin can configure activity log retention and expired logs are purged'
     $this->assertModelExists($retainedLog);
 });
 
+test('activity logs expose standardized subject labels and context', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createStudent();
+
+    KompenResponHubActivityLog::create([
+        'event_type' => 'progress.updated',
+        'subject_type' => 'student_progress',
+        'subject_reference' => '1',
+        'nim' => $student->nim,
+        'subject_name' => $student->nama_mahasiswa,
+        'periode_semester' => $student->periode_semester,
+        'kelas' => $student->kelas,
+        'actor_type' => 'admin',
+        'occurred_at' => now()->subMinutes(3),
+    ]);
+    KompenResponHubActivityLog::create([
+        'event_type' => 'import.completed',
+        'subject_type' => 'import',
+        'subject_reference' => '2',
+        'periode_semester' => $student->periode_semester,
+        'actor_type' => 'system',
+        'metadata' => ['original_filename' => 'kompen-genap.xlsx'],
+        'occurred_at' => now()->subMinutes(2),
+    ]);
+    KompenResponHubActivityLog::create([
+        'event_type' => 'export.completed',
+        'subject_type' => 'export',
+        'subject_reference' => '3',
+        'actor_type' => 'system',
+        'metadata' => [
+            'resource' => 'students',
+            'format' => 'xlsx',
+            'filters' => ['periode_semester' => '2026/2027 Genap', 'kelas' => '1AEA1'],
+        ],
+        'occurred_at' => now()->subMinute(),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=activity')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('activityLogs.data.0.subject_label', 'Ekspor: Kompen dan Respon (XLSX)')
+            ->where('activityLogs.data.0.subject_context', 'Periode: 2026/2027 Genap · Kelas: 1AEA1')
+            ->where('activityLogs.data.1.subject_label', 'Workbook: kompen-genap.xlsx')
+            ->where('activityLogs.data.1.subject_context', $student->periode_semester)
+            ->where('activityLogs.data.2.subject_label', "Mahasiswa: {$student->nama_mahasiswa}")
+            ->where('activityLogs.data.2.subject_context', "NIM {$student->nim} · Kelas {$student->kelas} · {$student->periode_semester}"),
+        );
+});
+
 test('an export produces a landscape PDF for detail kompen', function () {
     Storage::fake('local');
     Queue::fake();
@@ -398,7 +468,7 @@ test('an export produces a landscape PDF for detail kompen', function () {
 
     $response
         ->assertOk()
-        ->assertDownload("detail-kompen-2026-2027-ganjil-{$task->id}.pdf")
+        ->assertDownload("detail-kompen--periode-2026-2027-ganjil--ekspor-{$task->id}.pdf")
         ->assertHeaderContains('Content-Type', 'application/pdf');
 
     expect($response->streamedContent())->toStartWith('%PDF-');
