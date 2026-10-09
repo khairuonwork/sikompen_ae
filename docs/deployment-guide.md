@@ -2,7 +2,7 @@
 
 ## Kondisi deployment saat ini
 
-Repository sudah memiliki Docker Compose single-host dengan empat service:
+Repository sudah memiliki Docker Compose single-host dengan lima service:
 
 ```mermaid
 flowchart LR
@@ -10,8 +10,11 @@ flowchart LR
     Web -->|FastCGI internal| App[PHP-FPM app]
     App --> DB[(MariaDB database)]
     Queue[Laravel queue worker] --> DB
+    Scheduler[Laravel scheduler] --> DB
     App --> Files[(sikompen_import_storage)]
     Queue --> Files
+    App --> Exports[(sikompen_export_storage)]
+    Queue --> Exports
     DB --> DBVolume[(sikompen_database_data)]
 ```
 
@@ -19,7 +22,9 @@ flowchart LR
 - PHP-FPM dan queue tidak mengekspos port ke host.
 - MariaDB dipublikasikan hanya pada `127.0.0.1:${KOMPEN_DB_PORT}:3306`, sehingga tidak dapat diakses dari jaringan lain secara langsung.
 - XLSX upload berada di named volume `sikompen_import_storage`, mounted di `storage/app/private/kompen-respon-hub/imports` pada service `app` dan `queue`.
+- Hasil ekspor berada di named volume `sikompen_export_storage`, mounted di `storage/app/private/kompen-respon-hub/exports` pada service `app` dan `queue`.
 - Data database berada pada named volume `sikompen_database_data`.
+- Service `scheduler` menjalankan reconciliation task serta kebijakan retensi; ia harus hidup bersama `queue`.
 
 ## Prasyarat host
 
@@ -69,7 +74,7 @@ Terminal 1:
 
 ```bash
 docker compose up -d --build
-docker compose exec app php artisan migrate
+docker compose exec app php artisan migrate --force
 docker compose ps
 ```
 
@@ -132,21 +137,11 @@ Tekan `Ctrl+C` pada terminal 2–4 untuk menghentikan proses lokal. Database con
 docker compose stop database
 ```
 
-### Pilihan C — satu perintah untuk development lokal
-
-Laravel menyediakan runner yang mengumpulkan server aplikasi, Vite, queue, dan log. Jalankan dari satu terminal:
-
-```bash
-composer run dev
-```
-
-Gunakan opsi ini bila tidak membutuhkan terminal terpisah. Database tetap harus sudah hidup, misalnya melalui `docker compose up -d database` atau MariaDB lokal dengan konfigurasi `.env` yang sesuai.
-
 ## First start
 
 ```bash
 docker compose build
-docker compose up -d
+docker compose up -d --build
 docker compose exec app php artisan migrate --force
 docker compose exec app php artisan optimize
 docker compose ps
@@ -160,10 +155,10 @@ Perintah `migrate` tidak perlu dijalankan ulang pada setiap restart. Jalankan ha
 
 ```bash
 git pull
-docker compose up -d --build app web queue
+docker compose up -d --build app web queue scheduler
 docker compose exec app php artisan migrate --force
 docker compose exec app php artisan optimize
-docker compose logs --tail=100 app web queue
+docker compose logs --tail=100 app web queue scheduler
 ```
 
 Jika hanya mengubah UI atau backend, command build di atas sudah membangun asset React dan image PHP yang baru.
@@ -173,17 +168,17 @@ Jika hanya mengubah UI atau backend, command build di atas sudah membangun asset
 | Kebutuhan | Command |
 | --- | --- |
 | Status container | `docker compose ps` |
-| Log web/PHP/queue | `docker compose logs -f web app queue` |
+| Log web/PHP/queue/scheduler | `docker compose logs -f web app queue scheduler` |
 | Log task impor gagal | `docker compose logs -f queue` lalu cek tab Log upload/admin |
 | Shell aplikasi | `docker compose exec app sh` |
 | Cek migration | `docker compose exec app php artisan migrate:status` |
 | Cek queue gagal | `docker compose exec app php artisan queue:failed` |
 | Restart worker | `docker compose restart queue` |
-| Rebuild penuh setelah kode berubah | `docker compose up -d --build app web queue` |
+| Rebuild penuh setelah kode berubah | `docker compose up -d --build app web queue scheduler` |
 
 ## Backup dan restore
 
-Backup harus mencakup **dua** named volume. Database tanpa volume import membuat audit metadata masih ada tetapi XLSX sumber tidak bisa diunduh; volume import tanpa database tidak punya metadata/izin akses.
+Backup harus mencakup **tiga** named volume. Database tanpa volume import membuat audit metadata masih ada tetapi XLSX sumber tidak bisa diunduh; volume export menentukan apakah file ekspor yang masih dalam masa retensi masih dapat didownload.
 
 Sebelum melakukan restore, hentikan service atau setidaknya hentikan `queue` agar tidak ada task impor aktif. Uji prosedur restore di host non-produksi terlebih dahulu.
 
@@ -192,6 +187,7 @@ Untuk mengetahui path volume:
 ```bash
 docker volume inspect sikompen_database_data
 docker volume inspect sikompen_import_storage
+docker volume inspect sikompen_export_storage
 ```
 
 Jangan gunakan `docker compose down -v` di production, karena opsi `-v` menghapus volume beserta database dan file upload.
@@ -206,7 +202,7 @@ Jangan gunakan `docker compose down -v` di production, karena opsi `-v` menghapu
 - Pantau disk volume; file upload dan audit log akan bertambah seiring waktu.
 - Update base image dan dependensi secara berkala, rebuild, lalu jalankan test sebelum deploy.
 
-## Rencana integrasi dengan Si-Admin: belum diimplementasikan
+## Integrasi gateway Si-Admin
 
 Arsitektur yang telah dibahas untuk fase berikutnya adalah **satu Docker Compose internal**:
 
@@ -224,6 +220,6 @@ Dalam rancangan ini:
 - Si-Admin meneruskan identitas/role yang telah diverifikasi lewat header internal dan Si-Kompen wajib menolak request yang tidak datang dari gateway tepercaya.
 - Jangan berbagi `APP_KEY`, session database, atau cookie antara dua aplikasi.
 
-Code handler Sikompen untuk gateway tersebut sudah tersedia, tetapi Compose repository ini masih menjalankan Sikompen mandiri dan belum memiliki service Si-Admin/prefix proxy. Implementasi Compose gabungan harus dilakukan bersama tim Si-Admin agar header tepercaya, path prefix, URL asset, TLS, dan error handling memiliki kontrak yang sama. Gunakan `nginx.si-admin-gateway.conf` sebagai konfigurasi Nginx publik awal; ia meneruskan `/sikompen/*` ke gateway Si-Admin, bukan langsung ke service Sikompen.
+Handler Sikompen untuk verifikasi HMAC, anti-replay, session proxy, dan mapping role sudah tersedia. Compose repository ini tetap menjalankan Sikompen mandiri; Compose gabungan serta prefix proxy harus dikerjakan bersama tim Si-Admin agar network, header tepercaya, path prefix, URL asset, TLS, dan error handling memiliki kontrak yang sama. Gunakan `nginx.si-admin-gateway.conf` sebagai konfigurasi Nginx publik awal; ia meneruskan `/sikompen/*` ke gateway Si-Admin, bukan langsung ke service Sikompen.
 
 Kontrak header HMAC, role, pengujian `superuser`, dan tanggung jawab gateway Si-Admin tersedia di [si-admin-proxy-contract.md](si-admin-proxy-contract.md).
