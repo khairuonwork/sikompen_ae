@@ -1,5 +1,5 @@
 import { Head, Link } from "@inertiajs/react";
-import { AlertCircle, KeyRound, LogOut, UserRound } from "lucide-react";
+import { AlertCircle, ArrowLeft, KeyRound, LogOut, UserRound } from "lucide-react";
 import { destroy as logout } from "@/actions/App/Http/Controllers/StudentAuthenticationController";
 import { edit as editPassword } from "@/actions/App/Http/Controllers/StudentPasswordController";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Student } from "@/features/kompen-respon-hub/shared/types";
 import { sikompenUrl } from "@/lib/sikompen-url";
+import { home } from "@/routes";
 
 type StudentProfileProps = {
     profile: {
@@ -46,6 +47,11 @@ export default function StudentProfile({ profile }: StudentProfileProps): React.
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
+                            <Button asChild variant="outline" className="rounded-2xl border-[#8AAEE0] bg-white/80 text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                <Link href={sikompenUrl(home.url())}>
+                                    <ArrowLeft className="size-4" /> Kembali ke beranda
+                                </Link>
+                            </Button>
                             <Button asChild className="rounded-2xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
                                 <Link href={sikompenUrl(editPassword.url())}>
                                     <KeyRound className="size-4" /> Ganti password
