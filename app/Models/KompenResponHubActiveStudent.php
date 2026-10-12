@@ -45,17 +45,16 @@ class KompenResponHubActiveStudent extends Model
      * @param  Builder<self>  $query
      * @return Builder<self>
      */
-    public function scopeFromActiveRosterSources(Builder $query): Builder
+    public function scopeFromActiveRosterReference(Builder $query): Builder
     {
         $studentTable = $this->getTable();
-        $sourceTable = (new KompenResponHubActiveStudentImportSource)->getTable();
+        $referenceTable = (new KompenResponHubActiveStudentImportReference)->getTable();
 
-        return $query->whereExists(function (\Illuminate\Database\Query\Builder $sourceQuery) use ($sourceTable, $studentTable): void {
-            $sourceQuery->selectRaw('1')
-                ->from($sourceTable)
-                ->whereColumn("{$sourceTable}.kelas", "{$studentTable}.kelas")
+        return $query->whereExists(function (\Illuminate\Database\Query\Builder $referenceQuery) use ($referenceTable, $studentTable): void {
+            $referenceQuery->selectRaw('1')
+                ->from($referenceTable)
                 ->whereColumn(
-                    "{$sourceTable}.sikompen_active_student_import_id",
+                    "{$referenceTable}.sikompen_active_student_import_id",
                     "{$studentTable}.sikompen_active_student_import_id",
                 );
         });

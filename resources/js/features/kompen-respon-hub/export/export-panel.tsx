@@ -1,6 +1,7 @@
 import { FileSpreadsheet, FileText, Filter, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ClassSelectContent } from "../shared/components/class-select-content";
 import { Input } from "@/components/ui/input";
 import {
     Select,
@@ -162,14 +163,14 @@ export function ExportPanel({
                             <SelectTrigger className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]">
                                 <SelectValue placeholder="Semua kelas" />
                             </SelectTrigger>
-                            <SelectContent className="rounded-2xl text-xs font-semibold">
-                                <SelectItem value="all">Semua kelas</SelectItem>
+                            <ClassSelectContent>
+                                <SelectItem value="all" className="col-span-full">Semua kelas</SelectItem>
                                 {filterOptions.kelas.map((option) => (
                                     <SelectItem key={option} value={option}>
                                         {option}
                                     </SelectItem>
                                 ))}
-                            </SelectContent>
+                            </ClassSelectContent>
                         </Select>
                     )}
                     <Select

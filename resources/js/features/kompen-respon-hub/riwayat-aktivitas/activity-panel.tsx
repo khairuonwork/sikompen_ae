@@ -239,30 +239,35 @@ export function ActivityLogTable({
 }): React.JSX.Element {
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
-            <div className="overflow-x-auto">
-                <table className="w-full min-w-[750px] table-fixed text-sm">
+            <div className="data-table-scroll">
+                <table className="data-table min-w-[1120px]">
+                    <colgroup>
+                        {["14rem", "16rem", "22rem", "12rem", "20rem"].map((width, index) => (
+                            <col key={`${width}-${index}`} style={{ width }} />
+                        ))}
+                    </colgroup>
                     <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
-                            <th className="px-4 py-3">Waktu</th>
-                            <th className="px-4 py-3">Aktivitas</th>
-                            <th className="px-4 py-3">Subjek</th>
-                            <th className="px-4 py-3">Aktor</th>
-                            <th className="px-4 py-3">Alasan</th>
+                            <th className="px-5 py-4">Waktu</th>
+                            <th className="px-5 py-4">Aktivitas</th>
+                            <th className="px-5 py-4">Subjek</th>
+                            <th className="px-5 py-4">Aktor</th>
+                            <th className="px-5 py-4">Alasan</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F0F3FA]">
                         {data.data.map((log) => (
                             <tr key={log.id}>
-                                <td className="break-words px-4 py-3 text-xs">
+                                <td className="px-5 py-4 text-xs whitespace-nowrap">
                                     {new Date(log.occurred_at).toLocaleString(
                                         "id-ID",
                                         { timeZone: "Asia/Jakarta" },
                                     )}
                                 </td>
-                                <td className="break-words px-4 py-3 text-xs font-semibold text-[#395886]">
+                                <td className="px-5 py-4 text-xs font-semibold text-[#395886]">
                                     {activityDescription(log)}
                                 </td>
-                                <td className="break-words px-4 py-3 text-xs">
+                                <td className="px-5 py-4 text-xs">
                                     <p className="break-words font-semibold text-[#395886]">
                                         {log.subject_label}
                                     </p>
@@ -272,10 +277,10 @@ export function ActivityLogTable({
                                         </p>
                                     ) : null}
                                 </td>
-                                <td className="break-words px-4 py-3 text-xs">
+                                <td className="px-5 py-4 text-xs">
                                     {log.actor_name ?? "Sistem"}
                                 </td>
-                                <td className="break-words px-4 py-3 text-xs text-[#395886]/70">
+                                <td className="px-5 py-4 text-xs text-[#395886]/70">
                                     {log.reason ?? "—"}
                                 </td>
                             </tr>

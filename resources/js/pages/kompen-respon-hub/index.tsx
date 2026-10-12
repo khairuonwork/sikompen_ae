@@ -71,7 +71,7 @@ export default function KompenResponHubIndex({
     importVersions,
     activeImportVersions,
     activeStudentImportVersions,
-    activeStudentImportSources,
+    activeStudentImportReferences,
     warnings,
     warningCandidates,
     rolledBackWarnings,
@@ -437,13 +437,13 @@ export default function KompenResponHubIndex({
                                 items={[
                                     "Kompen dan Respon serta Daftar Mahasiswa Aktif dikelola pada tabel yang terpisah agar versi file mudah ditelusuri.",
                                     "Periode dibaca otomatis dari isi setiap file. Tidak ada pemetaan periode manual.",
-                                    "Pilih satu workbook Kompen dan Respon untuk setiap periode. Daftar mahasiswa aktif dipilih terpisah untuk kelas-kelas yang tercantum di file roster.",
+                                    "Pilih satu workbook Kompen dan Respon serta satu daftar mahasiswa aktif untuk setiap periode.",
                                     "Kedua jenis file dapat diunggah dan digunakan secara mandiri; sistem tidak mewajibkan pasangan periode yang sama.",
                                 ]}
                             />
-                            {activeStudentImportVersions !== null && activeStudentImportSources !== null ? (
+                            {activeStudentImportVersions !== null && activeStudentImportReferences !== null ? (
                                 <ActiveStudentImportList
-                                    sources={activeStudentImportSources}
+                                    references={activeStudentImportReferences}
                                     versions={activeStudentImportVersions}
                                 />
                             ) : null}

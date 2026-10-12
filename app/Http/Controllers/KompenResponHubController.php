@@ -7,8 +7,8 @@ use App\Actions\KompenResponHub\SikompenStudentAccess;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
 use App\Http\Requests\SearchKompenResponHubStudentRequest;
+use App\Http\Resources\KompenResponHubActiveStudentImportReferenceResource;
 use App\Http\Resources\KompenResponHubActiveStudentImportResource;
-use App\Http\Resources\KompenResponHubActiveStudentImportSourceResource;
 use App\Http\Resources\KompenResponHubActiveStudentImportTaskResource;
 use App\Http\Resources\KompenResponHubActivityLogResource;
 use App\Http\Resources\KompenResponHubDetailResource;
@@ -19,7 +19,6 @@ use App\Http\Resources\KompenResponHubImportVersionResource;
 use App\Http\Resources\KompenResponHubStudentResource;
 use App\Http\Resources\KompenResponHubStudentSearchResource;
 use App\Http\Resources\KompenResponHubWarningLetterResource;
-use App\Models\KompenResponHubActiveStudentImportSource;
 use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
@@ -274,8 +273,8 @@ class KompenResponHubController extends Controller
             'activeStudentImportVersions' => $isAdmin && $activeTab === 'files'
                 ? $this->activeStudentImportVersionPaginator($filters)
                 : null,
-            'activeStudentImportSources' => $isAdmin && $activeTab === 'files'
-                ? $this->activeStudentImportSourcePaginator($filters)
+            'activeStudentImportReferences' => $isAdmin && $activeTab === 'files'
+                ? $this->activeStudentImportReferencePaginator($filters)
                 : null,
             'warnings' => $isAdmin && $activeTab === 'warnings'
                 ? $this->resourcePaginator(
@@ -368,23 +367,23 @@ class KompenResponHubController extends Controller
      * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
      */
-    private function activeStudentImportSourcePaginator(array $filters): array
+    private function activeStudentImportReferencePaginator(array $filters): array
     {
-        $pageName = 'active_student_import_source_page';
+        $pageName = 'active_student_import_reference_page';
         $requestedPage = max(1, (int) ($filters[$pageName] ?? 1));
-        $paginator = $this->dataQuery->activeStudentImportSources()
+        $paginator = $this->dataQuery->activeStudentImportReferences()
             ->paginate($this->perPage($filters), ['*'], $pageName, $requestedPage)
             ->withQueryString();
 
         if ($paginator->isEmpty() && $paginator->total() > 0 && $paginator->currentPage() > $paginator->lastPage()) {
-            $paginator = $this->dataQuery->activeStudentImportSources()
+            $paginator = $this->dataQuery->activeStudentImportReferences()
                 ->paginate($this->perPage($filters), ['*'], $pageName, $paginator->lastPage())
                 ->withQueryString();
         }
 
         return $this->resourcePaginator(
             $paginator,
-            KompenResponHubActiveStudentImportSourceResource::class,
+            KompenResponHubActiveStudentImportReferenceResource::class,
             $pageName,
         );
     }
@@ -517,10 +516,10 @@ class KompenResponHubController extends Controller
     }
 
     /**
-     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog|KompenResponHubImport|\App\Models\KompenResponHubActiveStudentImport|KompenResponHubActiveStudentImportSource|\App\Models\KompenResponHubWarningLetter|\App\Models\KompenResponHubActivityLog
+     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog|KompenResponHubImport|\App\Models\KompenResponHubActiveStudentImport|\App\Models\KompenResponHubActiveStudentImportReference|\App\Models\KompenResponHubWarningLetter|\App\Models\KompenResponHubActivityLog
      *
      * @param  LengthAwarePaginator<int, TModel>  $paginator
-     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource|KompenResponHubImportVersionResource|KompenResponHubActiveStudentImportResource|KompenResponHubActiveStudentImportSourceResource|KompenResponHubWarningLetterResource|KompenResponHubActivityLogResource>  $resource
+     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource|KompenResponHubImportVersionResource|KompenResponHubActiveStudentImportResource|KompenResponHubActiveStudentImportReferenceResource|KompenResponHubWarningLetterResource|KompenResponHubActivityLogResource>  $resource
      * @return array<string, mixed>
      */
     private function resourcePaginator(LengthAwarePaginator $paginator, string $resource, string $pageName): array

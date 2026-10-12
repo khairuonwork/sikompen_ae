@@ -108,6 +108,9 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
         Route::post('kompen-respon/active-students/imports/{import}/activate', [KompenResponHubActiveStudentImportController::class, 'activate'])
             ->middleware('throttle:20,1')
             ->name('kompen-respon.active-students.imports.activate');
+        Route::delete('kompen-respon/active-students/imports/{import}', [KompenResponHubActiveStudentImportController::class, 'destroy'])
+            ->middleware('throttle:10,1')
+            ->name('kompen-respon.active-students.imports.destroy');
         Route::get('kompen-respon/active-students/import-tasks/{task}', [KompenResponHubActiveStudentImportController::class, 'showTask'])
             ->name('kompen-respon.active-students.import-tasks.show');
         Route::post('kompen-respon/imports', [KompenResponHubImportController::class, 'store'])

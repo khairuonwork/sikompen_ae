@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * @property int $id
@@ -74,6 +75,12 @@ class KompenResponHubActiveStudentImport extends Model
     public function activeSources(): HasMany
     {
         return $this->hasMany(KompenResponHubActiveStudentImportSource::class, 'sikompen_active_student_import_id');
+    }
+
+    /** @return HasOne<KompenResponHubActiveStudentImportReference, $this> */
+    public function activeReference(): HasOne
+    {
+        return $this->hasOne(KompenResponHubActiveStudentImportReference::class, 'sikompen_active_student_import_id');
     }
 
     /** @return HasMany<KompenResponHubImportAuditLog, $this> */

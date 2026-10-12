@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Http\Resources\KompenResponHubStudentResource;
 use App\Models\KompenResponHubActiveStudent;
-use App\Models\KompenResponHubActiveStudentImportSource;
+use App\Models\KompenResponHubActiveStudentImportReference;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubStudentAccount;
@@ -60,8 +60,8 @@ class StudentProfileController extends Controller
             ->where('nim', $nim)
             ->orderByDesc('id');
 
-        if (KompenResponHubActiveStudentImportSource::query()->exists()) {
-            $query->fromActiveRosterSources();
+        if (KompenResponHubActiveStudentImportReference::query()->exists()) {
+            $query->fromActiveRosterReference();
         }
 
         return $query->value('nama_mahasiswa');

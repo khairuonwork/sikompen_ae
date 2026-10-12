@@ -49,7 +49,7 @@ class KompenResponHubTableRequest extends FormRequest
             'per_page' => ['nullable', 'integer', 'between:1,100'],
             'active_import_page' => ['nullable', 'integer', 'min:1'],
             'active_student_import_page' => ['nullable', 'integer', 'min:1'],
-            'active_student_import_source_page' => ['nullable', 'integer', 'min:1'],
+            'active_student_import_reference_page' => ['nullable', 'integer', 'min:1'],
         ];
     }
 

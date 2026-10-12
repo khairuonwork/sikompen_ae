@@ -9,6 +9,7 @@ import {
     Users,
     X,
 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -18,9 +19,16 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
 import { number } from "../shared/lib/formatters";
+import { ClassSelectContent } from "../shared/components/class-select-content";
 import type {
     Dashboard,
     FilterOptions,
@@ -38,6 +46,7 @@ export function DashboardPanel({
     filters: Filters;
     filterOptions: FilterOptions;
 }): React.JSX.Element {
+    const [selectedClass, setSelectedClass] = useState(filters.kelas ?? "");
     const warningQuery = {
         tab: "warnings",
         ...(filters.tingkat ? { tingkat: filters.tingkat } : {}),
@@ -90,6 +99,7 @@ export function DashboardPanel({
                 className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(160px,1fr)_minmax(120px,0.7fr)_minmax(140px,0.8fr)_auto_auto] md:items-end"
             >
                 <input name="tab" type="hidden" value="dashboard" />
+                <input name="kelas" type="hidden" value={selectedClass} />
                 <div className="grid flex-1 gap-1.5">
                     <Label
                         htmlFor="dashboard-period"
@@ -139,19 +149,26 @@ export function DashboardPanel({
                     >
                         Kelas
                     </Label>
-                    <select
-                        id="dashboard-class"
-                        name="kelas"
-                        defaultValue={filters.kelas ?? ""}
-                        className="h-10 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]"
+                    <Select
+                        value={selectedClass || undefined}
+                        onValueChange={(value) =>
+                            setSelectedClass(value === "all" ? "" : value)
+                        }
                     >
-                        <option value="">Semua kelas</option>
+                        <SelectTrigger id="dashboard-class" className="h-10 w-full rounded-xl border-[#8AAEE0] bg-white px-3 text-sm font-medium text-[#395886]">
+                            <SelectValue placeholder="Semua kelas" />
+                        </SelectTrigger>
+                        <ClassSelectContent>
+                            <SelectItem value="all" className="col-span-full">
+                                Semua kelas
+                            </SelectItem>
                         {filterOptions.kelas.map((classCode) => (
-                            <option key={classCode} value={classCode}>
+                            <SelectItem key={classCode} value={classCode}>
                                 {classCode}
-                            </option>
+                            </SelectItem>
                         ))}
-                    </select>
+                        </ClassSelectContent>
+                    </Select>
                 </div>
                 <Button
                     type="submit"

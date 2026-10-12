@@ -153,19 +153,19 @@ export type ActiveStudentImportVersion = {
     uploader_name: string;
     uploader_email: string | null;
     imported_at: string;
-    active_classes: string[];
+    is_active: boolean;
+    activated_at: string | null;
 };
 
-export type ActiveStudentImportSource = {
+export type ActiveStudentImportReference = {
     id: number;
     periode_semester: string | null;
-    kelas: string;
     activated_at: string;
     import: {
         id: number;
         original_filename: string;
-        periode_semester: string | null;
         student_count: number;
+        class_count: number;
         imported_at: string;
     };
 };
@@ -297,7 +297,7 @@ export type KompenResponHubPageProps = {
     importVersions: Pagination<ImportVersion> | null;
     activeImportVersions: Pagination<ImportVersion> | null;
     activeStudentImportVersions: Pagination<ActiveStudentImportVersion> | null;
-    activeStudentImportSources: Pagination<ActiveStudentImportSource> | null;
+    activeStudentImportReferences: Pagination<ActiveStudentImportReference> | null;
     warnings: Pagination<Warning> | null;
     warningCandidates: Pagination<Student> | null;
     rolledBackWarnings: Pagination<Warning> | null;

@@ -4,7 +4,7 @@ namespace App\Actions\KompenResponHub;
 
 use App\Models\KompenResponHubActiveStudent;
 use App\Models\KompenResponHubActiveStudentImport;
-use App\Models\KompenResponHubActiveStudentImportSource;
+use App\Models\KompenResponHubActiveStudentImportReference;
 use App\Models\KompenResponHubImportAuditLog;
 use Illuminate\Support\Facades\DB;
 
@@ -47,21 +47,24 @@ class ActivateKompenResponHubActiveStudentImport
                     throw new \LogicException('Versi daftar mahasiswa aktif tidak memiliki data kelas untuk digunakan.');
                 }
 
-                KompenResponHubActiveStudentImportSource::query()
+                $activeReference = KompenResponHubActiveStudentImportReference::query()
                     ->where('periode_semester', $period)
-                    ->whereIn('kelas', $classes)
                     ->lockForUpdate()
-                    ->get(['id']);
+                    ->first();
 
-                foreach ($classes as $kelas) {
-                    KompenResponHubActiveStudentImportSource::query()->updateOrCreate(
-                        ['periode_semester' => $period, 'kelas' => $kelas],
-                        [
-                            'sikompen_active_student_import_id' => $lockedImport->id,
-                            'activated_by_admin_id' => $actorAdminId,
-                            'activated_at' => now(),
-                        ],
-                    );
+                if ($activeReference === null) {
+                    KompenResponHubActiveStudentImportReference::query()->create([
+                        'periode_semester' => $period,
+                        'sikompen_active_student_import_id' => $lockedImport->id,
+                        'activated_by_admin_id' => $actorAdminId,
+                        'activated_at' => now(),
+                    ]);
+                } else {
+                    $activeReference->update([
+                        'sikompen_active_student_import_id' => $lockedImport->id,
+                        'activated_by_admin_id' => $actorAdminId,
+                        'activated_at' => now(),
+                    ]);
                 }
 
                 KompenResponHubImportAuditLog::create([

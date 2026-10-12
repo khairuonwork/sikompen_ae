@@ -130,25 +130,30 @@ export function ImportVersionList({
                         {isEditMode ? "Selesai mengelola" : "Kelola file"}
                     </Button>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1320px] table-auto text-sm">
+                <div className="data-table-scroll">
+                    <table className="data-table min-w-[1380px]">
+                        <colgroup>
+                            {["10rem", "26rem", "12rem", "18rem", "15rem", "28rem"].map((width, index) => (
+                                <col key={`${width}-${index}`} style={{ width }} />
+                            ))}
+                        </colgroup>
                         <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                             <tr>
-                                <th className="px-4 py-3.5">Periode</th>
-                                <th className="px-4 py-3.5">Workbook</th>
-                                <th className="px-4 py-3.5">Diunggah</th>
-                                <th className="px-4 py-3.5">Isi</th>
-                                <th className="px-4 py-3.5">Status sumber</th>
-                                <th className="min-w-[430px] px-4 py-3.5 text-right whitespace-nowrap">Tindakan</th>
+                                <th className="px-5 py-4">Periode</th>
+                                <th className="px-5 py-4">Workbook</th>
+                                <th className="px-5 py-4">Diunggah</th>
+                                <th className="px-5 py-4">Isi</th>
+                                <th className="px-5 py-4">Status sumber</th>
+                                <th className="px-5 py-4 text-right">Tindakan</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[#F0F3FA]">
                             {data.data.map((version) => (
                                 <tr key={version.id} className="hover:bg-[#B1C9EF]/10">
-                                    <td className="px-4 py-3.5 text-xs font-bold text-[#395886]">
+                                    <td className="px-5 py-4 text-xs font-bold text-[#395886]">
                                         {version.periode_semester}
                                     </td>
-                                    <td className="break-words px-4 py-3.5">
+                                    <td className="px-5 py-4">
                                         <p className="break-words font-mono text-xs font-bold text-[#395886]" title={version.display_filename}>
                                             {version.display_filename}
                                         </p>
@@ -156,13 +161,13 @@ export function ImportVersionList({
                                             {version.uploaded_by_name ?? version.uploaded_by_email ?? "Admin tidak diketahui"}
                                         </p>
                                     </td>
-                                    <td className="px-4 py-3.5 text-xs text-[#395886]">
+                                    <td className="px-5 py-4 text-xs text-[#395886]">
                                         {formatJakartaDateTime(version.imported_at)}
                                     </td>
-                                    <td className="break-words px-4 py-3.5 text-xs font-semibold text-[#395886] tabular-nums">
+                                    <td className="px-5 py-4 text-xs font-semibold text-[#395886] tabular-nums">
                                         {version.class_count} kelas · {version.student_count} mahasiswa · {version.detail_count} detail
                                     </td>
-                                    <td className="px-4 py-3.5">
+                                    <td className="px-5 py-4">
                                         {version.is_active ? (
                                             <div>
                                                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-black tracking-wider text-emerald-800 uppercase">
@@ -178,7 +183,7 @@ export function ImportVersionList({
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3.5 whitespace-nowrap">
+                                    <td className="px-5 py-4 whitespace-nowrap">
                                         <div className="flex min-w-max justify-end gap-2">
                                             <Button asChild size="sm" variant="outline" className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
                                                 <a href={downloadUploadedWorkbook.url(version.id)}>

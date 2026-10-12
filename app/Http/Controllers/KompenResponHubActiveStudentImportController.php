@@ -6,16 +6,19 @@ use App\Actions\KompenResponHub\ActivateKompenResponHubActiveStudentImport;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Actions\KompenResponHub\ValidateKompenResponHubWorkbookArchive;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
+use App\Http\Requests\DestroyKompenResponHubActiveStudentImportRequest;
 use App\Http\Requests\StoreKompenResponHubActiveStudentImportRequest;
 use App\Http\Resources\KompenResponHubActiveStudentImportTaskResource;
 use App\Jobs\ProcessKompenResponHubActiveStudentImport;
 use App\Models\KompenResponHubActiveStudentImport;
 use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubAdmin;
+use App\Models\KompenResponHubImportAuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -105,6 +108,81 @@ class KompenResponHubActiveStudentImportController extends Controller
         return (new KompenResponHubActiveStudentImportTaskResource($task))->response();
     }
 
+    public function destroy(
+        DestroyKompenResponHubActiveStudentImportRequest $request,
+        SiAdminProxyAccess $access,
+        RecordKompenResponHubActivity $activity,
+        KompenResponHubActiveStudentImport $import,
+    ): RedirectResponse {
+        $actor = $access->actor($request);
+        $admin = $this->adminForActor($actor['id']);
+
+        /** @var array{id: int, original_filename: string, stored_path: string, periode_semester: string|null, class_count: int, student_count: int} $deletedImport */
+        $deletedImport = DB::connection(config('kompen-respon-hub.database_connection'))
+            ->transaction(function () use ($admin, $actor, $import): array {
+                $lockedImport = KompenResponHubActiveStudentImport::query()
+                    ->lockForUpdate()
+                    ->findOrFail($import->id);
+
+                abort_if(
+                    $lockedImport->activeReference()->lockForUpdate()->exists(),
+                    422,
+                    'Daftar mahasiswa aktif yang sedang digunakan tidak dapat dihapus. Pilih file lain untuk periode terkait terlebih dahulu.',
+                );
+
+                $snapshot = [
+                    'id' => $lockedImport->id,
+                    'original_filename' => $lockedImport->original_filename,
+                    'stored_path' => $lockedImport->stored_path,
+                    'periode_semester' => $lockedImport->periode_semester,
+                    'class_count' => $lockedImport->class_count,
+                    'student_count' => $lockedImport->student_count,
+                ];
+
+                KompenResponHubImportAuditLog::create([
+                    'event_type' => KompenResponHubImportAuditLog::EVENT_DELETE,
+                    'import_type' => KompenResponHubImportAuditLog::ImportTypeActiveStudents,
+                    'source_active_student_import_id' => $lockedImport->id,
+                    'actor_name' => $admin instanceof KompenResponHubAdmin ? $admin->email : $actor['email'],
+                    'actor_email' => $actor['email'],
+                    'periode_semester' => $lockedImport->periode_semester,
+                    'original_filename' => $lockedImport->original_filename,
+                    'class_count' => $lockedImport->class_count,
+                    'student_count' => $lockedImport->student_count,
+                    'detail_count' => 0,
+                    'metadata' => ['original_filename' => $lockedImport->original_filename],
+                    'occurred_at' => now(),
+                ]);
+
+                $lockedImport->delete();
+
+                return $snapshot;
+            });
+
+        if (str_starts_with($deletedImport['stored_path'], 'kompen-respon-hub/imports/active-students/')) {
+            Storage::disk('local')->delete($deletedImport['stored_path']);
+        }
+
+        $activity->execute(
+            eventType: 'active_students.deleted',
+            subjectType: 'active_student_import',
+            subjectReference: (string) $deletedImport['id'],
+            actor: $admin,
+            request: $request,
+            reason: 'Versi daftar mahasiswa aktif dihapus dari List File.',
+            beforeState: [
+                'original_filename' => $deletedImport['original_filename'],
+                'student_count' => $deletedImport['student_count'],
+                'class_count' => $deletedImport['class_count'],
+            ],
+            subjectName: $deletedImport['original_filename'],
+            period: $deletedImport['periode_semester'],
+        );
+
+        return to_route('admin.kompen-respon.index', ['tab' => 'files'])
+            ->with('success', "Versi {$deletedImport['original_filename']} berhasil dihapus. Riwayat audit tetap tersimpan.");
+    }
+
     public function activate(
         Request $request,
         KompenResponHubActiveStudentImport $import,
@@ -133,13 +211,13 @@ class KompenResponHubActiveStudentImportController extends Controller
             subjectReference: (string) $result['import_id'],
             actor: $admin,
             request: $request,
-            reason: "Daftar mahasiswa aktif {$result['periode_semester']} dipilih sebagai sumber kelas: ".implode(', ', $result['classes']).'.',
+            reason: "Daftar mahasiswa aktif {$result['periode_semester']} dipilih sebagai satu-satunya roster aktif periode tersebut.",
             metadata: ['classes' => $result['classes'], 'original_filename' => $result['original_filename'], 'periode_semester' => $result['periode_semester']],
             subjectName: $result['original_filename'],
             period: $result['periode_semester'],
         );
 
-        return back()->with('success', "Daftar mahasiswa aktif {$result['periode_semester']} sekarang digunakan untuk kelas: ".implode(', ', $result['classes']).'.');
+        return back()->with('success', "Daftar mahasiswa aktif {$result['periode_semester']} sekarang digunakan untuk seluruh kelas di dalam file.");
     }
 
     private function safeDownloadFilename(KompenResponHubActiveStudentImport $import): string
@@ -149,5 +227,12 @@ class KompenResponHubActiveStudentImportController extends Controller
         }
 
         return $import->original_filename;
+    }
+
+    private function adminForActor(int|string|null $actorId): ?KompenResponHubAdmin
+    {
+        return is_int($actorId)
+            ? KompenResponHubAdmin::query()->find($actorId)
+            : null;
     }
 }

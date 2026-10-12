@@ -70,12 +70,17 @@ export function ImportAuditLogTable({
 
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl">
-            <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] table-fixed text-sm">
+            <div className="data-table-scroll">
+                <table className="data-table min-w-[1380px]">
+                    <colgroup>
+                        {["16rem", "13rem", "11rem", "25rem", "16rem", "13rem", "9rem"].map((width, index) => (
+                            <col key={`${width}-${index}`} style={{ width }} />
+                        ))}
+                    </colgroup>
                     <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
                             {headings.map((heading) => (
-                                <th key={heading} className="px-4 py-3.5">
+                                <th key={heading} className="px-5 py-4">
                                     {heading}
                                 </th>
                             ))}
@@ -84,7 +89,7 @@ export function ImportAuditLogTable({
                     <tbody className="divide-y divide-[#F0F3FA]">
                         {data.data.map((auditLog) => (
                             <tr key={auditLog.id} className="hover:bg-[#B1C9EF]/10">
-                                <td className="break-words px-4 py-3.5">
+                                <td className="px-5 py-4">
                                     <span className={cn(
                                         "rounded-full px-2.5 py-1 text-[10px] font-black tracking-wider uppercase",
                                         auditLog.event_type === "upload" && "border border-emerald-200 bg-emerald-100 text-emerald-800",
@@ -100,15 +105,15 @@ export function ImportAuditLogTable({
                                         )}
                                     </p>
                                 </td>
-                                <td className="break-words px-4 py-3.5">
+                                <td className="px-5 py-4">
                                     <span className="rounded-full bg-[#F0F3FA] px-2.5 py-1 text-[10px] font-black tracking-wider text-[#395886] uppercase">
                                         {importTypeLabel(auditLog.import_type)}
                                     </span>
                                 </td>
-                                <td className="break-words px-4 py-3.5 text-xs font-semibold text-[#628ECB]">
+                                <td className="px-5 py-4 text-xs font-semibold text-[#628ECB]">
                                     {auditLog.periode_semester ?? "—"}
                                 </td>
-                                <td className="break-words px-4 py-3.5">
+                                <td className="px-5 py-4">
                                     <p className="break-words font-mono text-xs font-semibold text-[#395886]" title={auditLog.original_filename}>
                                         {auditLog.original_filename}
                                     </p>
@@ -118,12 +123,12 @@ export function ImportAuditLogTable({
                                             : `Diunggah ${formatJakartaDateTime(auditLog.version_imported_at)}`}
                                     </p>
                                 </td>
-                                <td className="break-words px-4 py-3.5">
+                                <td className="px-5 py-4">
                                     <p className="break-words text-xs font-bold text-[#395886]">{auditLog.actor_name ?? "—"}</p>
                                     <p className="break-all text-[11px] text-[#395886]/60">{auditLog.actor_email ?? "—"}</p>
                                 </td>
-                                <td className="px-4 py-3.5 text-xs whitespace-nowrap text-[#395886]">{formatJakartaDateTime(auditLog.occurred_at)}</td>
-                                <td className="px-4 py-3.5">
+                                <td className="px-5 py-4 text-xs whitespace-nowrap text-[#395886]">{formatJakartaDateTime(auditLog.occurred_at)}</td>
+                                <td className="px-5 py-4">
                                     {auditLog.can_download_file &&
                                     (auditLog.source_import_id !== null ||
                                         auditLog.source_active_student_import_id !==

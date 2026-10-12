@@ -63,6 +63,8 @@ RUN rm -f public/hot \
         echo 'max_execution_time=600'; \
         echo 'max_input_time=600'; \
         echo 'memory_limit=1024M'; \
+        echo 'expose_php=Off'; \
+        echo 'cgi.fix_pathinfo=0'; \
     } > /usr/local/etc/php/conf.d/sikompen.ini
 
 ENTRYPOINT ["docker-entrypoint"]
@@ -72,5 +74,6 @@ FROM nginx:1.27-alpine AS web
 
 WORKDIR /var/www/html
 
+COPY nginx-main.conf /etc/nginx/nginx.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=app /var/www/html/public ./public

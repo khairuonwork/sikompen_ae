@@ -32,10 +32,10 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use RuntimeException;
 use ZipArchive;
 
-test('the public student page is available while student APIs require authenticated access', function () {
+test('student pages and APIs require authenticated access', function () {
     createStudent();
 
-    $this->get('/kompen-respon')->assertOk();
+    $this->get('/kompen-respon')->assertRedirect('/mahasiswa/login');
     $this->getJson('/api/kompen-respon/students?nama=Rina')->assertUnauthorized();
 
     $this->get('/admin/login')->assertOk();
