@@ -297,6 +297,7 @@ test('completed progress resolves an existing warning without deleting its trace
 });
 
 test('students have no status before the cutoff has passed', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
     $cutoff = KompenResponHubPeriodCutoff::create([
         'periode_semester' => $student->periode_semester,
@@ -304,7 +305,7 @@ test('students have no status before the cutoff has passed', function () {
         'timezone' => 'Asia/Jakarta',
     ]);
 
-    $this->getJson('/api/kompen-respon/students')
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/students')
         ->assertOk()
         ->assertJsonPath('data.0.progress_status', 'none');
 });
@@ -471,6 +472,7 @@ test('the warning list exposes only active fixed SP records with outstanding deb
 });
 
 test('an outstanding fixed issued SP is exposed as an active SP student status', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
     $cutoff = KompenResponHubPeriodCutoff::create([
         'periode_semester' => $student->periode_semester,
@@ -491,7 +493,7 @@ test('an outstanding fixed issued SP is exposed as an active SP student status',
         'snapshot' => ['sisa_hutang_jam' => 3.5],
     ]);
 
-    $this->getJson('/api/kompen-respon/students')
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/students')
         ->assertOk()
         ->assertJsonPath('data.0.progress_status', 'warning_active')
         ->assertJsonPath('data.0.has_active_warning', true)

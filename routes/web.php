@@ -12,6 +12,8 @@ use App\Http\Controllers\KompenResponHubImportTaskController;
 use App\Http\Controllers\KompenResponHubLandingController;
 use App\Http\Controllers\KompenResponHubLifecycleController;
 use App\Http\Controllers\SiAdminProxyAccessController;
+use App\Http\Controllers\StudentAuthenticationController;
+use App\Http\Controllers\StudentPasswordController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', KompenResponHubLandingController::class)
@@ -30,6 +32,13 @@ Route::middleware('sikompen.standalone')->group(function (): void {
             ->name('admin.login.store');
     });
 
+    Route::middleware('guest:student')->group(function (): void {
+        Route::get('mahasiswa/login', [StudentAuthenticationController::class, 'create'])->name('student.login');
+        Route::post('mahasiswa/login', [StudentAuthenticationController::class, 'store'])
+            ->middleware('throttle:student-login')
+            ->name('student.login.store');
+    });
+
     Route::get('admin/setup', [KompenResponHubAdminSetupController::class, 'create'])->name('admin.setup.create');
     Route::post('admin/setup', [KompenResponHubAdminSetupController::class, 'store'])
         ->middleware('throttle:admin-setup')
@@ -37,24 +46,41 @@ Route::middleware('sikompen.standalone')->group(function (): void {
 });
 
 Route::middleware('sikompen.proxy-session')->group(function (): void {
-    Route::get('mahasiswa', [KompenResponHubController::class, 'studentIndex'])
-        ->name('student.kompen-respon.index');
-    Route::get('kompen-respon', [KompenResponHubController::class, 'studentIndex'])
-        ->name('kompen-respon-hub.index');
+    Route::middleware('sikompen.student')->group(function (): void {
+        Route::get('mahasiswa/ganti-password', [StudentPasswordController::class, 'edit'])
+            ->name('student.password.edit');
+        Route::put('mahasiswa/ganti-password', [StudentPasswordController::class, 'update'])
+            ->middleware('throttle:10,15')
+            ->name('student.password.update');
 
-    Route::post('exports', [KompenResponHubExportController::class, 'store'])
-        ->middleware('throttle:10,15')
-        ->name('kompen-respon.exports.store');
-    Route::get('exports/{exportTask}', [KompenResponHubExportController::class, 'show'])
-        ->name('kompen-respon.exports.show');
-    Route::get('exports/{exportTask}/download', [KompenResponHubExportController::class, 'download'])
-        ->name('kompen-respon.exports.download');
-    Route::delete('exports/{exportTask}', [KompenResponHubExportController::class, 'destroy'])
-        ->middleware('throttle:10,15')
-        ->name('kompen-respon.exports.destroy');
-    Route::post('exports/{exportTask}/dismiss', [KompenResponHubExportController::class, 'dismiss'])
-        ->middleware('throttle:20,1')
-        ->name('kompen-respon.exports.dismiss');
+        Route::middleware('sikompen.student-password-changed')->group(function (): void {
+            Route::get('mahasiswa', [KompenResponHubController::class, 'studentIndex'])
+                ->name('student.kompen-respon.index');
+            Route::get('kompen-respon', [KompenResponHubController::class, 'studentIndex'])
+                ->name('kompen-respon-hub.index');
+        });
+
+        Route::middleware('sikompen.standalone')->group(function (): void {
+            Route::post('mahasiswa/logout', [StudentAuthenticationController::class, 'destroy'])
+                ->name('student.logout');
+        });
+    });
+
+    Route::middleware(['sikompen.student-password-changed', 'sikompen.data-access'])->group(function (): void {
+        Route::post('exports', [KompenResponHubExportController::class, 'store'])
+            ->middleware('throttle:10,15')
+            ->name('kompen-respon.exports.store');
+        Route::get('exports/{exportTask}', [KompenResponHubExportController::class, 'show'])
+            ->name('kompen-respon.exports.show');
+        Route::get('exports/{exportTask}/download', [KompenResponHubExportController::class, 'download'])
+            ->name('kompen-respon.exports.download');
+        Route::delete('exports/{exportTask}', [KompenResponHubExportController::class, 'destroy'])
+            ->middleware('throttle:10,15')
+            ->name('kompen-respon.exports.destroy');
+        Route::post('exports/{exportTask}/dismiss', [KompenResponHubExportController::class, 'dismiss'])
+            ->middleware('throttle:20,1')
+            ->name('kompen-respon.exports.dismiss');
+    });
 
     Route::middleware('sikompen.admin')->prefix('admin')->name('admin.')->group(function (): void {
         Route::get('/', [KompenResponHubController::class, 'adminIndex'])

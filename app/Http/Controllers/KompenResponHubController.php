@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
+use App\Actions\KompenResponHub\SikompenStudentAccess;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
 use App\Http\Requests\SearchKompenResponHubStudentRequest;
@@ -37,6 +38,7 @@ class KompenResponHubController extends Controller
     public function __construct(
         private KompenResponHubDataQuery $dataQuery,
         private SiAdminProxyAccess $proxyAccess,
+        private SikompenStudentAccess $studentAccess,
     ) {}
 
     public function studentIndex(KompenResponHubTableRequest $request): Response
@@ -69,7 +71,7 @@ class KompenResponHubController extends Controller
 
     public function student(KompenResponHubStudent $student): JsonResponse
     {
-        $studentNim = $this->proxyAccess->studentNim(request());
+        $studentNim = $this->studentAccess->studentNim(request());
         abort_if($studentNim !== null && $student->nim !== $studentNim, 404);
 
         $student->load([
@@ -148,7 +150,7 @@ class KompenResponHubController extends Controller
     private function index(KompenResponHubTableRequest $request, bool $isAdmin): Response
     {
         $filters = $this->filtersForRequest($request);
-        $filterOptions = $this->dataQuery->filterOptions();
+        $filterOptions = $this->dataQuery->filterOptions($filters);
         $activeTab = $filters['tab'] ?? 'students';
         if (! $isAdmin && in_array($activeTab, ['upload', 'files', 'imports', 'warnings', 'activity'], true)) {
             $activeTab = 'students';
@@ -364,7 +366,7 @@ class KompenResponHubController extends Controller
             ? $requestedPerPage
             : 15;
 
-        $studentNim = $this->proxyAccess->studentNim($request);
+        $studentNim = $this->studentAccess->studentNim($request);
 
         if ($studentNim !== null) {
             $filters['nim'] = $studentNim;

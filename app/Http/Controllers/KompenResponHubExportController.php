@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Actions\KompenResponHub\SikompenStudentAccess;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\KompenResponHubExportTaskAccessRequest;
 use App\Http\Requests\StoreKompenResponHubExportRequest;
@@ -20,6 +21,7 @@ class KompenResponHubExportController extends Controller
     public function store(
         StoreKompenResponHubExportRequest $request,
         SiAdminProxyAccess $access,
+        SikompenStudentAccess $studentAccess,
         RecordKompenResponHubActivity $activity,
     ): RedirectResponse {
         $actor = $access->hasAdminAccess($request)
@@ -31,7 +33,7 @@ class KompenResponHubExportController extends Controller
             ->only(['nim', 'nama', 'search', 'kelas', 'tingkat', 'periode_semester', 'mata_kuliah', 'nama_dosen'])
             ->filter(fn (mixed $value): bool => filled($value))
             ->all();
-        $studentNim = $access->studentNim($request);
+        $studentNim = $studentAccess->studentNim($request);
 
         if ($studentNim !== null) {
             $filters['nim'] = $studentNim;

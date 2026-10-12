@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\KompenResponHubAdmin;
+use App\Models\KompenResponHubStudentAccount;
 
 return [
 
@@ -42,6 +43,10 @@ return [
             'driver' => 'session',
             'provider' => 'admins',
         ],
+        'student' => [
+            'driver' => 'session',
+            'provider' => 'students',
+        ],
     ],
 
     /*
@@ -65,6 +70,10 @@ return [
         'admins' => [
             'driver' => 'eloquent',
             'model' => KompenResponHubAdmin::class,
+        ],
+        'students' => [
+            'driver' => 'eloquent',
+            'model' => KompenResponHubStudentAccount::class,
         ],
 
         // 'users' => [

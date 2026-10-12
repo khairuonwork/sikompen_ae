@@ -6,6 +6,7 @@ use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Jobs\GenerateKompenResponHubExport;
 use App\Jobs\ProcessKompenResponHubImport;
 use App\Models\KompenResponHubActiveImport;
+use App\Models\KompenResponHubActiveStudent;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
@@ -15,6 +16,7 @@ use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
+use App\Models\KompenResponHubStudentAccount;
 use App\Models\KompenResponHubSystemSetting;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
@@ -30,23 +32,11 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use RuntimeException;
 use ZipArchive;
 
-test('the public page and data API do not require a login', function () {
-    $student = createStudent();
+test('student data routes require authenticated access', function () {
+    createStudent();
 
-    $this->get('/kompen-respon')
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->component('kompen-respon-hub/index')
-            ->where('activeTab', 'students')
-            ->where('isAdmin', false)
-            ->where('filterOptions.tingkat', [1])
-            ->has('filterOptions.periode_semester', 1),
-        );
-
-    $this->getJson('/api/kompen-respon/students?nama=Rina')
-        ->assertOk()
-        ->assertJsonPath('data.0.nim', $student->nim)
-        ->assertJsonPath('data.0.total_hutang_jam', '3.5000');
+    $this->get('/kompen-respon')->assertRedirect('/mahasiswa/login');
+    $this->getJson('/api/kompen-respon/students?nama=Rina')->assertUnauthorized();
 
     $this->get('/admin/login')->assertOk();
 });
@@ -152,6 +142,7 @@ test('the Kompen and Respon table filters students by class and level', function
 });
 
 test('the dynamic filters only expose uploaded periods and filter their records', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
     createStudent();
     $otherImport = KompenResponHubImport::create([
         'periode_semester' => '2026/2027 Genap',
@@ -182,7 +173,7 @@ test('the dynamic filters only expose uploaded periods and filter their records'
         'sisa_hutang_jam' => 0,
     ]);
 
-    $this->getJson('/api/kompen-respon/filter-options')
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/filter-options')
         ->assertOk()
         ->assertJsonPath('periode_semester', [
             '2026/2027 Genap',
@@ -190,13 +181,14 @@ test('the dynamic filters only expose uploaded periods and filter their records'
         ])
         ->assertJsonPath('kelas', ['1AEA1', '2AEB1']);
 
-    $this->getJson('/api/kompen-respon/students?periode_semester=2026%2F2027%20Genap')
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/students?periode_semester=2026%2F2027%20Genap')
         ->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.nim', '987654321');
 });
 
 test('the student API returns the complete kompen and respon payload for one student', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
     $student = createStudent();
     KompenResponHubDetail::create([
         'kompen_respon_hub_student_id' => $student->id,
@@ -210,7 +202,7 @@ test('the student API returns the complete kompen and respon payload for one stu
         'jam_responsi' => 2,
     ]);
 
-    $this->getJson("/api/kompen-respon/students/{$student->id}")
+    $this->actingAs($admin, 'admin')->getJson("/api/kompen-respon/students/{$student->id}")
         ->assertOk()
         ->assertJsonPath('data.summary.nama_mahasiswa', 'Rina Utami')
         ->assertJsonPath('data.summary.total_kompensasi_jam', '1.5000')
@@ -222,8 +214,9 @@ test('an export without filters is queued and produces a landscape XLSX', functi
     Storage::fake('local');
     Queue::fake();
     createStudent();
+    $admin = KompenResponHubAdmin::factory()->create();
 
-    $this->post('/exports', [
+    $this->actingAs($admin, 'admin')->post('/exports', [
         'resource' => 'students',
         'format' => 'xlsx',
     ])
@@ -280,15 +273,17 @@ test('an export without filters is queued and produces a landscape XLSX', functi
 
 test('an export task can be cancelled by its requesting session', function () {
     Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
 
-    $this->post('/exports', [
+    $this->actingAs($admin, 'admin')->post('/exports', [
         'resource' => 'students',
         'format' => 'xlsx',
     ])->assertRedirect();
 
     $task = KompenResponHubExportTask::query()->sole();
 
-    $this->withCookie(config('session.cookie'), $task->request_session_id)
+    $this->actingAs($admin, 'admin')
+        ->withCookie(config('session.cookie'), $task->request_session_id)
         ->delete("/exports/{$task->id}?token={$task->access_token}")
         ->assertRedirect();
 
@@ -327,8 +322,9 @@ test('an export filename captures active filters in a predictable order', functi
 
 test('a terminal export notification can be dismissed without deleting its audit task', function () {
     Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
 
-    $this->post('/exports', [
+    $this->actingAs($admin, 'admin')->post('/exports', [
         'resource' => 'students',
         'format' => 'xlsx',
     ])->assertRedirect();
@@ -340,13 +336,15 @@ test('a terminal export notification can be dismissed without deleting its audit
         'failed_at' => now(),
     ]);
 
-    $this->withCookie(config('session.cookie'), $task->request_session_id)
+    $this->actingAs($admin, 'admin')
+        ->withCookie(config('session.cookie'), $task->request_session_id)
         ->post("/exports/{$task->id}/dismiss?token={$task->access_token}")
         ->assertRedirect()
         ->assertSessionHas('sikompen.dismissed_export_task_ids', [$task->id]);
 
-    $this->withCookie(config('session.cookie'), $task->request_session_id)
-        ->get('/kompen-respon')
+    $this->actingAs($admin, 'admin')
+        ->withCookie(config('session.cookie'), $task->request_session_id)
+        ->get('/admin')
         ->assertOk()
         ->assertInertia(fn ($page) => $page->has('exportTasks', 0));
 
@@ -437,6 +435,7 @@ test('an export produces a landscape PDF for detail kompen', function () {
     Storage::fake('local');
     Queue::fake();
     $student = createStudent();
+    $admin = KompenResponHubAdmin::factory()->create();
     KompenResponHubDetail::create([
         'kompen_respon_hub_student_id' => $student->id,
         'tanggal' => '2026-09-01',
@@ -449,7 +448,7 @@ test('an export produces a landscape PDF for detail kompen', function () {
         'jam_responsi' => 2,
     ]);
 
-    $this->post('/exports', [
+    $this->actingAs($admin, 'admin')->post('/exports', [
         'resource' => 'details',
         'format' => 'pdf',
         'periode_semester' => '2026/2027 Ganjil',
@@ -479,6 +478,7 @@ test('an export fails safely when its result exceeds the hard row limit', functi
     Queue::fake();
     config(['kompen-respon-hub.export_max_rows' => 1]);
     $student = createStudent();
+    $admin = KompenResponHubAdmin::factory()->create();
 
     $secondStudent = $student->replicate();
     $secondStudent->fill([
@@ -486,7 +486,7 @@ test('an export fails safely when its result exceeds the hard row limit', functi
         'nama_mahasiswa' => 'Dani Pratama',
     ])->save();
 
-    $this->post('/exports', [
+    $this->actingAs($admin, 'admin')->post('/exports', [
         'resource' => 'students',
         'format' => 'xlsx',
     ])->assertRedirect();
@@ -508,6 +508,7 @@ test('a PDF export is not limited by the XLSX row limit', function () {
     Queue::fake();
     config(['kompen-respon-hub.export_max_rows' => 1]);
     $student = createStudent();
+    $admin = KompenResponHubAdmin::factory()->create();
 
     $secondStudent = $student->replicate();
     $secondStudent->fill([
@@ -515,7 +516,7 @@ test('a PDF export is not limited by the XLSX row limit', function () {
         'nama_mahasiswa' => 'Dani Pratama',
     ])->save();
 
-    $this->post('/exports', [
+    $this->actingAs($admin, 'admin')->post('/exports', [
         'resource' => 'students',
         'format' => 'pdf',
     ])->assertRedirect();
@@ -560,7 +561,10 @@ test('an unexpected export failure is logged with task context while keeping its
 });
 
 test('a student cannot queue an export of warning letters', function () {
-    $this->post('/exports', [
+    $account = KompenResponHubStudentAccount::factory()->create(['nim' => '261000001']);
+    KompenResponHubActiveStudent::factory()->create(['nim' => $account->nim]);
+
+    $this->actingAs($account, 'student')->post('/exports', [
         'resource' => 'warnings',
         'format' => 'xlsx',
     ])->assertForbidden();
@@ -863,7 +867,7 @@ test('activating a completed import clears cached filter options', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
 
-    $this->getJson('/api/kompen-respon/filter-options')
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/filter-options')
         ->assertOk()
         ->assertJsonPath('periode_semester', []);
 
@@ -875,7 +879,7 @@ test('activating a completed import clears cached filter options', function () {
         ),
     ])->assertRedirect('/admin?tab=upload');
 
-    $this->getJson('/api/kompen-respon/filter-options')
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/filter-options')
         ->assertOk()
         ->assertJsonPath('periode_semester', []);
 
@@ -884,7 +888,7 @@ test('activating a completed import clears cached filter options', function () {
         ->post("/admin/kompen-respon/imports/{$import->id}/activate")
         ->assertRedirect('/admin?tab=files');
 
-    $this->getJson('/api/kompen-respon/filter-options')
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/filter-options')
         ->assertOk()
         ->assertJsonPath('periode_semester', ['2026/2027 Gasal']);
 });
@@ -948,12 +952,13 @@ test('a guest cannot activate a selected upload version', function () {
 
 test('search filters reject HTML syntax and treat SQL wildcards as plain text', function () {
     createStudent();
+    $admin = KompenResponHubAdmin::factory()->create();
 
-    $this->getJson('/api/kompen-respon/students?search=%3Cscript%3Ealert(1)%3C%2Fscript%3E')
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/students?search=%3Cscript%3Ealert(1)%3C%2Fscript%3E')
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['search']);
 
-    $this->getJson('/api/kompen-respon/students?search=%25')
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/students?search=%25')
         ->assertOk()
         ->assertJsonCount(0, 'data');
 });

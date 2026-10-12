@@ -58,7 +58,7 @@ test('the Si-Admin gateway sends superuser to the access selection page', functi
         );
 
     $this->get(route('admin.kompen-respon.index'))->assertOk();
-    $this->get('/mahasiswa')->assertOk();
+    $this->get('/mahasiswa')->assertForbidden();
 });
 
 test('the Si-Admin gateway sends mahasiswa to the student page', function (): void {

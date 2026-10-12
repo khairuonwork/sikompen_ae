@@ -14,13 +14,7 @@ test('the landing page offers separate admin and student access', function () {
             ->where('isAdminSetupOpen', false),
         );
 
-    $this->get('/mahasiswa')
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->component('kompen-respon-hub/index')
-            ->where('isAdmin', false)
-            ->where('activeTab', 'students'),
-        );
+    $this->get('/mahasiswa')->assertRedirect('/mahasiswa/login');
 });
 
 test('the landing page offers setup when an admin opens registration', function () {
