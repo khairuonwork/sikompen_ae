@@ -3,12 +3,33 @@ import { CheckCircle2, Download, UsersRound } from "lucide-react";
 import { activate } from "@/actions/App/Http/Controllers/KompenResponHubActiveStudentImportController";
 import { downloadUploadedWorkbook } from "@/actions/App/Http/Controllers/KompenResponHubActiveStudentImportController";
 import { Button } from "@/components/ui/button";
+import { Pager } from "../shared/components/pagination";
 import type {
     ActiveStudentImportSource,
     ActiveStudentImportVersion,
+    Pagination,
 } from "../shared/types";
 
 type SourcesByPeriod = Record<string, ActiveStudentImportSource[]>;
+
+function activeClassesSummary(classes: string[]): {
+    label: string;
+    preview: string;
+} | null {
+    if (classes.length === 0) {
+        return null;
+    }
+
+    const visibleClasses = classes.slice(0, 3);
+    const remainingClasses = classes.length - visibleClasses.length;
+
+    return {
+        label: `${classes.length} kelas digunakan`,
+        preview: remainingClasses > 0
+            ? `${visibleClasses.join(", ")} +${remainingClasses} lainnya`
+            : visibleClasses.join(", "),
+    };
+}
 
 function formatJakartaDateTime(value: string): string {
     return new Intl.DateTimeFormat("id-ID", {
@@ -22,10 +43,10 @@ export function ActiveStudentImportList({
     sources,
     versions,
 }: {
-    sources: ActiveStudentImportSource[];
-    versions: ActiveStudentImportVersion[];
+    sources: Pagination<ActiveStudentImportSource>;
+    versions: Pagination<ActiveStudentImportVersion>;
 }): React.JSX.Element {
-    const sourcesByPeriod = sources.reduce<SourcesByPeriod>((grouped, source) => {
+    const sourcesByPeriod = sources.data.reduce<SourcesByPeriod>((grouped, source) => {
         const period = source.periode_semester ?? "Periode belum ditetapkan";
         grouped[period] ??= [];
         grouped[period].push(source);
@@ -44,7 +65,7 @@ export function ActiveStudentImportList({
                         Satu file roster aktif untuk setiap kombinasi periode dan kelas. Kelas atau periode lain dapat memakai file berbeda.
                     </p>
                 </div>
-                {sources.length > 0 ? (
+                {sources.data.length > 0 ? (
                     <div className="mt-4 grid gap-5">
                         {Object.entries(sourcesByPeriod).map(([period, periodSources]) => (
                             <div key={period} className="grid gap-3">
@@ -86,6 +107,7 @@ export function ActiveStudentImportList({
                                 </div>
                             </div>
                         ))}
+                        <Pager data={sources} />
                     </div>
                 ) : (
                     <p className="mt-4 rounded-2xl border border-dashed border-[#8AAEE0] bg-white/70 px-4 py-3 text-xs font-semibold text-[#395886]/70">
@@ -100,24 +122,27 @@ export function ActiveStudentImportList({
                         <UsersRound className="size-4" /> Semua versi daftar mahasiswa aktif
                     </h3>
                     <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
-                        Pilih file untuk menjadikannya sumber roster kelas-kelas di dalam file pada periode yang sama.
+                        Pilih file untuk menjadikannya sumber roster kelas-kelas yang tercantum di dalam file. Pemilihan roster tidak bergantung pada workbook Kompen dan Respon.
                     </p>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[940px] table-fixed text-sm">
+                    <table className="w-full min-w-[1220px] table-auto text-sm">
                         <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                             <tr>
                                 <th className="w-[17%] px-4 py-3.5">Periode</th>
                                 <th className="w-[27%] px-4 py-3.5">File roster</th>
                                 <th className="w-[13%] px-4 py-3.5">Isi</th>
                                 <th className="w-[17%] px-4 py-3.5">Diunggah</th>
-                                <th className="w-[14%] px-4 py-3.5">Kelas digunakan</th>
-                                <th className="w-[12%] px-4 py-3.5 text-right">Tindakan</th>
+                                <th className="w-[180px] px-4 py-3.5">Kelas digunakan</th>
+                                <th className="min-w-[330px] px-4 py-3.5 text-right whitespace-nowrap">Tindakan</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[#F0F3FA]">
-                            {versions.map((version) => (
-                                <tr key={version.id} className="align-top hover:bg-[#B1C9EF]/10">
+                            {versions.data.map((version) => {
+                                const activeClasses = activeClassesSummary(version.active_classes);
+
+                                return (
+                                <tr key={version.id} className="align-middle hover:bg-[#B1C9EF]/10">
                                     <td className="break-words px-4 py-3.5 text-xs font-bold text-[#395886]">
                                         {version.periode_semester ?? "Belum ditetapkan"}
                                     </td>
@@ -136,14 +161,26 @@ export function ActiveStudentImportList({
                                     <td className="px-4 py-3.5 text-xs text-[#395886]">
                                         {formatJakartaDateTime(version.imported_at)}
                                     </td>
-                                    <td className="break-words px-4 py-3.5 text-xs text-[#395886]">
-                                        {version.active_classes.length > 0
-                                            ? version.active_classes.join(", ")
-                                            : "Belum digunakan"}
+                                    <td className="w-[180px] px-4 py-3.5 text-xs text-[#395886]">
+                                        {activeClasses === null ? (
+                                            "Belum digunakan"
+                                        ) : (
+                                            <div className="max-w-[180px]">
+                                                <p className="font-bold text-[#395886]">
+                                                    {activeClasses.label}
+                                                </p>
+                                                <p
+                                                    className="mt-1 truncate text-[11px] font-medium text-[#395886]/65"
+                                                    title={version.active_classes.join(", ")}
+                                                >
+                                                    {activeClasses.preview}
+                                                </p>
+                                            </div>
+                                        )}
                                     </td>
-                                    <td className="px-4 py-3.5">
-                                        <div className="flex justify-end gap-2">
-                                            <Button asChild size="sm" variant="outline" className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                    <td className="px-4 py-3.5 whitespace-nowrap">
+                                        <div className="flex min-w-max justify-end gap-2">
+                                            <Button asChild size="sm" variant="outline" className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
                                                 <a href={downloadUploadedWorkbook.url(version.id)}>
                                                     <Download className="mr-1.5 size-3.5" /> Unduh
                                                 </a>
@@ -153,7 +190,7 @@ export function ActiveStudentImportList({
                                                 onBefore={() => window.confirm(`Gunakan ${version.original_filename} sebagai roster aktif untuk kelas pada periode ${version.periode_semester ?? "ini"}?`)}
                                             >
                                                 {({ processing }) => (
-                                                    <Button type="submit" size="sm" disabled={processing} className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
+                                                    <Button type="submit" size="sm" disabled={processing} className="shrink-0 rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
                                                         {processing ? "Memilih…" : "Jadikan digunakan"}
                                                     </Button>
                                                 )}
@@ -161,10 +198,12 @@ export function ActiveStudentImportList({
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
+                <Pager data={versions} />
             </div>
         </section>
     );

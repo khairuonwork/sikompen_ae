@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import type { Pagination } from "../types";
 
-const perPageOptions = [15, 25, 50, 100] as const;
+const perPageOptions = [5, 15, 25, 50, 100] as const;
 
 export function Pager<T>({ data }: { data: Pagination<T> }): React.JSX.Element {
     const [pageInput, setPageInput] = useState(

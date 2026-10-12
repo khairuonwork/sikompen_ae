@@ -5,13 +5,16 @@ use App\Actions\KompenResponHub\ParseKompenResponHubActiveStudentWorkbook;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Actions\KompenResponHub\ValidateKompenResponHubWorkbookArchive;
 use App\Jobs\ProcessKompenResponHubActiveStudentImport;
+use App\Models\KompenResponHubActiveImport;
 use App\Models\KompenResponHubActiveStudent;
 use App\Models\KompenResponHubActiveStudentImport;
 use App\Models\KompenResponHubActiveStudentImportSource;
 use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
+use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
+use App\Models\KompenResponHubStudent;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -180,6 +183,91 @@ test('active roster sources are selected independently for the same class across
         ->orderBy('periode_semester')
         ->pluck('periode_semester')
         ->all())->toBe(['2027/2028 Gasal', '2027/2028 Genap']);
+});
+
+test('the file list keeps workbook and active student sources independent', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $period = '2027/2028 Gasal';
+    $workbookImport = KompenResponHubImport::query()->create([
+        'uploaded_by_admin_id' => $admin->id,
+        'uploader_name' => $admin->email,
+        'uploader_email' => $admin->email,
+        'periode_semester' => $period,
+        'original_filename' => 'kompen-respon.xlsx',
+        'display_filename' => 'kompen-respon.xlsx',
+        'stored_path' => 'kompen-respon-hub/imports/kompen-respon.xlsx',
+        'file_hash' => str_repeat('a', 64),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 0,
+        'imported_at' => now(),
+    ]);
+    KompenResponHubActiveImport::query()->create([
+        'periode_semester' => $period,
+        'kompen_respon_hub_import_id' => $workbookImport->id,
+        'activated_by_admin_id' => $admin->id,
+        'activated_at' => now(),
+    ]);
+    KompenResponHubStudent::query()->create([
+        'kompen_respon_hub_import_id' => $workbookImport->id,
+        'nim' => '261000001',
+        'periode_semester' => $period,
+        'nama_mahasiswa' => 'Alya Pratama',
+        'kelas' => '1AEA1',
+        'tingkat' => 1,
+        'total_jam_terlambat' => 0,
+        'total_jam_sakit' => 0,
+        'total_jam_izin' => 0,
+        'total_jam_bolos' => 0,
+        'total_kompensasi_jam' => 0,
+        'total_responsi_jam' => 0,
+        'total_hutang_jam' => 0,
+        'kompensasi_dikerjakan_jam' => 0,
+        'sisa_hutang_jam' => 0,
+    ]);
+
+    $this->actingAs($admin, 'admin')->get('/admin?tab=files')
+        ->assertInertia(fn ($page) => $page
+            ->has('activeImportVersions.data', 1)
+            ->where('activeStudentImportSources.meta.total', 0)
+            ->missing('filePairingWarnings'));
+});
+
+test('the file list paginates active student roster versions and selected roster sources independently', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $imports = KompenResponHubActiveStudentImport::factory()->count(16)->create();
+
+    foreach ($imports as $index => $import) {
+        KompenResponHubActiveStudentImportSource::factory()->create([
+            'kelas' => '1AEA'.($index + 1),
+            'sikompen_active_student_import_id' => $import->id,
+        ]);
+    }
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=files&per_page=15&active_student_import_page=99&active_student_import_source_page=99')
+        ->assertInertia(fn ($page) => $page
+            ->where('activeStudentImportVersions.meta.page_name', 'active_student_import_page')
+            ->where('activeStudentImportVersions.meta.current_page', 2)
+            ->has('activeStudentImportVersions.data', 1)
+            ->where('activeStudentImportSources.meta.page_name', 'active_student_import_source_page')
+            ->where('activeStudentImportSources.meta.current_page', 2)
+            ->has('activeStudentImportSources.data', 1));
+});
+
+test('an administrator can select more than five active student roster versions within one minute', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    foreach (range(1, 6) as $classNumber) {
+        $import = KompenResponHubActiveStudentImport::factory()->create();
+        KompenResponHubActiveStudent::factory()
+            ->for($import, 'importBatch')
+            ->create(['kelas' => "1AEA{$classNumber}"]);
+
+        $this->actingAs($admin, 'admin')
+            ->post("/admin/kompen-respon/active-students/imports/{$import->id}/activate")
+            ->assertSessionHas('success');
+    }
 });
 
 test('the active student parser rejects blocks that use different periods', function (): void {

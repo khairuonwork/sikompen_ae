@@ -126,7 +126,8 @@ class KompenResponHubDataQuery
         return $this->importVersions()
             ->has('activeReference')
             ->reorder()
-            ->orderByDesc('periode_semester');
+            ->orderByDesc('periode_semester')
+            ->orderByDesc('id');
     }
 
     /** @return Builder<KompenResponHubActiveStudentImport> */
@@ -137,7 +138,6 @@ class KompenResponHubDataQuery
                 'uploadedByAdmin:id,email',
                 'activeSources:id,periode_semester,kelas,sikompen_active_student_import_id,activated_at',
             ])
-            ->orderByDesc('periode_semester')
             ->orderByDesc('imported_at')
             ->orderByDesc('id');
     }
@@ -148,7 +148,8 @@ class KompenResponHubDataQuery
         return KompenResponHubActiveStudentImportSource::query()
             ->with(['importBatch:id,original_filename,periode_semester,student_count,imported_at'])
             ->orderByDesc('periode_semester')
-            ->orderBy('kelas');
+            ->orderBy('kelas')
+            ->orderByDesc('id');
     }
 
     /**

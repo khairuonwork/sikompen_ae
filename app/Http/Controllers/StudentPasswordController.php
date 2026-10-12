@@ -18,6 +18,7 @@ class StudentPasswordController extends Controller
 
         return Inertia::render('auth/student-password', [
             'nim' => $student->nim,
+            'requiresCurrentPassword' => ! $student->requiresPasswordChange(),
         ]);
     }
 

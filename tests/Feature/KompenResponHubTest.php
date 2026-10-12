@@ -141,6 +141,26 @@ test('the Kompen and Respon table filters students by class and level', function
         );
 });
 
+test('the table supports five data per page', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createStudent();
+
+    foreach (range(1, 5) as $index) {
+        $student->replicate()->fill([
+            'nim' => '12345678'.($index + 9),
+            'nama_mahasiswa' => "Mahasiswa {$index}",
+        ])->save();
+    }
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?per_page=5')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('students.meta.per_page', 5)
+            ->has('students.data', 5),
+        );
+});
+
 test('the dynamic filters only expose uploaded periods and filter their records', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     createStudent();
@@ -906,9 +926,9 @@ test('the upload log identifies active data by import version instead of filenam
 
     $this->actingAs($admin, 'admin')->get('/admin?tab=files')
         ->assertInertia(fn ($page) => $page
-            ->where('activeImportVersions.0.id', $activeImport->id)
-            ->where('activeImportVersions.0.periode_semester', $activeImport->periode_semester)
-            ->where('activeImportVersions.0.is_active', true)
+            ->where('activeImportVersions.data.0.id', $activeImport->id)
+            ->where('activeImportVersions.data.0.periode_semester', $activeImport->periode_semester)
+            ->where('activeImportVersions.data.0.is_active', true)
             ->where('importVersions.data.0.id', $activeImport->id),
         );
 });

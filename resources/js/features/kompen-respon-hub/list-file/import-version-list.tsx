@@ -35,7 +35,7 @@ export function ImportVersionList({
     activeVersions,
     data,
 }: {
-    activeVersions: ImportVersion[];
+    activeVersions: Pagination<ImportVersion>;
     data: Pagination<ImportVersion>;
 }): React.JSX.Element {
     const [isEditMode, setIsEditMode] = useState(false);
@@ -63,12 +63,12 @@ export function ImportVersionList({
                         Sumber data yang digunakan
                     </h3>
                     <p className="text-xs font-medium text-[#395886]/70">
-                        Satu workbook aktif untuk setiap periode.
+                        Satu workbook Kompen dan Respon aktif untuk setiap periode.
                     </p>
                 </div>
-                {activeVersions.length > 0 ? (
+                {activeVersions.data.length > 0 ? (
                     <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                        {activeVersions.map((version) => (
+                        {activeVersions.data.map((version) => (
                             <article
                                 key={version.id}
                                 className="rounded-2xl border border-white bg-white/90 p-4 shadow-2xs"
@@ -99,6 +99,9 @@ export function ImportVersionList({
                                 </div>
                             </article>
                         ))}
+                        <div className="md:col-span-2 xl:col-span-3">
+                            <Pager data={activeVersions} />
+                        </div>
                     </div>
                 ) : (
                     <p className="mt-4 rounded-2xl border border-dashed border-[#8AAEE0] bg-white/70 px-4 py-3 text-xs font-semibold text-[#395886]/70">
@@ -128,7 +131,7 @@ export function ImportVersionList({
                     </Button>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1080px] table-fixed text-sm">
+                    <table className="w-full min-w-[1320px] table-auto text-sm">
                         <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                             <tr>
                                 <th className="px-4 py-3.5">Periode</th>
@@ -136,7 +139,7 @@ export function ImportVersionList({
                                 <th className="px-4 py-3.5">Diunggah</th>
                                 <th className="px-4 py-3.5">Isi</th>
                                 <th className="px-4 py-3.5">Status sumber</th>
-                                <th className="px-4 py-3.5 text-right">Tindakan</th>
+                                <th className="min-w-[430px] px-4 py-3.5 text-right whitespace-nowrap">Tindakan</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[#F0F3FA]">
@@ -171,28 +174,28 @@ export function ImportVersionList({
                                             </div>
                                         ) : (
                                             <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black tracking-wider text-slate-700 uppercase">
-                                                Tersimpan
+                                                Versi tersimpan
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3.5">
-                                        <div className="flex justify-end gap-2">
-                                            <Button asChild size="sm" variant="outline" className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                    <td className="px-4 py-3.5 whitespace-nowrap">
+                                        <div className="flex min-w-max justify-end gap-2">
+                                            <Button asChild size="sm" variant="outline" className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
                                                 <a href={downloadUploadedWorkbook.url(version.id)}>
                                                     <Download className="mr-1.5 size-3.5" /> Unduh
                                                 </a>
                                             </Button>
                                             {isEditMode ? (
                                                 <>
-                                                    <Button type="button" size="sm" variant="outline" onClick={() => openManagementDialog(version, "rename")} className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                                    <Button type="button" size="sm" variant="outline" onClick={() => openManagementDialog(version, "rename")} className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
                                                         <Pencil className="mr-1.5 size-3.5" /> Ubah nama
                                                     </Button>
-                                                    <Button type="button" size="sm" variant="outline" disabled={version.is_active} onClick={() => openManagementDialog(version, "delete")} className="rounded-xl border-rose-200 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white">
+                                                    <Button type="button" size="sm" variant="outline" disabled={version.is_active} onClick={() => openManagementDialog(version, "delete")} className="shrink-0 rounded-xl border-rose-200 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white">
                                                         <Trash2 className="mr-1.5 size-3.5" /> Hapus
                                                     </Button>
                                                 </>
                                             ) : version.is_active ? (
-                                                <Button size="sm" disabled className="rounded-xl bg-emerald-600 text-xs font-bold text-white disabled:opacity-100">
+                                                <Button size="sm" disabled className="shrink-0 rounded-xl bg-emerald-600 text-xs font-bold text-white disabled:opacity-100">
                                                     Digunakan
                                                 </Button>
                                             ) : (
@@ -201,9 +204,9 @@ export function ImportVersionList({
                                                     onBefore={() => window.confirm(`Gunakan ${version.display_filename} sebagai sumber data aktif untuk periode ${version.periode_semester}? Data sumber periode tersebut akan diganti, sedangkan koreksi manual dan riwayat tetap dipertahankan.`)}
                                                 >
                                                     {({ processing }) => (
-                                                        <Button type="submit" size="sm" disabled={processing} className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
+                                                        <Button type="submit" size="sm" disabled={processing} className="shrink-0 rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
                                                             <UploadCloud className="mr-1.5 size-3.5" />
-                                                            {processing ? "Memilih…" : "Jadikan aktif"}
+                                                        {processing ? "Memilih…" : "Gunakan untuk periode ini"}
                                                         </Button>
                                                     )}
                                                 </Form>

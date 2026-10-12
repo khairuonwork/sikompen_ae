@@ -7,10 +7,13 @@ import {
     ListFilter,
     LogOut,
     Settings,
+    UserRound,
 } from "lucide-react";
 import { useState } from "react";
 import { adminStudentOverview } from "@/actions/App/Http/Controllers/KompenResponHubController";
 import { destroy as logout } from "@/actions/App/Http/Controllers/AdminAuthenticationController";
+import { destroy as studentLogout } from "@/actions/App/Http/Controllers/StudentAuthenticationController";
+import { show as studentProfile } from "@/actions/App/Http/Controllers/StudentProfileController";
 import { settings as adminSettings } from "@/actions/App/Http/Controllers/KompenResponHubAdminSetupController";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -54,6 +57,7 @@ import { UploadWorkspace } from "@/features/kompen-respon-hub/upload/upload-work
 export default function KompenResponHubIndex({
     activeTab,
     isAdmin,
+    hasStudentSession,
     filters,
     filterOptions,
     importAuditPeriods,
@@ -95,7 +99,6 @@ export default function KompenResponHubIndex({
         useState<StudentOverview | null>(null);
     const [isStudentOverviewLoading, setIsStudentOverviewLoading] =
         useState(false);
-
     async function loadStudentOverview(studentId: number): Promise<void> {
         setIsStudentOverviewLoading(true);
 
@@ -203,6 +206,29 @@ export default function KompenResponHubIndex({
                                         Kembali
                                     </Link>
                                 </Button>
+                            ) : hasStudentSession ? (
+                                <>
+                                    <Button
+                                        asChild
+                                        variant="outline"
+                                        className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white active:scale-95"
+                                    >
+                                        <Link href={sikompenUrl(studentProfile.url())} className="flex items-center gap-1.5">
+                                            <UserRound className="size-4" />
+                                            Profil
+                                        </Link>
+                                    </Button>
+                                    <Button
+                                        asChild
+                                        variant="outline"
+                                        className="rounded-2xl border-rose-300 bg-white/80 px-4 py-2.5 text-xs font-bold text-rose-700 shadow-2xs transition-all duration-300 hover:border-rose-600 hover:bg-rose-600 hover:text-white active:scale-95"
+                                    >
+                                        <Link href={sikompenUrl(studentLogout.url())} method="post" as="button" className="flex items-center gap-1.5">
+                                            <LogOut className="size-4" />
+                                            Keluar
+                                        </Link>
+                                    </Button>
+                                </>
                             ) : (
                                     <Button
                                         asChild
@@ -211,7 +237,7 @@ export default function KompenResponHubIndex({
                                     >
                                         <Link href={sikompenUrl(home.url())} className="flex items-center gap-1.5">
                                             <LogOut className="size-4" />
-                                            Keluar
+                                            Kembali
                                         </Link>
                                     </Button>
                                 )}
@@ -409,17 +435,19 @@ export default function KompenResponHubIndex({
                             <TableGuide
                                 title="Panduan List File"
                                 items={[
-                                    "Bagian Sumber data yang digunakan merangkum satu workbook aktif pada setiap periode.",
-                                    "Setiap periode hanya dapat memiliki satu workbook aktif, sedangkan periode yang berbeda dapat memakai workbook aktif yang berbeda.",
-                                    "Daftar semua versi menyimpan riwayat workbook yang siap dipilih. Klik Jadikan aktif untuk mengganti sumber data periode terkait.",
-                                    "Daftar mahasiswa aktif dikelola terpisah. Satu file roster berlaku untuk satu periode dan dapat dipilih per kelas tanpa mengubah periode atau kelas lain.",
+                                    "Kompen dan Respon serta Daftar Mahasiswa Aktif dikelola pada tabel yang terpisah agar versi file mudah ditelusuri.",
+                                    "Periode dibaca otomatis dari isi setiap file. Tidak ada pemetaan periode manual.",
+                                    "Pilih satu workbook Kompen dan Respon untuk setiap periode. Daftar mahasiswa aktif dipilih terpisah untuk kelas-kelas yang tercantum di file roster.",
+                                    "Kedua jenis file dapat diunggah dan digunakan secara mandiri; sistem tidak mewajibkan pasangan periode yang sama.",
                                 ]}
                             />
-                            <ActiveStudentImportList
-                                sources={activeStudentImportSources}
-                                versions={activeStudentImportVersions}
-                            />
-                            {importVersions?.data.length ? (
+                            {activeStudentImportVersions !== null && activeStudentImportSources !== null ? (
+                                <ActiveStudentImportList
+                                    sources={activeStudentImportSources}
+                                    versions={activeStudentImportVersions}
+                                />
+                            ) : null}
+                            {importVersions?.data.length && activeImportVersions !== null ? (
                                 <ImportVersionList
                                     activeVersions={activeImportVersions}
                                     data={importVersions}

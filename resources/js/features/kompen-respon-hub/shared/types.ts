@@ -283,6 +283,7 @@ export type KompenResponHubPageProps = {
         | "warnings"
         | "activity";
     isAdmin: boolean;
+    hasStudentSession: boolean;
     filters: Filters;
     filterOptions: FilterOptions;
     importAuditPeriods: string[];
@@ -294,9 +295,9 @@ export type KompenResponHubPageProps = {
     details: Pagination<Detail> | null;
     imports: Pagination<ImportAuditLog> | null;
     importVersions: Pagination<ImportVersion> | null;
-    activeImportVersions: ImportVersion[];
-    activeStudentImportVersions: ActiveStudentImportVersion[];
-    activeStudentImportSources: ActiveStudentImportSource[];
+    activeImportVersions: Pagination<ImportVersion> | null;
+    activeStudentImportVersions: Pagination<ActiveStudentImportVersion> | null;
+    activeStudentImportSources: Pagination<ActiveStudentImportSource> | null;
     warnings: Pagination<Warning> | null;
     warningCandidates: Pagination<Student> | null;
     rolledBackWarnings: Pagination<Warning> | null;

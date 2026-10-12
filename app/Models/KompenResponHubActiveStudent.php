@@ -8,6 +8,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $sikompen_active_student_import_id
+ * @property string $nim
+ * @property string $nama_mahasiswa
+ * @property string $kelas
+ * @property-read KompenResponHubActiveStudentImport|null $importBatch
+ */
 class KompenResponHubActiveStudent extends Model
 {
     /** @use HasFactory<KompenResponHubActiveStudentFactory> */

@@ -14,6 +14,7 @@ use App\Http\Controllers\KompenResponHubLifecycleController;
 use App\Http\Controllers\SiAdminProxyAccessController;
 use App\Http\Controllers\StudentAuthenticationController;
 use App\Http\Controllers\StudentPasswordController;
+use App\Http\Controllers\StudentProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', KompenResponHubLandingController::class)
@@ -46,19 +47,23 @@ Route::middleware('sikompen.standalone')->group(function (): void {
 });
 
 Route::middleware('sikompen.proxy-session')->group(function (): void {
-    Route::get('mahasiswa', [KompenResponHubController::class, 'studentIndex'])
-        ->name('student.kompen-respon.index');
-    Route::get('kompen-respon', [KompenResponHubController::class, 'studentIndex'])
-        ->name('kompen-respon-hub.index');
-
     Route::middleware('sikompen.student')->group(function (): void {
-        Route::get('mahasiswa/ganti-password', [StudentPasswordController::class, 'edit'])
-            ->name('student.password.edit');
-        Route::put('mahasiswa/ganti-password', [StudentPasswordController::class, 'update'])
-            ->middleware('throttle:10,15')
-            ->name('student.password.update');
+        Route::middleware('sikompen.student-password-changed')->group(function (): void {
+            Route::get('mahasiswa', [KompenResponHubController::class, 'studentIndex'])
+                ->name('student.kompen-respon.index');
+            Route::get('kompen-respon', [KompenResponHubController::class, 'studentIndex'])
+                ->name('kompen-respon-hub.index');
+        });
 
         Route::middleware('sikompen.standalone')->group(function (): void {
+            Route::get('mahasiswa/ganti-password', [StudentPasswordController::class, 'edit'])
+                ->name('student.password.edit');
+            Route::put('mahasiswa/ganti-password', [StudentPasswordController::class, 'update'])
+                ->middleware('throttle:10,15')
+                ->name('student.password.update');
+            Route::get('mahasiswa/profil', [StudentProfileController::class, 'show'])
+                ->middleware('sikompen.student-password-changed')
+                ->name('student.profile.show');
             Route::post('mahasiswa/logout', [StudentAuthenticationController::class, 'destroy'])
                 ->name('student.logout');
         });
@@ -101,7 +106,7 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
         Route::get('kompen-respon/active-students/imports/{import}/download', [KompenResponHubActiveStudentImportController::class, 'downloadUploadedWorkbook'])
             ->name('kompen-respon.active-students.imports.download');
         Route::post('kompen-respon/active-students/imports/{import}/activate', [KompenResponHubActiveStudentImportController::class, 'activate'])
-            ->middleware('throttle:5,15')
+            ->middleware('throttle:20,1')
             ->name('kompen-respon.active-students.imports.activate');
         Route::get('kompen-respon/active-students/import-tasks/{task}', [KompenResponHubActiveStudentImportController::class, 'showTask'])
             ->name('kompen-respon.active-students.import-tasks.show');

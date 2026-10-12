@@ -1,5 +1,5 @@
 import { Form } from "@inertiajs/react";
-import { UploadCloud } from "lucide-react";
+import { UploadCloud, X } from "lucide-react";
 import { type DragEvent, useState } from "react";
 import { store } from "@/actions/App/Http/Controllers/KompenResponHubImportController";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,12 @@ export function UploadPanel({
     const [selectedFilename, setSelectedFilename] = useState<string | null>(
         null,
     );
+    const [fileInputKey, setFileInputKey] = useState(0);
+
+    function clearSelectedFile(): void {
+        setSelectedFilename(null);
+        setFileInputKey((currentKey) => currentKey + 1);
+    }
 
     return (
         <Card className="group mx-auto w-full max-w-3xl overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-all duration-500 hover:shadow-[0_15px_35px_rgba(57,88,134,0.15)]">
@@ -40,7 +46,7 @@ export function UploadPanel({
                 resetOnSuccess
                 onStart={() => onUploadRequestActivityChange(true)}
                 onFinish={() => onUploadRequestActivityChange(false)}
-                onSuccess={() => setSelectedFilename(null)}
+                onSuccess={clearSelectedFile}
             >
                 {({ errors, processing, progress }) => (
                     <>
@@ -80,6 +86,7 @@ export function UploadPanel({
                                     Workbook XLSX
                                 </Label>
                                 <Input
+                                    key={fileInputKey}
                                     id="kompen-respon-workbook"
                                     name="file"
                                     type="file"
@@ -93,13 +100,29 @@ export function UploadPanel({
                                     }
                                     className="h-12 cursor-pointer rounded-2xl border-[#8AAEE0] bg-white/90 p-1.5 text-sm text-[#395886] shadow-2xs transition-all duration-300 file:mr-3 file:h-9 file:rounded-xl file:border-0 file:bg-[#395886] file:px-3 file:text-xs file:font-bold file:text-white hover:file:bg-[#1E293B]"
                                 />
-                                <p className="rounded-xl bg-[#F0F3FA]/70 px-3 py-2 text-[11px] font-medium text-[#395886]/75">
-                                    Nama file dicatat di Log Upload:{" "}
-                                    <span className="font-mono font-bold text-[#395886]">
-                                        {selectedFilename ??
-                                            "Belum ada file dipilih"}
-                                    </span>
-                                </p>
+                                <div className="flex min-h-10 items-center justify-between gap-3 rounded-xl bg-[#F0F3FA]/70 px-3 py-2 text-[11px] font-medium text-[#395886]/75">
+                                    <p className="min-w-0 break-all">
+                                        Nama file dicatat di Log Upload:{" "}
+                                        <span className="font-mono font-bold text-[#395886]">
+                                            {selectedFilename ??
+                                                "Belum ada file dipilih"}
+                                        </span>
+                                    </p>
+                                    {selectedFilename !== null ? (
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="ghost"
+                                            onClick={clearSelectedFile}
+                                            disabled={processing}
+                                            className="size-7 shrink-0 rounded-lg text-[#395886] hover:bg-white hover:text-rose-600"
+                                            aria-label="Batalkan file yang dipilih"
+                                            title="Batalkan file"
+                                        >
+                                            <X className="size-4" />
+                                        </Button>
+                                    ) : null}
+                                </div>
                                 <p className="text-[11px] leading-tight font-medium text-[#395886]/60">
                                     Maksimum 20 MB. B4 hanya menerima Gasal
                                     atau Genap; C4 wajib berformat YYYY/YYYY,

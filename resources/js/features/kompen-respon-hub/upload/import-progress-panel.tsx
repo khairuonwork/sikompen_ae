@@ -1,9 +1,38 @@
 import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { toast } from "sonner";
 import { showTask as activeStudentImportTaskStatus } from "@/actions/App/Http/Controllers/KompenResponHubActiveStudentImportController";
 import { show as importTaskStatus } from "@/actions/App/Http/Controllers/KompenResponHubImportTaskController";
+import { Button } from "@/components/ui/button";
 import type { ImportTask } from "../shared/types";
 import { ProgressBar } from "../shared/components/progress-bar";
+
+const dismissedImportTasksStorageKey = "sikompen-dismissed-import-tasks";
+
+function taskKey(importTask: ImportTask): string {
+    return `${importTask.import_type}:${importTask.id}`;
+}
+
+function dismissedTaskKeysFromSession(): Set<string> {
+    if (typeof window === "undefined") {
+        return new Set();
+    }
+
+    try {
+        const storedKeys: unknown = JSON.parse(
+            window.sessionStorage.getItem(dismissedImportTasksStorageKey) ??
+                "[]",
+        );
+
+        return new Set(
+            Array.isArray(storedKeys)
+                ? storedKeys.filter((key): key is string => typeof key === "string")
+                : [],
+        );
+    } catch {
+        return new Set();
+    }
+}
 
 export function ImportProgressPanel({
     initialImportTasks,
@@ -11,6 +40,9 @@ export function ImportProgressPanel({
     initialImportTasks: ImportTask[];
 }): React.JSX.Element | null {
     const [importTasks, setImportTasks] = useState(initialImportTasks);
+    const [dismissedTaskKeys, setDismissedTaskKeys] = useState<Set<string>>(
+        dismissedTaskKeysFromSession,
+    );
     const notifiedFailedTaskIds = useRef<Set<string>>(new Set());
     const activeTaskIds = importTasks
         .filter(
@@ -18,8 +50,11 @@ export function ImportProgressPanel({
                 importTask.status === "queued" ||
                 importTask.status === "processing",
         )
-        .map((importTask) => `${importTask.import_type}:${importTask.id}`);
+        .map(taskKey);
     const activeTaskKey = activeTaskIds.join(",");
+    const visibleImportTasks = importTasks.filter(
+        (importTask) => !dismissedTaskKeys.has(taskKey(importTask)),
+    );
 
     useEffect(() => {
         setImportTasks(initialImportTasks);
@@ -118,15 +153,33 @@ export function ImportProgressPanel({
         };
     }, [activeTaskKey]);
 
-    if (importTasks.length === 0) {
+    function dismissTask(importTask: ImportTask): void {
+        const dismissedTaskKey = taskKey(importTask);
+
+        setDismissedTaskKeys((currentTaskKeys) => {
+            const updatedTaskKeys = new Set(currentTaskKeys);
+            updatedTaskKeys.add(dismissedTaskKey);
+
+            try {
+                window.sessionStorage.setItem(
+                    dismissedImportTasksStorageKey,
+                    JSON.stringify([...updatedTaskKeys]),
+                );
+            } catch {}
+
+            return updatedTaskKeys;
+        });
+    }
+
+    if (visibleImportTasks.length === 0) {
         return null;
     }
 
     return (
         <section className="grid gap-3" aria-live="polite">
-            {importTasks.map((importTask) => (
+            {visibleImportTasks.map((importTask) => (
                 <div
-                    key={`${importTask.import_type}:${importTask.id}`}
+                    key={taskKey(importTask)}
                     className="animate-in fade-in grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl duration-300"
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -140,9 +193,22 @@ export function ImportProgressPanel({
                                 {importTask.progress_message}
                             </p>
                         </div>
-                        <span className="rounded-full border border-[#8AAEE0]/40 bg-[#B1C9EF]/30 px-3 py-1 font-mono text-sm font-bold text-[#395886] tabular-nums">
-                            {importTask.progress}%
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className="rounded-full border border-[#8AAEE0]/40 bg-[#B1C9EF]/30 px-3 py-1 font-mono text-sm font-bold text-[#395886] tabular-nums">
+                                {importTask.progress}%
+                            </span>
+                            <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                onClick={() => dismissTask(importTask)}
+                                className="size-8 rounded-xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#B1C9EF]/30 hover:text-[#395886]"
+                                aria-label="Tutup notifikasi impor"
+                                title="Tutup notifikasi. Proses impor tetap berjalan di latar belakang."
+                            >
+                                <X className="size-4" />
+                            </Button>
+                        </div>
                     </div>
                     <ProgressBar value={importTask.progress} />
                     {importTask.error_message ? (
