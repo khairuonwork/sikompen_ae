@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\KompenResponHub\SikompenStudentAccess;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubAdminSetupWindow;
@@ -15,7 +14,6 @@ class KompenResponHubLandingController extends Controller
     public function __invoke(
         Request $request,
         SiAdminProxyAccess $access,
-        SikompenStudentAccess $studentAccess,
     ): Response {
         $isStandaloneMode = ! config('si-admin-proxy.enabled');
         $isInitialAdminSetupAvailable = $isStandaloneMode && ! KompenResponHubAdmin::query()->exists();
@@ -25,7 +23,6 @@ class KompenResponHubLandingController extends Controller
 
         return Inertia::render('welcome', [
             'isAdminAuthenticated' => $access->hasAdminAccess($request),
-            'isStudentAuthenticated' => $studentAccess->hasStudentAccess($request),
             'isInitialAdminSetupAvailable' => $isInitialAdminSetupAvailable,
             'isAdminSetupOpen' => $isAdminSetupOpen,
         ]);

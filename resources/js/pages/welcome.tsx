@@ -2,7 +2,6 @@ import { Head, Link } from '@inertiajs/react';
 import { GraduationCap, ShieldCheck, UserPlus, ArrowRight } from 'lucide-react';
 import { create as adminLogin } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
 import { create as adminSetup } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
-import { create as studentLogin } from '@/actions/App/Http/Controllers/StudentAuthenticationController';
 import { Button } from '@/components/ui/button';
 import { sikompenUrl } from '@/lib/sikompen-url';
 import {
@@ -17,14 +16,12 @@ import { index as studentIndex } from '@/routes/student/kompen-respon';
 
 type WelcomeProps = {
     isAdminAuthenticated: boolean;
-    isStudentAuthenticated: boolean;
     isInitialAdminSetupAvailable: boolean;
     isAdminSetupOpen: boolean;
 };
 
 export default function Welcome({
     isAdminAuthenticated,
-    isStudentAuthenticated,
     isInitialAdminSetupAvailable,
     isAdminSetupOpen,
 }: WelcomeProps): React.JSX.Element {
@@ -49,7 +46,7 @@ export default function Welcome({
                             Pilih Jenis Akses
                         </h1>
                         <p className="text-[#395886]/70 text-sm md:text-base max-w-xl mx-auto leading-relaxed font-medium">
-                            Admin mengelola impor dokumen. Mahasiswa masuk dengan NIM untuk melihat data miliknya sendiri.
+                            Admin mengelola impor dokumen. Mahasiswa dapat melihat data Kompen/Respon dan Detail Kompen.
                         </p>
                     </div>
 
@@ -124,7 +121,7 @@ export default function Welcome({
                                         Mahasiswa
                                     </CardTitle>
                                     <CardDescription className="text-[#395886]/70 text-xs md:text-sm mt-1 leading-relaxed font-normal">
-                                        Akses baca saja untuk melihat Kompen/Respon dan Detail Kompen milik sendiri.
+                                        Akses baca saja untuk melihat Kompen/Respon dan Detail Kompen.
                                     </CardDescription>
                                 </div>
                             </CardHeader>
@@ -134,8 +131,8 @@ export default function Welcome({
                                     variant="outline"
                                     className="w-full border-[#8AAEE0] text-[#395886] bg-white/80 hover:bg-[#395886] hover:text-white hover:border-[#395886] transition-all duration-300 rounded-2xl font-bold active:scale-95 text-xs py-3 shadow-2xs"
                                 >
-                                    <Link href={sikompenUrl(isStudentAuthenticated ? studentIndex.url() : studentLogin.url())} className="flex items-center justify-center gap-2">
-                                        {isStudentAuthenticated ? 'Buka data saya' : 'Login sebagai mahasiswa'}
+                                    <Link href={sikompenUrl(studentIndex.url())} className="flex items-center justify-center gap-2">
+                                        Buka data mahasiswa
                                         <ArrowRight className="size-4 group-hover:translate-x-1 transition-transform" />
                                     </Link>
                                 </Button>

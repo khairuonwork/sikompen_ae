@@ -24,6 +24,7 @@ export function activityLabel(eventType: string): string {
         "import.renamed": "Nama file diperbarui",
         "import.deleted": "Versi file dihapus",
         "active_students.imported": "Daftar mahasiswa aktif diperbarui",
+        "active_students.activated": "Sumber mahasiswa aktif dipilih",
         "active_students.import_failed": "Impor mahasiswa aktif gagal",
         "progress.updated": "Progres diperbarui",
         "summary.override_updated": "Koreksi total jam",
@@ -45,6 +46,8 @@ export function activityLabel(eventType: string): string {
         "export.timed_out": "Ekspor dihentikan karena waktu habis",
         "maintenance.activity_log_retention_updated":
             "Retensi riwayat diperbarui",
+        "maintenance.import_audit_log_retention_updated":
+            "Retensi Log Upload diperbarui",
     };
 
     return descriptions[eventType] ?? "Aktivitas sistem";
@@ -237,7 +240,7 @@ export function ActivityLogTable({
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[750px] text-sm">
+                <table className="w-full min-w-[750px] table-fixed text-sm">
                     <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
                             <th className="px-4 py-3">Waktu</th>
@@ -250,29 +253,29 @@ export function ActivityLogTable({
                     <tbody className="divide-y divide-[#F0F3FA]">
                         {data.data.map((log) => (
                             <tr key={log.id}>
-                                <td className="px-4 py-3 text-xs">
+                                <td className="break-words px-4 py-3 text-xs">
                                     {new Date(log.occurred_at).toLocaleString(
                                         "id-ID",
                                         { timeZone: "Asia/Jakarta" },
                                     )}
                                 </td>
-                                <td className="px-4 py-3 text-xs font-semibold text-[#395886]">
+                                <td className="break-words px-4 py-3 text-xs font-semibold text-[#395886]">
                                     {activityDescription(log)}
                                 </td>
-                                <td className="px-4 py-3 text-xs">
-                                    <p className="font-semibold text-[#395886]">
+                                <td className="break-words px-4 py-3 text-xs">
+                                    <p className="break-words font-semibold text-[#395886]">
                                         {log.subject_label}
                                     </p>
                                     {log.subject_context ? (
-                                        <p className="text-[11px] text-[#628ECB]">
+                                        <p className="break-words text-[11px] text-[#628ECB]">
                                             {log.subject_context}
                                         </p>
                                     ) : null}
                                 </td>
-                                <td className="px-4 py-3 text-xs">
+                                <td className="break-words px-4 py-3 text-xs">
                                     {log.actor_name ?? "Sistem"}
                                 </td>
-                                <td className="max-w-xs px-4 py-3 text-xs text-[#395886]/70">
+                                <td className="break-words px-4 py-3 text-xs text-[#395886]/70">
                                     {log.reason ?? "—"}
                                 </td>
                             </tr>

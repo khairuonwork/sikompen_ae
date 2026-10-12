@@ -2,12 +2,28 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Database\Factories\KompenResponHubActiveStudentImportFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property int|null $uploaded_by_admin_id
+ * @property string $uploader_name
+ * @property string|null $uploader_email
+ * @property string $original_filename
+ * @property string|null $periode_semester
+ * @property string $stored_path
+ * @property string $file_hash
+ * @property int $student_count
+ * @property int $class_count
+ * @property CarbonInterface $imported_at
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ */
 class KompenResponHubActiveStudentImport extends Model
 {
     /** @use HasFactory<KompenResponHubActiveStudentImportFactory> */
@@ -20,6 +36,7 @@ class KompenResponHubActiveStudentImport extends Model
         'uploader_name',
         'uploader_email',
         'original_filename',
+        'periode_semester',
         'stored_path',
         'file_hash',
         'student_count',
@@ -51,6 +68,12 @@ class KompenResponHubActiveStudentImport extends Model
     public function students(): HasMany
     {
         return $this->hasMany(KompenResponHubActiveStudent::class, 'sikompen_active_student_import_id');
+    }
+
+    /** @return HasMany<KompenResponHubActiveStudentImportSource, $this> */
+    public function activeSources(): HasMany
+    {
+        return $this->hasMany(KompenResponHubActiveStudentImportSource::class, 'sikompen_active_student_import_id');
     }
 
     /** @return HasMany<KompenResponHubImportAuditLog, $this> */

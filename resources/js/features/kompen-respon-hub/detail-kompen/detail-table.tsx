@@ -30,7 +30,7 @@ export function DetailTable({
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-all duration-300">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1100px] text-sm">
+                <table className="w-full min-w-[1100px] table-fixed text-sm">
                     <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
                             {headings.map((heading) => (
@@ -57,19 +57,19 @@ export function DetailTable({
                                 <td className="px-4 py-3.5 font-mono text-xs font-bold text-[#395886]">
                                     {detail.nim}
                                 </td>
-                                <td className="px-4 py-3.5 font-bold text-[#395886]">
+                                <td className="break-words px-4 py-3.5 font-bold text-[#395886]">
                                     {detail.nama_mahasiswa}
                                 </td>
-                                <td className="px-4 py-3.5 font-medium text-[#395886]/80">
+                                <td className="break-words px-4 py-3.5 font-medium text-[#395886]/80">
                                     {detail.kelas}
                                 </td>
-                                <td className="px-4 py-3.5 font-medium text-[#395886]">
+                                <td className="break-words px-4 py-3.5 font-medium text-[#395886]">
                                     {detail.mata_kuliah}
                                 </td>
-                                <td className="px-4 py-3.5 text-xs text-[#395886]/80">
+                                <td className="break-words px-4 py-3.5 text-xs text-[#395886]/80">
                                     {detail.nama_dosen}
                                 </td>
-                                <td className="px-4 py-3.5 text-xs font-medium text-[#628ECB]">
+                                <td className="break-words px-4 py-3.5 text-xs font-medium text-[#628ECB]">
                                     {detail.jenis_pertemuan}
                                 </td>
                                 <td className="px-4 py-3.5 text-xs font-semibold text-[#395886]">
@@ -84,7 +84,7 @@ export function DetailTable({
                                 <td className="px-4 py-3.5 text-right font-mono text-xs text-[#395886] tabular-nums">
                                     {number(detail.jam_responsi)}
                                 </td>
-                                <td className="max-w-60 truncate px-4 py-3.5 text-xs text-[#395886]/70">
+                                <td className="break-words px-4 py-3.5 text-xs text-[#395886]/70">
                                     {detail.keterangan ?? "—"}
                                 </td>
                             </tr>

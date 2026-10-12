@@ -4,6 +4,7 @@ namespace App\Actions\KompenResponHub;
 
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Models\KompenResponHubActiveStudent;
+use App\Models\KompenResponHubActiveStudentImportSource;
 use App\Models\KompenResponHubStudentAccount;
 use Illuminate\Http\Request;
 
@@ -33,9 +34,13 @@ class SikompenStudentAccess
 
     public function activeStudentExists(string $nim): bool
     {
-        return KompenResponHubActiveStudent::query()
-            ->where('nim', $nim)
-            ->exists();
+        $students = KompenResponHubActiveStudent::query()->where('nim', $nim);
+
+        if (! KompenResponHubActiveStudentImportSource::query()->exists()) {
+            return $students->exists();
+        }
+
+        return $students->fromActiveRosterSources()->exists();
     }
 
     private function studentAccount(Request $request): ?KompenResponHubStudentAccount

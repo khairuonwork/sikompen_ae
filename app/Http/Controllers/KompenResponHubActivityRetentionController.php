@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\UpdateKompenResponHubActivityRetentionRequest;
+use App\Http\Requests\UpdateKompenResponHubImportAuditRetentionRequest;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubSystemSetting;
 use Illuminate\Http\RedirectResponse;
@@ -37,5 +38,35 @@ class KompenResponHubActivityRetentionController extends Controller
         );
 
         return back()->with('success', 'Retensi riwayat aktivitas berhasil diperbarui.');
+    }
+
+    public function updateImportAudit(
+        UpdateKompenResponHubImportAuditRetentionRequest $request,
+        SiAdminProxyAccess $access,
+        RecordKompenResponHubActivity $activity,
+    ): RedirectResponse {
+        $settings = KompenResponHubSystemSetting::current();
+        $previousRetentionDays = $settings->import_audit_log_retention_days;
+        $retentionDays = $request->integer('import_audit_log_retention_days');
+
+        $settings->update(['import_audit_log_retention_days' => $retentionDays]);
+
+        $actor = $access->actor($request);
+        $admin = is_int($actor['id'])
+            ? KompenResponHubAdmin::query()->find($actor['id'])
+            : null;
+        $activity->execute(
+            'maintenance.import_audit_log_retention_updated',
+            'system_setting',
+            'import_audit_log_retention',
+            $admin,
+            $request,
+            reason: "Retensi Log Upload diubah menjadi {$retentionDays} hari.",
+            beforeState: ['import_audit_log_retention_days' => $previousRetentionDays],
+            afterState: ['import_audit_log_retention_days' => $retentionDays],
+            subjectName: 'Retensi Log Upload',
+        );
+
+        return back()->with('success', 'Retensi Log Upload berhasil diperbarui.');
     }
 }

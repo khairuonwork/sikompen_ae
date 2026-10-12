@@ -2,6 +2,8 @@
 
 namespace App\Actions\KompenResponHub;
 
+use App\Models\KompenResponHubActiveStudentImport;
+use App\Models\KompenResponHubActiveStudentImportSource;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImport;
@@ -125,6 +127,28 @@ class KompenResponHubDataQuery
             ->has('activeReference')
             ->reorder()
             ->orderByDesc('periode_semester');
+    }
+
+    /** @return Builder<KompenResponHubActiveStudentImport> */
+    public function activeStudentImportVersions(): Builder
+    {
+        return KompenResponHubActiveStudentImport::query()
+            ->with([
+                'uploadedByAdmin:id,email',
+                'activeSources:id,periode_semester,kelas,sikompen_active_student_import_id,activated_at',
+            ])
+            ->orderByDesc('periode_semester')
+            ->orderByDesc('imported_at')
+            ->orderByDesc('id');
+    }
+
+    /** @return Builder<KompenResponHubActiveStudentImportSource> */
+    public function activeStudentImportSources(): Builder
+    {
+        return KompenResponHubActiveStudentImportSource::query()
+            ->with(['importBatch:id,original_filename,periode_semester,student_count,imported_at'])
+            ->orderByDesc('periode_semester')
+            ->orderBy('kelas');
     }
 
     /**

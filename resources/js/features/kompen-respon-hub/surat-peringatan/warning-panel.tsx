@@ -91,7 +91,7 @@ export function WarningTable({
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[850px] text-sm">
+                <table className="w-full min-w-[850px] table-fixed text-sm">
                     <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
                             <th className="px-4 py-3">Mahasiswa</th>
@@ -111,8 +111,8 @@ export function WarningTable({
                                     onSelect && "cursor-pointer",
                                 )}
                             >
-                                <td className="px-4 py-3">
-                                    <p className="font-bold text-[#395886]">
+                                <td className="break-words px-4 py-3">
+                                    <p className="break-words font-bold text-[#395886]">
                                         {warning.nama_mahasiswa}
                                     </p>
                                     <p className="font-mono text-xs text-[#628ECB]">
@@ -132,7 +132,7 @@ export function WarningTable({
                                         ),
                                     )}
                                 </td>
-                                <td className="max-w-xs px-4 py-3 text-xs text-[#395886]/70">
+                                <td className="break-words px-4 py-3 text-xs text-[#395886]/70">
                                     {warning.reason ?? "—"}
                                 </td>
                             </tr>
@@ -159,7 +159,7 @@ function WarningCandidateTable({
                 </p>
             </div>
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
+                <table className="w-full min-w-[760px] table-fixed text-sm">
                     <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
                             <th className="px-4 py-3">Mahasiswa</th>
@@ -172,8 +172,8 @@ function WarningCandidateTable({
                     <tbody className="divide-y divide-[#F0F3FA]">
                         {data.data.map((student) => (
                             <tr key={student.id} className="hover:bg-amber-50/50">
-                                <td className="px-4 py-3">
-                                    <p className="font-bold text-[#395886]">{student.nama_mahasiswa}</p>
+                                <td className="break-words px-4 py-3">
+                                    <p className="break-words font-bold text-[#395886]">{student.nama_mahasiswa}</p>
                                     <p className="font-mono text-xs text-[#628ECB]">{student.nim}</p>
                                 </td>
                                 <td className="px-4 py-3 text-xs font-semibold text-[#395886]">{student.kelas}</td>
@@ -526,6 +526,8 @@ export function WarningPanel({
                             type="button"
                             onClick={() => {
                                 setEditingCutoffPeriod(selectedWarningPeriod);
+
+
                                 setIsCutoffEditorOpen(true);
                             }}
                             className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"

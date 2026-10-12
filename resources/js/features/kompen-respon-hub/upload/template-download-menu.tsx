@@ -63,7 +63,7 @@ export function TemplateDownloadMenu(): React.JSX.Element {
                         <span className="grid gap-0.5">
                             <span className="font-bold">Mahasiswa Aktif</span>
                             <span className="text-xs text-[#395886]/65">
-                                Master NIM, nama mahasiswa, dan kelas.
+                                Roster mahasiswa aktif per periode dan blok kelas.
                             </span>
                         </span>
                     </a>

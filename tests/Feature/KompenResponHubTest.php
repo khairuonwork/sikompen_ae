@@ -32,10 +32,10 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use RuntimeException;
 use ZipArchive;
 
-test('student data routes require authenticated access', function () {
+test('the public student page is available while student APIs require authenticated access', function () {
     createStudent();
 
-    $this->get('/kompen-respon')->assertRedirect('/mahasiswa/login');
+    $this->get('/kompen-respon')->assertOk();
     $this->getJson('/api/kompen-respon/students?nama=Rina')->assertUnauthorized();
 
     $this->get('/admin/login')->assertOk();
@@ -320,6 +320,36 @@ test('an export filename captures active filters in a predictable order', functi
     );
 });
 
+test('an administrator can export upload logs with import type and period filters', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    KompenResponHubImportAuditLog::create([
+        'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
+        'import_type' => KompenResponHubImportAuditLog::ImportTypeActiveStudents,
+        'actor_name' => 'Admin Akademik',
+        'actor_email' => $admin->email,
+        'periode_semester' => '2027/2028 Gasal',
+        'original_filename' => 'roster-1aea1.xlsx',
+        'class_count' => 1,
+        'student_count' => 25,
+        'detail_count' => 0,
+        'occurred_at' => now(),
+    ]);
+    $task = KompenResponHubExportTask::factory()->create([
+        'resource' => 'import_audits',
+        'filters' => [
+            'import_type' => KompenResponHubImportAuditLog::ImportTypeActiveStudents,
+            'periode_semester' => '2027/2028 Gasal',
+        ],
+    ]);
+
+    $result = app(BuildKompenResponHubExport::class)->execute($task);
+
+    expect($result['download_filename'])
+        ->toBe("log-upload--periode-2027-2028-gasal--jenis-data-active-students--ekspor-{$task->id}.xlsx")
+        ->and(Storage::disk('local')->exists($result['output_path']))->toBeTrue();
+});
+
 test('a terminal export notification can be dismissed without deleting its audit task', function () {
     Queue::fake();
     $admin = KompenResponHubAdmin::factory()->create();
@@ -376,6 +406,42 @@ test('an admin can configure activity log retention and expired logs are purged'
     expect(KompenResponHubSystemSetting::current()->activity_log_retention_days)->toBe(30);
 
     $this->artisan('sikompen:purge-activity-logs')->assertSuccessful();
+
+    $this->assertModelMissing($expiredLog);
+    $this->assertModelExists($retainedLog);
+});
+
+test('an admin can configure upload log retention and expired upload logs are purged', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $expiredLog = KompenResponHubImportAuditLog::create([
+        'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
+        'import_type' => KompenResponHubImportAuditLog::ImportTypeKompenRespon,
+        'original_filename' => 'lama.xlsx',
+        'class_count' => 1,
+        'student_count' => 25,
+        'detail_count' => 10,
+        'occurred_at' => now()->subDays(31),
+    ]);
+    $retainedLog = KompenResponHubImportAuditLog::create([
+        'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
+        'import_type' => KompenResponHubImportAuditLog::ImportTypeKompenRespon,
+        'original_filename' => 'baru.xlsx',
+        'class_count' => 1,
+        'student_count' => 25,
+        'detail_count' => 10,
+        'occurred_at' => now()->subDays(29),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->put('/admin/kompen-respon/import-audit-retention', [
+            'import_audit_log_retention_days' => 30,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Retensi Log Upload berhasil diperbarui.');
+
+    expect(KompenResponHubSystemSetting::current()->import_audit_log_retention_days)->toBe(30);
+
+    $this->artisan('sikompen:purge-import-audit-logs')->assertSuccessful();
 
     $this->assertModelMissing($expiredLog);
     $this->assertModelExists($retainedLog);

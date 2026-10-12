@@ -6,7 +6,10 @@ use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Actions\KompenResponHub\ValidateKompenResponHubWorkbookArchive;
 use App\Jobs\ProcessKompenResponHubActiveStudentImport;
 use App\Models\KompenResponHubActiveStudent;
+use App\Models\KompenResponHubActiveStudentImport;
+use App\Models\KompenResponHubActiveStudentImportSource;
 use App\Models\KompenResponHubActiveStudentImportTask;
+use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImportAuditLog;
 use Illuminate\Http\UploadedFile;
@@ -23,7 +26,7 @@ test('an administrator can download the active student list template', function 
         ->assertDownload('Template_Daftar_Mahasiswa_Aktif_Sikompen.xlsx');
 });
 
-test('an administrator can queue an active student list import and replace the master list after validation', function () {
+test('an administrator can queue an active student list import and select it as the roster source for its classes', function () {
     Storage::fake('local');
     Queue::fake();
     $admin = KompenResponHubAdmin::factory()->create();
@@ -48,6 +51,9 @@ test('an administrator can queue an active student list import and replace the m
         ProcessKompenResponHubActiveStudentImport::class,
         fn (ProcessKompenResponHubActiveStudentImport $job): bool => $job->importTaskId === $task->id,
     );
+    expect($task->stored_path)
+        ->toStartWith('kompen-respon-hub/imports/active-students/')
+        ->and(Storage::disk('local')->exists($task->stored_path))->toBeTrue();
 
     (new ProcessKompenResponHubActiveStudentImport($task->id))->handle(
         app(ParseKompenResponHubActiveStudentWorkbook::class),
@@ -58,12 +64,32 @@ test('an administrator can queue an active student list import and replace the m
 
     $task->refresh();
 
+    $import = KompenResponHubActiveStudentImport::query()->latest('id')->firstOrFail();
+
     expect($task->status)->toBe(KompenResponHubActiveStudentImportTask::StatusCompleted)
-        ->and(KompenResponHubActiveStudent::query()->pluck('nim')->all())
-        ->toBe(['261000001', '261000002'])
+        ->and(KompenResponHubActiveStudent::query()->orderBy('nim')->pluck('nim')->all())
+        ->toBe(['111111111', '261000001', '261000002'])
         ->and(KompenResponHubImportAuditLog::query()
             ->where('import_type', KompenResponHubImportAuditLog::ImportTypeActiveStudents)
             ->where('original_filename', 'mahasiswa-aktif.xlsx')
+            ->exists())->toBeTrue()
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'active_students.imported')
+            ->where('reason', 'Versi daftar mahasiswa aktif ditambahkan dari file unggahan.')
+            ->where('periode_semester', '2027/2028 Gasal')
+            ->exists())->toBeTrue();
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/active-students/imports/{$import->id}/activate")
+        ->assertSessionHas('success');
+
+    expect(KompenResponHubActiveStudentImportSource::query()
+        ->where('periode_semester', '2027/2028 Gasal')
+        ->where('kelas', '1AEA1')
+        ->value('sikompen_active_student_import_id'))
+        ->toBe($import->id)
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'active_students.activated')
             ->exists())->toBeTrue();
 });
 
@@ -81,10 +107,13 @@ test('a duplicate NIM leaves the existing active student master list unchanged',
             'uploader_name' => 'Admin Akademik',
             'file' => UploadedFile::fake()->createWithContent(
                 'duplikat.xlsx',
-                activeStudentWorkbookContents([
-                    ['261000001', 'Alya Pratama', '1AEA1'],
-                    ['261000001', 'Alya Pratama', '1AEA1'],
-                ]),
+                activeStudentWorkbookContents(blocks: [[
+                    'kelas' => '1AEA1',
+                    'students' => [
+                        ['261000001', 'Alya Pratama'],
+                        ['261000001', 'Alya Pratama'],
+                    ],
+                ]]),
             ),
         ])
         ->assertRedirect('/admin?tab=upload');
@@ -97,13 +126,112 @@ test('a duplicate NIM leaves the existing active student master list unchanged',
         ->toBe(['111111111']);
 });
 
+test('the active student parser accepts repeatable class blocks for one period', function (): void {
+    Storage::fake('local');
+    $path = 'testing/mahasiswa-aktif-header-bergeser.xlsx';
+    Storage::disk('local')->put($path, activeStudentWorkbookContents(
+        blocks: [
+            [
+                'kelas' => '1AEA1',
+                'students' => [['261000001', 'Alya Pratama']],
+            ],
+            [
+                'kelas' => '1AEA2',
+                'students' => [['261000002', 'Bima Saputra']],
+            ],
+        ],
+        firstMarkerRow: 8,
+    ));
+
+    $payload = app(ParseKompenResponHubActiveStudentWorkbook::class)
+        ->execute(Storage::disk('local')->path($path));
+
+    expect($payload['errors'])->toBe([])
+        ->and($payload['students'])->toHaveCount(2)
+        ->and($payload['students'][0]['nim'])->toBe('261000001')
+        ->and($payload['students'][1]['kelas'])->toBe('1AEA2')
+        ->and($payload['preview']['periode_semester'])->toBe('2027/2028 Gasal');
+});
+
+test('active roster sources are selected independently for the same class across periods', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $gasalImport = KompenResponHubActiveStudentImport::factory()->create([
+        'periode_semester' => '2027/2028 Gasal',
+    ]);
+    $genapImport = KompenResponHubActiveStudentImport::factory()->create([
+        'periode_semester' => '2027/2028 Genap',
+    ]);
+    KompenResponHubActiveStudent::factory()->for($gasalImport, 'importBatch')->create([
+        'kelas' => '1AEA1',
+    ]);
+    KompenResponHubActiveStudent::factory()->for($genapImport, 'importBatch')->create([
+        'kelas' => '1AEA1',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/active-students/imports/{$gasalImport->id}/activate")
+        ->assertSessionHas('success');
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/active-students/imports/{$genapImport->id}/activate")
+        ->assertSessionHas('success');
+
+    expect(KompenResponHubActiveStudentImportSource::query()
+        ->where('kelas', '1AEA1')
+        ->orderBy('periode_semester')
+        ->pluck('periode_semester')
+        ->all())->toBe(['2027/2028 Gasal', '2027/2028 Genap']);
+});
+
+test('the active student parser rejects blocks that use different periods', function (): void {
+    Storage::fake('local');
+    $path = 'testing/mahasiswa-aktif-periode-berbeda.xlsx';
+    Storage::disk('local')->put($path, activeStudentWorkbookContents(blocks: [
+        [
+            'kelas' => '1AEA1',
+            'students' => [['261000001', 'Alya Pratama']],
+        ],
+        [
+            'kelas' => '1AEA2',
+            'semester' => 'Genap',
+            'students' => [['261000002', 'Bima Saputra']],
+        ],
+    ]));
+
+    $payload = app(ParseKompenResponHubActiveStudentWorkbook::class)
+        ->execute(Storage::disk('local')->path($path));
+
+    expect($payload['errors'])->toContain([
+        'location' => 'Mahasiswa Aktif',
+        'message' => 'Semua blok kelas harus menggunakan periode semester yang sama.',
+    ]);
+});
+
+test('the active student parser rejects formulas in a class block', function (): void {
+    Storage::fake('local');
+    $path = 'testing/mahasiswa-aktif-formula.xlsx';
+    Storage::disk('local')->put($path, activeStudentWorkbookContents(usesFormula: true));
+
+    $payload = app(ParseKompenResponHubActiveStudentWorkbook::class)
+        ->execute(Storage::disk('local')->path($path));
+
+    expect($payload['errors'])->toContain([
+        'location' => 'Mahasiswa Aktif!B6',
+        'message' => 'Formula tidak diizinkan dalam template daftar mahasiswa aktif.',
+    ]);
+});
+
 /**
- * @param  list<array{0: string, 1: string, 2: string}>  $rows
+ * @param  list<array{kelas: string, semester?: string, academic_year?: string, students: list<array{0: string, 1: string}>}>  $blocks
  */
-function activeStudentWorkbookContents(array $rows = [
-    ['261000001', 'Alya Pratama', '1AEA1'],
-    ['261000002', 'Bima Saputra', '1AEA1'],
-]): string
+function activeStudentWorkbookContents(array $blocks = [
+    [
+        'kelas' => '1AEA1',
+        'students' => [
+            ['261000001', 'Alya Pratama'],
+            ['261000002', 'Bima Saputra'],
+        ],
+    ],
+], int $firstMarkerRow = 3, bool $usesFormula = false): string
 {
     $workbook = new Spreadsheet;
     $guide = $workbook->getActiveSheet();
@@ -111,10 +239,28 @@ function activeStudentWorkbookContents(array $rows = [
     $guide->setCellValue('A1', 'Petunjuk');
     $students = $workbook->createSheet();
     $students->setTitle('Mahasiswa Aktif');
-    $students->fromArray([
-        ['NIM', 'Nama Mahasiswa', 'Kelas'],
-        ...$rows,
-    ], null, 'A5');
+    $row = $firstMarkerRow;
+
+    foreach ($blocks as $block) {
+        $class = $block['kelas'];
+        $semester = $block['semester'] ?? 'Gasal';
+        $academicYear = $block['academic_year'] ?? '2027/2028';
+        $students->setCellValue("A{$row}", "DAFTAR MAHASISWA AKTIF — {$class}");
+        $students->fromArray([
+            ['Periode', $semester, $academicYear, 'Kelas', $class, '', 'Tingkat', (int) $class[0]],
+            ['No.', 'NIM', 'Nama Mahasiswa'],
+        ], null, 'A'.($row + 1));
+
+        foreach ($block['students'] as $index => [$nim, $name]) {
+            $students->fromArray([[$index + 1, $nim, $name]], null, 'A'.($row + 3 + $index));
+        }
+
+        if ($usesFormula) {
+            $students->setCellValue('B'.($row + 3), '=261000001');
+        }
+
+        $row += max(7, count($block['students']) + 5);
+    }
 
     $writer = new Xlsx($workbook);
     ob_start();

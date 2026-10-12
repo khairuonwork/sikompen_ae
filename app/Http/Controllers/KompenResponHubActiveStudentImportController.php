@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\KompenResponHub\ActivateKompenResponHubActiveStudentImport;
+use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Actions\KompenResponHub\ValidateKompenResponHubWorkbookArchive;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\StoreKompenResponHubActiveStudentImportRequest;
@@ -9,8 +11,10 @@ use App\Http\Resources\KompenResponHubActiveStudentImportTaskResource;
 use App\Jobs\ProcessKompenResponHubActiveStudentImport;
 use App\Models\KompenResponHubActiveStudentImport;
 use App\Models\KompenResponHubActiveStudentImportTask;
+use App\Models\KompenResponHubAdmin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -31,7 +35,7 @@ class KompenResponHubActiveStudentImportController extends Controller
     public function downloadUploadedWorkbook(KompenResponHubActiveStudentImport $import): StreamedResponse
     {
         abort_unless(
-            str_starts_with($import->stored_path, 'kompen-respon-hub/active-student-imports/')
+            str_starts_with($import->stored_path, 'kompen-respon-hub/imports/active-students/')
                 && Storage::disk('local')->exists($import->stored_path),
             404,
             'File unggahan tidak tersedia.',
@@ -69,7 +73,7 @@ class KompenResponHubActiveStudentImportController extends Controller
             ]);
         }
 
-        $storedPath = $file->store('kompen-respon-hub/active-student-imports');
+        $storedPath = $file->store('kompen-respon-hub/imports/active-students');
 
         if ($storedPath === false) {
             throw ValidationException::withMessages([
@@ -99,6 +103,43 @@ class KompenResponHubActiveStudentImportController extends Controller
     public function showTask(KompenResponHubActiveStudentImportTask $task): JsonResponse
     {
         return (new KompenResponHubActiveStudentImportTaskResource($task))->response();
+    }
+
+    public function activate(
+        Request $request,
+        KompenResponHubActiveStudentImport $import,
+        SiAdminProxyAccess $access,
+        ActivateKompenResponHubActiveStudentImport $activator,
+        RecordKompenResponHubActivity $activity,
+    ): RedirectResponse {
+        $actor = $access->actor($request);
+        $admin = is_int($actor['id'])
+            ? KompenResponHubAdmin::query()->find($actor['id'])
+            : null;
+        try {
+            $result = $activator->execute(
+                $import,
+                $admin instanceof KompenResponHubAdmin ? $admin->email : $actor['email'],
+                $actor['email'],
+                $admin?->id,
+            );
+        } catch (\LogicException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        $activity->execute(
+            eventType: 'active_students.activated',
+            subjectType: 'active_student_import',
+            subjectReference: (string) $result['import_id'],
+            actor: $admin,
+            request: $request,
+            reason: "Daftar mahasiswa aktif {$result['periode_semester']} dipilih sebagai sumber kelas: ".implode(', ', $result['classes']).'.',
+            metadata: ['classes' => $result['classes'], 'original_filename' => $result['original_filename'], 'periode_semester' => $result['periode_semester']],
+            subjectName: $result['original_filename'],
+            period: $result['periode_semester'],
+        );
+
+        return back()->with('success', "Daftar mahasiswa aktif {$result['periode_semester']} sekarang digunakan untuk kelas: ".implode(', ', $result['classes']).'.');
     }
 
     private function safeDownloadFilename(KompenResponHubActiveStudentImport $import): string

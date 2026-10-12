@@ -34,7 +34,7 @@ function eventDescription(
     importType: ImportAuditLog["import_type"],
 ): string {
     if (eventType === "upload" && importType === "active_students") {
-        return "Daftar mahasiswa aktif disimpan sebagai master data terbaru.";
+        return "Versi daftar mahasiswa aktif disimpan dan siap dipilih per kelas.";
     }
 
     return {
@@ -71,7 +71,7 @@ export function ImportAuditLogTable({
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-sm">
+                <table className="w-full min-w-[900px] table-fixed text-sm">
                     <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
                             {headings.map((heading) => (
@@ -84,7 +84,7 @@ export function ImportAuditLogTable({
                     <tbody className="divide-y divide-[#F0F3FA]">
                         {data.data.map((auditLog) => (
                             <tr key={auditLog.id} className="hover:bg-[#B1C9EF]/10">
-                                <td className="px-4 py-3.5 whitespace-nowrap">
+                                <td className="break-words px-4 py-3.5">
                                     <span className={cn(
                                         "rounded-full px-2.5 py-1 text-[10px] font-black tracking-wider uppercase",
                                         auditLog.event_type === "upload" && "border border-emerald-200 bg-emerald-100 text-emerald-800",
@@ -100,16 +100,16 @@ export function ImportAuditLogTable({
                                         )}
                                     </p>
                                 </td>
-                                <td className="px-4 py-3.5">
+                                <td className="break-words px-4 py-3.5">
                                     <span className="rounded-full bg-[#F0F3FA] px-2.5 py-1 text-[10px] font-black tracking-wider text-[#395886] uppercase">
                                         {importTypeLabel(auditLog.import_type)}
                                     </span>
                                 </td>
-                                <td className="px-4 py-3.5 text-xs font-semibold text-[#628ECB]">
+                                <td className="break-words px-4 py-3.5 text-xs font-semibold text-[#628ECB]">
                                     {auditLog.periode_semester ?? "—"}
                                 </td>
-                                <td className="max-w-64 px-4 py-3.5">
-                                    <p className="truncate font-mono text-xs font-semibold text-[#395886]" title={auditLog.original_filename}>
+                                <td className="break-words px-4 py-3.5">
+                                    <p className="break-words font-mono text-xs font-semibold text-[#395886]" title={auditLog.original_filename}>
                                         {auditLog.original_filename}
                                     </p>
                                     <p className="mt-1 text-[11px] text-[#395886]/60">
@@ -118,9 +118,9 @@ export function ImportAuditLogTable({
                                             : `Diunggah ${formatJakartaDateTime(auditLog.version_imported_at)}`}
                                     </p>
                                 </td>
-                                <td className="px-4 py-3.5">
-                                    <p className="text-xs font-bold text-[#395886]">{auditLog.actor_name ?? "—"}</p>
-                                    <p className="text-[11px] text-[#395886]/60">{auditLog.actor_email ?? "—"}</p>
+                                <td className="break-words px-4 py-3.5">
+                                    <p className="break-words text-xs font-bold text-[#395886]">{auditLog.actor_name ?? "—"}</p>
+                                    <p className="break-all text-[11px] text-[#395886]/60">{auditLog.actor_email ?? "—"}</p>
                                 </td>
                                 <td className="px-4 py-3.5 text-xs whitespace-nowrap text-[#395886]">{formatJakartaDateTime(auditLog.occurred_at)}</td>
                                 <td className="px-4 py-3.5">

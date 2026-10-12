@@ -37,9 +37,9 @@ export function ActiveStudentUploadPanel({
                             Upload Daftar Mahasiswa Aktif
                         </CardTitle>
                         <CardDescription className="mt-1 text-xs leading-relaxed font-normal text-[#395886]/70 md:text-sm">
-                            Data ini menjadi master mahasiswa aktif untuk
-                            persiapan akun mahasiswa. Unggahan baru menggantikan
-                            daftar aktif sebelumnya setelah validasi berhasil.
+                            Upload roster mahasiswa aktif untuk satu periode.
+                            Setiap file tersimpan sebagai versi dan dapat dipilih
+                            di List File untuk kelas pada periode tersebut.
                         </CardDescription>
                     </div>
                 </div>
@@ -108,9 +108,10 @@ export function ActiveStudentUploadPanel({
                                     </span>
                                 </p>
                                 <p className="text-[11px] leading-tight font-medium text-[#395886]/60">
-                                    Kolom wajib: NIM, Nama Mahasiswa, dan Kelas.
-                                    NIM harus unik dan kode kelas mengikuti
-                                    format seperti 1AEA1.
+                                    Setiap workbook hanya untuk satu periode.
+                                    Tambahkan mahasiswa dalam blok per kelas:
+                                    isi B4 (Gasal/Genap), C4 (tahun ajaran), E4
+                                    (kelas), H4 (tingkat), lalu NIM dan nama.
                                 </p>
                                 {errors.file ? (
                                     <p className="text-xs font-bold text-rose-600">

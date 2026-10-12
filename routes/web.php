@@ -46,19 +46,17 @@ Route::middleware('sikompen.standalone')->group(function (): void {
 });
 
 Route::middleware('sikompen.proxy-session')->group(function (): void {
+    Route::get('mahasiswa', [KompenResponHubController::class, 'studentIndex'])
+        ->name('student.kompen-respon.index');
+    Route::get('kompen-respon', [KompenResponHubController::class, 'studentIndex'])
+        ->name('kompen-respon-hub.index');
+
     Route::middleware('sikompen.student')->group(function (): void {
         Route::get('mahasiswa/ganti-password', [StudentPasswordController::class, 'edit'])
             ->name('student.password.edit');
         Route::put('mahasiswa/ganti-password', [StudentPasswordController::class, 'update'])
             ->middleware('throttle:10,15')
             ->name('student.password.update');
-
-        Route::middleware('sikompen.student-password-changed')->group(function (): void {
-            Route::get('mahasiswa', [KompenResponHubController::class, 'studentIndex'])
-                ->name('student.kompen-respon.index');
-            Route::get('kompen-respon', [KompenResponHubController::class, 'studentIndex'])
-                ->name('kompen-respon-hub.index');
-        });
 
         Route::middleware('sikompen.standalone')->group(function (): void {
             Route::post('mahasiswa/logout', [StudentAuthenticationController::class, 'destroy'])
@@ -102,6 +100,9 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
             ->name('kompen-respon.active-students.imports.store');
         Route::get('kompen-respon/active-students/imports/{import}/download', [KompenResponHubActiveStudentImportController::class, 'downloadUploadedWorkbook'])
             ->name('kompen-respon.active-students.imports.download');
+        Route::post('kompen-respon/active-students/imports/{import}/activate', [KompenResponHubActiveStudentImportController::class, 'activate'])
+            ->middleware('throttle:5,15')
+            ->name('kompen-respon.active-students.imports.activate');
         Route::get('kompen-respon/active-students/import-tasks/{task}', [KompenResponHubActiveStudentImportController::class, 'showTask'])
             ->name('kompen-respon.active-students.import-tasks.show');
         Route::post('kompen-respon/imports', [KompenResponHubImportController::class, 'store'])
@@ -147,6 +148,9 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
         Route::put('kompen-respon/activity-retention', [KompenResponHubActivityRetentionController::class, 'update'])
             ->middleware('throttle:10,1')
             ->name('kompen-respon.activity-retention.update');
+        Route::put('kompen-respon/import-audit-retention', [KompenResponHubActivityRetentionController::class, 'updateImportAudit'])
+            ->middleware('throttle:10,1')
+            ->name('kompen-respon.import-audit-retention.update');
         Route::middleware('sikompen.standalone')->group(function (): void {
             Route::get('settings', [KompenResponHubAdminSetupController::class, 'settings'])->name('settings');
             Route::post('settings/admin-setup', [KompenResponHubAdminSetupController::class, 'enable'])

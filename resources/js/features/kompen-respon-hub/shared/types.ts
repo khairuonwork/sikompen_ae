@@ -144,6 +144,32 @@ export type ImportVersion = {
     } | null;
 };
 
+export type ActiveStudentImportVersion = {
+    id: number;
+    original_filename: string;
+    periode_semester: string | null;
+    student_count: number;
+    class_count: number;
+    uploader_name: string;
+    uploader_email: string | null;
+    imported_at: string;
+    active_classes: string[];
+};
+
+export type ActiveStudentImportSource = {
+    id: number;
+    periode_semester: string | null;
+    kelas: string;
+    activated_at: string;
+    import: {
+        id: number;
+        original_filename: string;
+        periode_semester: string | null;
+        student_count: number;
+        imported_at: string;
+    };
+};
+
 export type ImportTask = {
     id: number;
     import_type: "kompen_respon" | "active_students";
@@ -159,7 +185,7 @@ export type ImportTask = {
 export type ExportTask = {
     id: number;
     access_token: string;
-    resource: "students" | "details" | "warnings";
+    resource: "students" | "details" | "warnings" | "import_audits";
     format: "xlsx" | "pdf";
     status: "queued" | "processing" | "completed" | "failed" | "cancelled";
     progress: number;
@@ -269,11 +295,14 @@ export type KompenResponHubPageProps = {
     imports: Pagination<ImportAuditLog> | null;
     importVersions: Pagination<ImportVersion> | null;
     activeImportVersions: ImportVersion[];
+    activeStudentImportVersions: ActiveStudentImportVersion[];
+    activeStudentImportSources: ActiveStudentImportSource[];
     warnings: Pagination<Warning> | null;
     warningCandidates: Pagination<Student> | null;
     rolledBackWarnings: Pagination<Warning> | null;
     activityLogs: Pagination<ActivityLog> | null;
     activityRetentionDays: number | null;
+    importAuditRetentionDays: number | null;
     cutoffs: Cutoff[];
     activeImportTasks: ImportTask[];
     exportTasks: ExportTask[];

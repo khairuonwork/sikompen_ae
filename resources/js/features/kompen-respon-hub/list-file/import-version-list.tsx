@@ -128,7 +128,7 @@ export function ImportVersionList({
                     </Button>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1080px] text-sm">
+                    <table className="w-full min-w-[1080px] table-fixed text-sm">
                         <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                             <tr>
                                 <th className="px-4 py-3.5">Periode</th>
@@ -145,8 +145,8 @@ export function ImportVersionList({
                                     <td className="px-4 py-3.5 text-xs font-bold text-[#395886]">
                                         {version.periode_semester}
                                     </td>
-                                    <td className="max-w-72 px-4 py-3.5">
-                                        <p className="truncate font-mono text-xs font-bold text-[#395886]" title={version.display_filename}>
+                                    <td className="break-words px-4 py-3.5">
+                                        <p className="break-words font-mono text-xs font-bold text-[#395886]" title={version.display_filename}>
                                             {version.display_filename}
                                         </p>
                                         <p className="mt-1 text-[11px] text-[#395886]/60">
@@ -156,7 +156,7 @@ export function ImportVersionList({
                                     <td className="px-4 py-3.5 text-xs text-[#395886]">
                                         {formatJakartaDateTime(version.imported_at)}
                                     </td>
-                                    <td className="px-4 py-3.5 text-xs font-semibold text-[#395886] tabular-nums">
+                                    <td className="break-words px-4 py-3.5 text-xs font-semibold text-[#395886] tabular-nums">
                                         {version.class_count} kelas · {version.student_count} mahasiswa · {version.detail_count} detail
                                     </td>
                                     <td className="px-4 py-3.5">

@@ -38,7 +38,7 @@ export function StudentTable({
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-all duration-300">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1150px] text-sm">
+                <table className="w-full min-w-[1150px] table-fixed text-sm">
                     <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
                             {headings.map((heading) => (
@@ -67,13 +67,13 @@ export function StudentTable({
                                 <td className="px-4 py-3.5 font-mono text-xs font-bold text-[#395886]">
                                     {student.nim}
                                 </td>
-                                <td className="px-4 py-3.5 font-bold text-[#395886]">
+                                <td className="break-words px-4 py-3.5 font-bold text-[#395886]">
                                     {student.nama_mahasiswa}
                                 </td>
-                                <td className="px-4 py-3.5 font-medium text-[#395886]/80">
+                                <td className="break-words px-4 py-3.5 font-medium text-[#395886]/80">
                                     {student.kelas}
                                 </td>
-                                <td className="px-4 py-3.5 text-xs font-semibold text-[#628ECB]">
+                                <td className="break-words px-4 py-3.5 text-xs font-semibold text-[#628ECB]">
                                     {student.periode_semester}
                                 </td>
                                 <td className="px-4 py-3.5">

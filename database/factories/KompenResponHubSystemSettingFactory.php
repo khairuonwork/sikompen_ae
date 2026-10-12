@@ -19,6 +19,7 @@ class KompenResponHubSystemSettingFactory extends Factory
     {
         return [
             'activity_log_retention_days' => 365,
+            'import_audit_log_retention_days' => 365,
         ];
     }
 }

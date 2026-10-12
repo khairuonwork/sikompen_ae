@@ -20,7 +20,7 @@ class StoreKompenResponHubExportRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'resource' => ['required', 'in:students,details,warnings'],
+            'resource' => ['required', 'in:students,details,warnings,import_audits'],
             'format' => ['required', 'in:xlsx,pdf'],
             'nim' => ['nullable', 'string', 'regex:/^[0-9]{9,20}$/'],
             'nama' => ['nullable', 'string', 'max:100', new SafeSearchTerm],
@@ -30,6 +30,9 @@ class StoreKompenResponHubExportRequest extends FormRequest
             'periode_semester' => ['nullable', 'string', 'max:50'],
             'mata_kuliah' => ['nullable', 'string', 'max:100', new SafeSearchTerm],
             'nama_dosen' => ['nullable', 'string', 'max:100', new SafeSearchTerm],
+            'import_type' => ['nullable', 'in:kompen_respon,active_students'],
+            'import_month' => ['nullable', 'date_format:Y-m'],
+            'import_year' => ['nullable', 'integer', 'between:2020,2100'],
         ];
     }
 }

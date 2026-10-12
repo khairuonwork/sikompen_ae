@@ -28,9 +28,9 @@ class KompenResponHubExportController extends Controller
             ? $access->actor($request)
             : ['id' => null];
         $validated = $request->validated();
-        abort_if($validated['resource'] === 'warnings' && ! $access->hasAdminAccess($request), 403);
+        abort_if(in_array($validated['resource'], ['warnings', 'import_audits'], true) && ! $access->hasAdminAccess($request), 403);
         $filters = collect($validated)
-            ->only(['nim', 'nama', 'search', 'kelas', 'tingkat', 'periode_semester', 'mata_kuliah', 'nama_dosen'])
+            ->only(['nim', 'nama', 'search', 'kelas', 'tingkat', 'periode_semester', 'mata_kuliah', 'nama_dosen', 'import_type', 'import_month', 'import_year'])
             ->filter(fn (mixed $value): bool => filled($value))
             ->all();
         $studentNim = $studentAccess->studentNim($request);

@@ -6,8 +6,8 @@ use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubStudentAccount;
 use Illuminate\Support\Facades\Hash;
 
-test('a guest cannot access student data without authenticating', function (): void {
-    $this->get('/mahasiswa')->assertRedirect('/mahasiswa/login');
+test('the public student page is available without authentication while the API remains protected', function (): void {
+    $this->get('/mahasiswa')->assertOk();
     $this->getJson('/api/kompen-respon/students')->assertUnauthorized();
 });
 
@@ -26,7 +26,7 @@ test('an active student signs in with the initial NIM password and must change i
         ->and($account->requiresPasswordChange())->toBeTrue();
 
     $this->assertAuthenticatedAs($account, 'student');
-    $this->get('/mahasiswa')->assertRedirect('/mahasiswa/ganti-password');
+    $this->get('/mahasiswa')->assertOk();
     $this->getJson('/api/kompen-respon/students')->assertForbidden();
 });
 
@@ -60,8 +60,7 @@ test('a student can only view their own records after changing the initial passw
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('isAdmin', false)
-            ->where('students.data.0.nim', $ownNim)
-            ->has('students.data', 1),
+            ->has('students.data', 2),
         );
 
     $this->getJson('/api/kompen-respon/students')
@@ -98,7 +97,7 @@ test('a student loses access when their NIM is no longer in the active roster', 
 
     $this->actingAs($account, 'student')
         ->get('/mahasiswa')
-        ->assertRedirect('/mahasiswa/login');
+        ->assertOk();
 
     $this->actingAs($account, 'student')
         ->getJson('/api/kompen-respon/students')

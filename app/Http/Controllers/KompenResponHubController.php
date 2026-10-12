@@ -7,6 +7,8 @@ use App\Actions\KompenResponHub\SikompenStudentAccess;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
 use App\Http\Requests\SearchKompenResponHubStudentRequest;
+use App\Http\Resources\KompenResponHubActiveStudentImportResource;
+use App\Http\Resources\KompenResponHubActiveStudentImportSourceResource;
 use App\Http\Resources\KompenResponHubActiveStudentImportTaskResource;
 use App\Http\Resources\KompenResponHubActivityLogResource;
 use App\Http\Resources\KompenResponHubDetailResource;
@@ -43,12 +45,12 @@ class KompenResponHubController extends Controller
 
     public function studentIndex(KompenResponHubTableRequest $request): Response
     {
-        return $this->index($request, false);
+        return $this->index($request, false, false);
     }
 
     public function adminIndex(KompenResponHubTableRequest $request): Response
     {
-        return $this->index($request, true);
+        return $this->index($request, true, false);
     }
 
     public function students(KompenResponHubTableRequest $request): JsonResponse
@@ -147,9 +149,12 @@ class KompenResponHubController extends Controller
         return response()->json($this->dataQuery->filterOptions($this->filtersForRequest($request)));
     }
 
-    private function index(KompenResponHubTableRequest $request, bool $isAdmin): Response
-    {
-        $filters = $this->filtersForRequest($request);
+    private function index(
+        KompenResponHubTableRequest $request,
+        bool $isAdmin,
+        bool $scopeToAuthenticatedStudent,
+    ): Response {
+        $filters = $this->filtersForRequest($request, $scopeToAuthenticatedStudent);
         $filterOptions = $this->dataQuery->filterOptions($filters);
         $activeTab = $filters['tab'] ?? 'students';
         if (! $isAdmin && in_array($activeTab, ['upload', 'files', 'imports', 'warnings', 'activity'], true)) {
@@ -226,6 +231,9 @@ class KompenResponHubController extends Controller
             'activityRetentionDays' => $isAdmin
                 ? KompenResponHubSystemSetting::current()->activity_log_retention_days
                 : null,
+            'importAuditRetentionDays' => $isAdmin
+                ? KompenResponHubSystemSetting::current()->import_audit_log_retention_days
+                : null,
             'students' => $activeTab === 'students'
                 ? $this->resourcePaginator(
                     $this->dataQuery->students($filters)->paginate($this->perPage($filters))->withQueryString(),
@@ -257,6 +265,16 @@ class KompenResponHubController extends Controller
             'activeImportVersions' => $isAdmin && $activeTab === 'files'
                 ? KompenResponHubImportVersionResource::collection(
                     $this->dataQuery->activeImportVersions()->get(),
+                )->resolve()
+                : [],
+            'activeStudentImportVersions' => $isAdmin && $activeTab === 'files'
+                ? KompenResponHubActiveStudentImportResource::collection(
+                    $this->dataQuery->activeStudentImportVersions()->limit(100)->get(),
+                )->resolve()
+                : [],
+            'activeStudentImportSources' => $isAdmin && $activeTab === 'files'
+                ? KompenResponHubActiveStudentImportSourceResource::collection(
+                    $this->dataQuery->activeStudentImportSources()->get(),
                 )->resolve()
                 : [],
             'warnings' => $isAdmin && $activeTab === 'warnings'
@@ -349,7 +367,7 @@ class KompenResponHubController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function filtersForRequest(KompenResponHubTableRequest $request): array
+    private function filtersForRequest(KompenResponHubTableRequest $request, bool $scopeToAuthenticatedStudent = true): array
     {
         $filters = $request->validated();
 
@@ -366,7 +384,9 @@ class KompenResponHubController extends Controller
             ? $requestedPerPage
             : 15;
 
-        $studentNim = $this->studentAccess->studentNim($request);
+        $studentNim = $scopeToAuthenticatedStudent
+            ? $this->studentAccess->studentNim($request)
+            : null;
 
         if ($studentNim !== null) {
             $filters['nim'] = $studentNim;

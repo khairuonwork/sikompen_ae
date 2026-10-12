@@ -74,7 +74,7 @@ class ProcessKompenResponHubActiveStudentImport implements ShouldQueue
             $task,
             KompenResponHubActiveStudentImportTask::StatusProcessing,
             60,
-            'Memvalidasi NIM, nama, dan kelas mahasiswa aktif.',
+            'Memvalidasi periode, kelas, NIM, dan nama mahasiswa aktif.',
         );
 
         $this->updateProgress(
@@ -95,17 +95,17 @@ class ProcessKompenResponHubActiveStudentImport implements ShouldQueue
         );
 
         $activity->execute(
-            'active_students.imported',
-            'active_student_import',
-            (string) $result['import_id'],
-            KompenResponHubAdmin::query()->find($task->uploaded_by_admin_id),
-            null,
-            null,
-            'Daftar mahasiswa aktif diperbarui dari file unggahan.',
+            eventType: 'active_students.imported',
+            subjectType: 'active_student_import',
+            subjectReference: (string) $result['import_id'],
+            actor: KompenResponHubAdmin::query()->find($task->uploaded_by_admin_id),
+            reason: 'Versi daftar mahasiswa aktif ditambahkan dari file unggahan.',
+            period: $result['periode_semester'],
             metadata: [
                 'student_count' => $result['student_count'],
                 'class_count' => $result['class_count'],
                 'original_filename' => $task->original_filename,
+                'periode_semester' => $result['periode_semester'],
             ],
             subjectName: $task->original_filename,
         );
@@ -114,7 +114,7 @@ class ProcessKompenResponHubActiveStudentImport implements ShouldQueue
             $task,
             KompenResponHubActiveStudentImportTask::StatusCompleted,
             100,
-            "Selesai: {$result['student_count']} mahasiswa aktif pada {$result['class_count']} kelas siap digunakan.",
+            "Selesai: {$result['student_count']} mahasiswa aktif pada {$result['class_count']} kelas untuk {$result['periode_semester']} siap digunakan.",
             [
                 'sikompen_active_student_import_id' => $result['import_id'],
                 'completed_at' => now(),

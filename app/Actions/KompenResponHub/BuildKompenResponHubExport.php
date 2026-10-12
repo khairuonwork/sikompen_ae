@@ -4,6 +4,7 @@ namespace App\Actions\KompenResponHub;
 
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubExportTask;
+use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubWarningLetter;
 use DomainException;
@@ -71,9 +72,9 @@ class BuildKompenResponHubExport
     }
 
     /**
-     * @param  'students'|'details'|'warnings'  $resource
+     * @param  'students'|'details'|'warnings'|'import_audits'  $resource
      * @param  array<string, mixed>  $filters
-     * @return Collection<int, KompenResponHubStudent>|Collection<int, KompenResponHubDetail>|Collection<int, KompenResponHubWarningLetter>
+     * @return Collection<int, KompenResponHubStudent>|Collection<int, KompenResponHubDetail>|Collection<int, KompenResponHubWarningLetter>|Collection<int, KompenResponHubImportAuditLog>
      */
     private function records(KompenResponHubExportTask $task, string $resource, array $filters): Collection
     {
@@ -81,6 +82,7 @@ class BuildKompenResponHubExport
             'students' => $this->studentRecords($task, $filters),
             'details' => $this->detailRecords($task, $filters),
             'warnings' => $this->warningRecords($task, $filters),
+            'import_audits' => $this->importAuditRecords($task, $filters),
         };
     }
 
@@ -130,6 +132,21 @@ class BuildKompenResponHubExport
     }
 
     /**
+     * @param  array<string, mixed>  $filters
+     * @return Collection<int, KompenResponHubImportAuditLog>
+     */
+    private function importAuditRecords(KompenResponHubExportTask $task, array $filters): Collection
+    {
+        $query = $this->dataQuery->importAuditLogs($filters);
+
+        if ($task->format === 'pdf') {
+            return $query->get();
+        }
+
+        return $this->limitedSpreadsheetRecords($task, $query->limit($this->maximumRowsFor($task->format) + 1)->get());
+    }
+
+    /**
      * @template TModel of Model
      *
      * @param  Collection<int, TModel>  $records
@@ -170,6 +187,9 @@ class BuildKompenResponHubExport
             'search' => 'pencarian',
             'mata_kuliah' => 'mata-kuliah',
             'nama_dosen' => 'dosen',
+            'import_type' => 'jenis-data',
+            'import_month' => 'bulan',
+            'import_year' => 'tahun',
         ];
 
         $segments = [$resourceSlug];
@@ -194,7 +214,7 @@ class BuildKompenResponHubExport
     }
 
     /**
-     * @param  'students'|'details'|'warnings'  $resource
+     * @param  'students'|'details'|'warnings'|'import_audits'  $resource
      * @return array{slug: string, title: string, columns: list<array{field: string, heading: string, type: 'text'|'integer'|'hours'|'date', width: int}>}
      */
     private function definition(string $resource): array
@@ -215,13 +235,18 @@ class BuildKompenResponHubExport
                 'title' => 'Surat Peringatan',
                 'columns' => $this->warningColumns(),
             ],
+            'import_audits' => [
+                'slug' => 'log-upload',
+                'title' => 'Log Upload',
+                'columns' => $this->importAuditColumns(),
+            ],
         };
     }
 
-    /** @return 'students'|'details'|'warnings' */
+    /** @return 'students'|'details'|'warnings'|'import_audits' */
     private function validatedResource(string $resource): string
     {
-        if (! in_array($resource, ['students', 'details', 'warnings'], true)) {
+        if (! in_array($resource, ['students', 'details', 'warnings', 'import_audits'], true)) {
             throw new \InvalidArgumentException('Unsupported export resource.');
         }
 
@@ -229,7 +254,7 @@ class BuildKompenResponHubExport
     }
 
     /**
-     * @param  Collection<int, KompenResponHubStudent>|Collection<int, KompenResponHubDetail>|Collection<int, KompenResponHubWarningLetter>  $records
+     * @param  Collection<int, KompenResponHubStudent>|Collection<int, KompenResponHubDetail>|Collection<int, KompenResponHubWarningLetter>|Collection<int, KompenResponHubImportAuditLog>  $records
      * @param  list<array{field: string, heading: string, type: 'text'|'integer'|'hours'|'date', width: int}>  $columns
      */
     private function writeSpreadsheet(string $path, string $title, string $period, Collection $records, array $columns): void
@@ -268,7 +293,7 @@ class BuildKompenResponHubExport
     }
 
     /**
-     * @param  Collection<int, KompenResponHubStudent>|Collection<int, KompenResponHubDetail>|Collection<int, KompenResponHubWarningLetter>  $records
+     * @param  Collection<int, KompenResponHubStudent>|Collection<int, KompenResponHubDetail>|Collection<int, KompenResponHubWarningLetter>|Collection<int, KompenResponHubImportAuditLog>  $records
      * @param  list<array{field: string, heading: string, type: 'text'|'integer'|'hours'|'date', width: int}>  $columns
      */
     private function writePdf(string $path, string $title, string $period, Collection $records, array $columns): void
@@ -386,6 +411,23 @@ class BuildKompenResponHubExport
             ['field' => 'snapshot.sisa_hutang_jam', 'heading' => 'Sisa[j]', 'type' => 'hours', 'width' => 13],
             ['field' => 'issued_at', 'heading' => 'Diterbitkan', 'type' => 'date', 'width' => 16],
             ['field' => 'reason', 'heading' => 'Catatan', 'type' => 'text', 'width' => 30],
+        ];
+    }
+
+    /** @return list<array{field: string, heading: string, type: 'text'|'integer'|'hours'|'date', width: int}> */
+    private function importAuditColumns(): array
+    {
+        return [
+            ['field' => 'event_type', 'heading' => 'Aksi', 'type' => 'text', 'width' => 18],
+            ['field' => 'import_type', 'heading' => 'Jenis Data', 'type' => 'text', 'width' => 20],
+            ['field' => 'periode_semester', 'heading' => 'Periode', 'type' => 'text', 'width' => 20],
+            ['field' => 'original_filename', 'heading' => 'Nama File', 'type' => 'text', 'width' => 36],
+            ['field' => 'actor_name', 'heading' => 'Pelaksana', 'type' => 'text', 'width' => 22],
+            ['field' => 'actor_email', 'heading' => 'Email Pelaksana', 'type' => 'text', 'width' => 28],
+            ['field' => 'class_count', 'heading' => 'Kelas', 'type' => 'integer', 'width' => 10],
+            ['field' => 'student_count', 'heading' => 'Mahasiswa', 'type' => 'integer', 'width' => 14],
+            ['field' => 'detail_count', 'heading' => 'Detail', 'type' => 'integer', 'width' => 12],
+            ['field' => 'occurred_at', 'heading' => 'Waktu Tindakan', 'type' => 'date', 'width' => 22],
         ];
     }
 }
