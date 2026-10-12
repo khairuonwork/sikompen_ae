@@ -18,6 +18,7 @@ class KompenResponHubImportTaskResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'import_type' => 'kompen_respon',
             'original_filename' => $this->original_filename,
             'status' => $this->status,
             'progress' => $this->progress,

@@ -50,6 +50,10 @@ class KompenResponHubActivityLogResource extends JsonResource
             return 'Workbook: '.($this->subject_name ?? $this->metadataFilename() ?? 'Tidak diketahui');
         }
 
+        if (in_array($this->subject_type, ['active_student_import', 'active_student_import_task'], true)) {
+            return 'Daftar mahasiswa aktif: '.($this->subject_name ?? $this->metadataFilename() ?? 'Tidak diketahui');
+        }
+
         if ($this->subject_type === 'export') {
             return "Ekspor: {$this->exportResourceLabel()} ({$this->exportFormatLabel()})";
         }

@@ -1,0 +1,199 @@
+<?php
+
+namespace App\Jobs;
+
+use App\Actions\KompenResponHub\ImportKompenResponHubActiveStudents;
+use App\Actions\KompenResponHub\ParseKompenResponHubActiveStudentWorkbook;
+use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Actions\KompenResponHub\ValidateKompenResponHubWorkbookArchive;
+use App\Models\KompenResponHubActiveStudentImportTask;
+use App\Models\KompenResponHubAdmin;
+use Carbon\CarbonInterface;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Storage;
+use Throwable;
+
+class ProcessKompenResponHubActiveStudentImport implements ShouldQueue
+{
+    use Queueable;
+
+    public int $timeout = 600;
+
+    public int $tries = 1;
+
+    public bool $failOnTimeout = true;
+
+    public function __construct(public int $importTaskId) {}
+
+    public function handle(
+        ParseKompenResponHubActiveStudentWorkbook $parser,
+        ImportKompenResponHubActiveStudents $importer,
+        RecordKompenResponHubActivity $activity,
+        ValidateKompenResponHubWorkbookArchive $archiveValidator,
+    ): void {
+        $task = KompenResponHubActiveStudentImportTask::query()->find($this->importTaskId);
+
+        if ($task === null || ! $task->isActive()) {
+            return;
+        }
+
+        $this->updateProgress(
+            $task,
+            KompenResponHubActiveStudentImportTask::StatusProcessing,
+            15,
+            'Membaca daftar mahasiswa aktif.',
+            ['started_at' => now()],
+        );
+
+        try {
+            $path = Storage::disk('local')->path($task->stored_path);
+            $archiveValidator->execute($path);
+            $payload = $parser->execute($path);
+        } catch (\InvalidArgumentException $exception) {
+            $this->markAsFailed($task, $exception->getMessage(), $activity);
+
+            return;
+        } catch (Throwable) {
+            $this->markAsFailed(
+                $task,
+                'Daftar mahasiswa aktif tidak dapat dibaca. Simpan ulang sebagai XLSX dari template lalu unggah kembali.',
+                $activity,
+            );
+
+            return;
+        }
+
+        if ($payload['errors'] !== []) {
+            $this->markAsFailed($task, $this->validationErrorMessage($payload['errors']), $activity);
+
+            return;
+        }
+
+        $this->updateProgress(
+            $task,
+            KompenResponHubActiveStudentImportTask::StatusProcessing,
+            60,
+            'Memvalidasi NIM, nama, dan kelas mahasiswa aktif.',
+        );
+
+        $this->updateProgress(
+            $task,
+            KompenResponHubActiveStudentImportTask::StatusProcessing,
+            80,
+            'Memperbarui daftar mahasiswa aktif.',
+        );
+
+        $result = $importer->execute(
+            $payload,
+            $task->original_filename,
+            $task->stored_path,
+            $task->file_hash,
+            (int) $task->uploaded_by_admin_id,
+            $task->uploader_name,
+            (string) $task->uploader_email,
+        );
+
+        $activity->execute(
+            'active_students.imported',
+            'active_student_import',
+            (string) $result['import_id'],
+            KompenResponHubAdmin::query()->find($task->uploaded_by_admin_id),
+            null,
+            null,
+            'Daftar mahasiswa aktif diperbarui dari file unggahan.',
+            metadata: [
+                'student_count' => $result['student_count'],
+                'class_count' => $result['class_count'],
+                'original_filename' => $task->original_filename,
+            ],
+            subjectName: $task->original_filename,
+        );
+
+        $this->updateProgress(
+            $task,
+            KompenResponHubActiveStudentImportTask::StatusCompleted,
+            100,
+            "Selesai: {$result['student_count']} mahasiswa aktif pada {$result['class_count']} kelas siap digunakan.",
+            [
+                'sikompen_active_student_import_id' => $result['import_id'],
+                'completed_at' => now(),
+            ],
+        );
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        $task = KompenResponHubActiveStudentImportTask::query()->find($this->importTaskId);
+
+        if ($task === null || $task->status === KompenResponHubActiveStudentImportTask::StatusCompleted) {
+            return;
+        }
+
+        $this->markAsFailed(
+            $task,
+            'Proses impor daftar mahasiswa aktif berhenti karena terjadi kendala pada server. Silakan unggah kembali atau hubungi administrator.',
+            app(RecordKompenResponHubActivity::class),
+        );
+    }
+
+    /**
+     * @param  array{started_at?: CarbonInterface, completed_at?: CarbonInterface, sikompen_active_student_import_id?: int, failed_at?: CarbonInterface}  $additionalAttributes
+     */
+    private function updateProgress(
+        KompenResponHubActiveStudentImportTask $task,
+        string $status,
+        int $progress,
+        string $message,
+        array $additionalAttributes = [],
+    ): void {
+        $task->update([
+            'status' => $status,
+            'progress' => $progress,
+            'progress_message' => $message,
+            ...$additionalAttributes,
+        ]);
+    }
+
+    /** @param list<array{location: string, message: string}> $errors */
+    private function validationErrorMessage(array $errors): string
+    {
+        return 'Daftar mahasiswa aktif perlu diperbaiki. '.collect($errors)
+            ->take(5)
+            ->map(fn (array $error): string => "{$error['location']}: {$error['message']}")
+            ->implode(' ');
+    }
+
+    private function markAsFailed(
+        KompenResponHubActiveStudentImportTask $task,
+        string $message,
+        RecordKompenResponHubActivity $activity,
+    ): void {
+        if (! $task->isActive()) {
+            return;
+        }
+
+        $this->updateProgress(
+            $task,
+            KompenResponHubActiveStudentImportTask::StatusFailed,
+            100,
+            'Impor daftar mahasiswa aktif gagal. Periksa keterangan di bawah.',
+            [
+                'error_message' => $message,
+                'failed_at' => now(),
+            ],
+        );
+
+        Storage::disk('local')->delete($task->stored_path);
+
+        $activity->execute(
+            'active_students.import_failed',
+            'active_student_import_task',
+            (string) $task->id,
+            KompenResponHubAdmin::query()->find($task->uploaded_by_admin_id),
+            reason: $message,
+            metadata: ['original_filename' => $task->original_filename],
+            subjectName: $task->original_filename,
+        );
+    }
+}

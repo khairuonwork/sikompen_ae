@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { showTask as activeStudentImportTaskStatus } from "@/actions/App/Http/Controllers/KompenResponHubActiveStudentImportController";
 import { show as importTaskStatus } from "@/actions/App/Http/Controllers/KompenResponHubImportTaskController";
 import type { ImportTask } from "../shared/types";
 import { ProgressBar } from "../shared/components/progress-bar";
@@ -10,14 +11,14 @@ export function ImportProgressPanel({
     initialImportTasks: ImportTask[];
 }): React.JSX.Element | null {
     const [importTasks, setImportTasks] = useState(initialImportTasks);
-    const notifiedFailedTaskIds = useRef<Set<number>>(new Set());
+    const notifiedFailedTaskIds = useRef<Set<string>>(new Set());
     const activeTaskIds = importTasks
         .filter(
             (importTask) =>
                 importTask.status === "queued" ||
                 importTask.status === "processing",
         )
-        .map((importTask) => importTask.id);
+        .map((importTask) => `${importTask.import_type}:${importTask.id}`);
     const activeTaskKey = activeTaskIds.join(",");
 
     useEffect(() => {
@@ -34,27 +35,39 @@ export function ImportProgressPanel({
         const refreshProgress = async (): Promise<void> => {
             try {
                 const updatedTasks = await Promise.all(
-                    activeTaskIds.map(async (importTaskId) => {
-                        const response = await fetch(
-                            importTaskStatus.url(importTaskId),
-                            {
-                                credentials: "same-origin",
-                                headers: {
-                                    Accept: "application/json",
-                                    "X-Requested-With": "XMLHttpRequest",
+                    importTasks
+                        .filter(
+                            (importTask) =>
+                                importTask.status === "queued" ||
+                                importTask.status === "processing",
+                        )
+                        .map(async (importTask) => {
+                            const response = await fetch(
+                                importTask.import_type === "active_students"
+                                    ? activeStudentImportTaskStatus.url(
+                                          importTask.id,
+                                      )
+                                    : importTaskStatus.url(importTask.id),
+                                {
+                                    credentials: "same-origin",
+                                    headers: {
+                                        Accept: "application/json",
+                                        "X-Requested-With": "XMLHttpRequest",
+                                    },
                                 },
-                            },
-                        );
+                            );
 
-                        if (!response.ok) {
-                            throw new Error("Status impor tidak dapat dimuat.");
-                        }
+                            if (!response.ok) {
+                                throw new Error(
+                                    "Status impor tidak dapat dimuat.",
+                                );
+                            }
 
-                        const payload: { data: ImportTask } =
-                            await response.json();
+                            const payload: { data: ImportTask } =
+                                await response.json();
 
-                        return payload.data;
-                    }),
+                            return payload.data;
+                        }),
                 );
 
                 if (!isMounted) {
@@ -64,11 +77,13 @@ export function ImportProgressPanel({
                 updatedTasks
                     .filter((task) => task.status === "failed")
                     .forEach((task) => {
-                        if (notifiedFailedTaskIds.current.has(task.id)) {
+                        const taskKey = `${task.import_type}:${task.id}`;
+
+                        if (notifiedFailedTaskIds.current.has(taskKey)) {
                             return;
                         }
 
-                        notifiedFailedTaskIds.current.add(task.id);
+                        notifiedFailedTaskIds.current.add(taskKey);
                         toast.error("Impor perlu diperbaiki", {
                             description:
                                 task.error_message ??
@@ -81,7 +96,9 @@ export function ImportProgressPanel({
                         (importTask) =>
                             updatedTasks.find(
                                 (updatedTask) =>
-                                    updatedTask.id === importTask.id,
+                                    updatedTask.id === importTask.id &&
+                                    updatedTask.import_type ===
+                                        importTask.import_type,
                             ) ?? importTask,
                     ),
                 );
@@ -109,13 +126,15 @@ export function ImportProgressPanel({
         <section className="grid gap-3" aria-live="polite">
             {importTasks.map((importTask) => (
                 <div
-                    key={importTask.id}
+                    key={`${importTask.import_type}:${importTask.id}`}
                     className="animate-in fade-in grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl duration-300"
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                             <p className="text-sm font-extrabold text-[#395886]">
-                                Memproses {importTask.original_filename}
+                                {importTask.import_type === "active_students"
+                                    ? "Memproses daftar mahasiswa aktif"
+                                    : "Memproses workbook Kompen dan Respon"}
                             </p>
                             <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
                                 {importTask.progress_message}

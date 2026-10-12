@@ -6,6 +6,7 @@ use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
 use App\Http\Requests\SearchKompenResponHubStudentRequest;
+use App\Http\Resources\KompenResponHubActiveStudentImportTaskResource;
 use App\Http\Resources\KompenResponHubActivityLogResource;
 use App\Http\Resources\KompenResponHubDetailResource;
 use App\Http\Resources\KompenResponHubExportTaskResource;
@@ -15,6 +16,7 @@ use App\Http\Resources\KompenResponHubImportVersionResource;
 use App\Http\Resources\KompenResponHubStudentResource;
 use App\Http\Resources\KompenResponHubStudentSearchResource;
 use App\Http\Resources\KompenResponHubWarningLetterResource;
+use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubExportTask;
@@ -204,16 +206,7 @@ class KompenResponHubController extends Controller
                     ->exists()
                 : false,
             'activeImportTasks' => $isAdmin
-                ? KompenResponHubImportTaskResource::collection(
-                    KompenResponHubImportTask::query()
-                        ->whereIn('status', [
-                            KompenResponHubImportTask::STATUS_QUEUED,
-                            KompenResponHubImportTask::STATUS_PROCESSING,
-                        ])
-                        ->latest('id')
-                        ->limit(3)
-                        ->get(),
-                )->resolve()
+                ? $this->activeImportTasks()
                 : [],
             'exportTasks' => KompenResponHubExportTaskResource::collection(
                 KompenResponHubExportTask::query()
@@ -299,6 +292,46 @@ class KompenResponHubController extends Controller
     private function perPage(array $filters): int
     {
         return (int) ($filters['per_page'] ?? 15);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function activeImportTasks(): array
+    {
+        $workbookTasks = KompenResponHubImportTaskResource::collection(
+            KompenResponHubImportTask::query()
+                ->whereIn('status', [
+                    KompenResponHubImportTask::STATUS_QUEUED,
+                    KompenResponHubImportTask::STATUS_PROCESSING,
+                ])
+                ->latest('id')
+                ->limit(3)
+                ->get(),
+        )->resolve();
+        $activeStudentTasks = KompenResponHubActiveStudentImportTaskResource::collection(
+            KompenResponHubActiveStudentImportTask::query()
+                ->whereIn('status', [
+                    KompenResponHubActiveStudentImportTask::StatusQueued,
+                    KompenResponHubActiveStudentImportTask::StatusProcessing,
+                ])
+                ->latest('id')
+                ->limit(3)
+                ->get(),
+        )->resolve();
+
+        /** @var list<array<string, mixed>> $tasks */
+        $tasks = [];
+
+        foreach ([...$workbookTasks, ...$activeStudentTasks] as $task) {
+            if (is_array($task)) {
+                $tasks[] = $task;
+            }
+        }
+
+        usort($tasks, static function (array $left, array $right): int {
+            return strcmp((string) ($right['queued_at'] ?? ''), (string) ($left['queued_at'] ?? ''));
+        });
+
+        return array_slice($tasks, 0, 3);
     }
 
     /** @return list<int> */

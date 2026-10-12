@@ -1,4 +1,5 @@
 import { Download } from "lucide-react";
+import { downloadUploadedWorkbook as downloadActiveStudentWorkbook } from "@/actions/App/Http/Controllers/KompenResponHubActiveStudentImportController";
 import { downloadUploadedWorkbook } from "@/actions/App/Http/Controllers/KompenResponHubImportController";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -28,7 +29,14 @@ function eventLabel(eventType: ImportAuditLog["event_type"]): string {
     }[eventType];
 }
 
-function eventDescription(eventType: ImportAuditLog["event_type"]): string {
+function eventDescription(
+    eventType: ImportAuditLog["event_type"],
+    importType: ImportAuditLog["import_type"],
+): string {
+    if (eventType === "upload" && importType === "active_students") {
+        return "Daftar mahasiswa aktif disimpan sebagai master data terbaru.";
+    }
+
     return {
         upload: "Workbook disimpan dan siap dipilih.",
         activate: "Workbook ditetapkan sebagai sumber data periode.",
@@ -39,6 +47,12 @@ function eventDescription(eventType: ImportAuditLog["event_type"]): string {
     }[eventType];
 }
 
+function importTypeLabel(importType: ImportAuditLog["import_type"]): string {
+    return importType === "active_students"
+        ? "Mahasiswa Aktif"
+        : "Kompen dan Respon";
+}
+
 export function ImportAuditLogTable({
     data,
 }: {
@@ -46,6 +60,7 @@ export function ImportAuditLogTable({
 }): React.JSX.Element {
     const headings = [
         "Aksi",
+        "Jenis data",
         "Periode",
         "Workbook",
         "Pelaksana",
@@ -79,16 +94,28 @@ export function ImportAuditLogTable({
                                         {eventLabel(auditLog.event_type)}
                                     </span>
                                     <p className="mt-1 max-w-48 text-[11px] leading-relaxed text-[#395886]/70">
-                                        {eventDescription(auditLog.event_type)}
+                                        {eventDescription(
+                                            auditLog.event_type,
+                                            auditLog.import_type,
+                                        )}
                                     </p>
                                 </td>
-                                <td className="px-4 py-3.5 text-xs font-semibold text-[#628ECB]">{auditLog.periode_semester}</td>
+                                <td className="px-4 py-3.5">
+                                    <span className="rounded-full bg-[#F0F3FA] px-2.5 py-1 text-[10px] font-black tracking-wider text-[#395886] uppercase">
+                                        {importTypeLabel(auditLog.import_type)}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-3.5 text-xs font-semibold text-[#628ECB]">
+                                    {auditLog.periode_semester ?? "—"}
+                                </td>
                                 <td className="max-w-64 px-4 py-3.5">
                                     <p className="truncate font-mono text-xs font-semibold text-[#395886]" title={auditLog.original_filename}>
                                         {auditLog.original_filename}
                                     </p>
                                     <p className="mt-1 text-[11px] text-[#395886]/60">
-                                        Diunggah {formatJakartaDateTime(auditLog.version_imported_at)}
+                                        {auditLog.import_type === "active_students"
+                                            ? "Master daftar mahasiswa aktif"
+                                            : `Diunggah ${formatJakartaDateTime(auditLog.version_imported_at)}`}
                                     </p>
                                 </td>
                                 <td className="px-4 py-3.5">
@@ -97,9 +124,23 @@ export function ImportAuditLogTable({
                                 </td>
                                 <td className="px-4 py-3.5 text-xs whitespace-nowrap text-[#395886]">{formatJakartaDateTime(auditLog.occurred_at)}</td>
                                 <td className="px-4 py-3.5">
-                                    {auditLog.can_download_file && auditLog.source_import_id !== null ? (
+                                    {auditLog.can_download_file &&
+                                    (auditLog.source_import_id !== null ||
+                                        auditLog.source_active_student_import_id !==
+                                            null) ? (
                                         <Button asChild size="sm" variant="outline" className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
-                                            <a href={downloadUploadedWorkbook.url(auditLog.source_import_id)}>
+                                            <a
+                                                href={
+                                                    auditLog.import_type ===
+                                                    "active_students"
+                                                        ? downloadActiveStudentWorkbook.url(
+                                                              auditLog.source_active_student_import_id!,
+                                                          )
+                                                        : downloadUploadedWorkbook.url(
+                                                              auditLog.source_import_id!,
+                                                          )
+                                                }
+                                            >
                                                 <Download className="mr-1.5 size-3.5" /> Unduh
                                             </a>
                                         </Button>

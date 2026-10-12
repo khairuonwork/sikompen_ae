@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminAuthenticationController;
+use App\Http\Controllers\KompenResponHubActiveStudentImportController;
 use App\Http\Controllers\KompenResponHubActivityRetentionController;
 use App\Http\Controllers\KompenResponHubAdminSetupController;
 use App\Http\Controllers\KompenResponHubController;
@@ -68,6 +69,15 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
             ->name('kompen-respon.students.overview');
         Route::get('kompen-respon/template', [KompenResponHubImportController::class, 'downloadTemplate'])
             ->name('kompen-respon.template.download');
+        Route::get('kompen-respon/active-students/template', [KompenResponHubActiveStudentImportController::class, 'downloadTemplate'])
+            ->name('kompen-respon.active-students.template.download');
+        Route::post('kompen-respon/active-students/imports', [KompenResponHubActiveStudentImportController::class, 'store'])
+            ->middleware('throttle:10,15')
+            ->name('kompen-respon.active-students.imports.store');
+        Route::get('kompen-respon/active-students/imports/{import}/download', [KompenResponHubActiveStudentImportController::class, 'downloadUploadedWorkbook'])
+            ->name('kompen-respon.active-students.imports.download');
+        Route::get('kompen-respon/active-students/import-tasks/{task}', [KompenResponHubActiveStudentImportController::class, 'showTask'])
+            ->name('kompen-respon.active-students.import-tasks.show');
         Route::post('kompen-respon/imports', [KompenResponHubImportController::class, 'store'])
             ->middleware('throttle:10,15')
             ->name('kompen-respon.imports.store');

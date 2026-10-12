@@ -23,6 +23,8 @@ export function activityLabel(eventType: string): string {
         "import.version_activated": "Versi file diaktifkan",
         "import.renamed": "Nama file diperbarui",
         "import.deleted": "Versi file dihapus",
+        "active_students.imported": "Daftar mahasiswa aktif diperbarui",
+        "active_students.import_failed": "Impor mahasiswa aktif gagal",
         "progress.updated": "Progres diperbarui",
         "summary.override_updated": "Koreksi total jam",
         "detail.override_updated": "Koreksi detail",

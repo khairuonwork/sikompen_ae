@@ -16,7 +16,7 @@ class KompenResponHubTableRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge(
-            collect(['nim', 'nama', 'search', 'kelas', 'periode_semester', 'warning_period', 'list_period', 'import_month', 'import_year', 'mata_kuliah', 'nama_dosen', 'tab', 'activity_event', 'activity_actor'])
+            collect(['nim', 'nama', 'search', 'kelas', 'periode_semester', 'warning_period', 'list_period', 'import_month', 'import_year', 'import_type', 'mata_kuliah', 'nama_dosen', 'tab', 'activity_event', 'activity_actor'])
                 ->mapWithKeys(fn (string $key): array => [
                     $key => is_string($this->query($key))
                         ? trim((string) $this->query($key))
@@ -41,6 +41,7 @@ class KompenResponHubTableRequest extends FormRequest
             'list_period' => ['nullable', 'string', 'max:50'],
             'import_month' => ['nullable', 'string', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
             'import_year' => ['nullable', 'integer', 'between:2000,2100'],
+            'import_type' => ['nullable', 'in:kompen_respon,active_students'],
             'mata_kuliah' => ['nullable', 'string', 'max:100', new SafeSearchTerm],
             'nama_dosen' => ['nullable', 'string', 'max:100', new SafeSearchTerm],
             'activity_event' => ['nullable', 'string', 'max:80'],

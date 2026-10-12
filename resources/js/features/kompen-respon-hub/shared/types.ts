@@ -97,14 +97,16 @@ export type Cutoff = {
 export type ImportAuditLog = {
     id: number;
     event_type: "upload" | "rollback" | "restore" | "activate" | "rename" | "delete";
+    import_type: "kompen_respon" | "active_students";
     source_import_id: number | null;
+    source_active_student_import_id: number | null;
     can_download_file: boolean;
     version_status: "active" | "stored" | "unavailable";
     version_imported_at: string | null;
     version_activated_at: string | null;
     actor_name: string | null;
     actor_email: string | null;
-    periode_semester: string;
+    periode_semester: string | null;
     original_filename: string;
     class_count: number;
     student_count: number;
@@ -144,6 +146,7 @@ export type ImportVersion = {
 
 export type ImportTask = {
     id: number;
+    import_type: "kompen_respon" | "active_students";
     original_filename: string;
     status: "queued" | "processing" | "completed" | "failed";
     progress: number;
@@ -192,6 +195,7 @@ export type Filters = {
     list_period?: string;
     import_month?: string;
     import_year?: number;
+    import_type?: "kompen_respon" | "active_students";
     activity_event?: string;
     activity_actor?: string;
     per_page?: number;

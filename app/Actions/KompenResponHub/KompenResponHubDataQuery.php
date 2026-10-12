@@ -26,12 +26,16 @@ class KompenResponHubDataQuery
     public function importAuditLogs(array $filters = []): Builder
     {
         $query = KompenResponHubImportAuditLog::query()
-            ->with('sourceImport.activeReference')
+            ->with(['sourceImport.activeReference', 'sourceActiveStudentImport'])
             ->orderByDesc('occurred_at')
             ->orderByDesc('id');
 
         if (filled($filters['periode_semester'] ?? null)) {
             $query->where('periode_semester', $filters['periode_semester']);
+        }
+
+        if (filled($filters['import_type'] ?? null)) {
+            $query->where('import_type', $filters['import_type']);
         }
 
         if (filled($filters['import_month'] ?? null)) {
@@ -66,6 +70,7 @@ class KompenResponHubDataQuery
     {
         return array_values(KompenResponHubImportAuditLog::query()
             ->select('periode_semester')
+            ->whereNotNull('periode_semester')
             ->selectRaw('MAX(occurred_at) as latest_occurred_at')
             ->groupBy('periode_semester')
             ->orderByDesc('latest_occurred_at')
