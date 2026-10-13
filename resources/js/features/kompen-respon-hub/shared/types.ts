@@ -96,7 +96,7 @@ export type Cutoff = {
 
 export type ImportAuditLog = {
     id: number;
-    event_type: "upload" | "rollback" | "restore" | "activate" | "rename" | "delete";
+    event_type: "upload" | "rollback" | "restore" | "activate" | "release" | "rename" | "delete";
     import_type: "kompen_respon" | "active_students";
     source_import_id: number | null;
     source_active_student_import_id: number | null;

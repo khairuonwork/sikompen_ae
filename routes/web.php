@@ -127,6 +127,9 @@ Route::middleware('sikompen.proxy-session')->group(function (): void {
         Route::post('kompen-respon/imports/{import}/activate', [KompenResponHubImportActivationController::class, 'store'])
             ->middleware('throttle:5,15')
             ->name('kompen-respon.imports.activate');
+        Route::delete('kompen-respon/imports/{import}/activation', [KompenResponHubImportActivationController::class, 'destroy'])
+            ->middleware('throttle:5,15')
+            ->name('kompen-respon.imports.activation.destroy');
         Route::get('kompen-respon/import-tasks/{importTask}', [KompenResponHubImportTaskController::class, 'show'])
             ->name('kompen-respon.import-tasks.show');
         Route::put('kompen-respon/cutoffs', [KompenResponHubLifecycleController::class, 'storeCutoff'])

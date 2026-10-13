@@ -22,6 +22,7 @@ function eventLabel(eventType: ImportAuditLog["event_type"]): string {
     return {
         upload: "Upload",
         activate: "Aktivasi",
+        release: "Lepas dari penggunaan",
         rollback: "Rollback",
         restore: "Pemulihan lama",
         rename: "Ganti nama",
@@ -40,6 +41,7 @@ function eventDescription(
     return {
         upload: "Workbook disimpan dan siap dipilih.",
         activate: "Workbook ditetapkan sebagai sumber data periode.",
+        release: "Workbook tidak lagi dipakai sebagai sumber aktif; data SP final tidak berubah.",
         rollback: "Data dari workbook dihapus melalui rollback.",
         restore: "Riwayat workbook dipulihkan.",
         rename: "Nama tampilan workbook diperbarui.",
@@ -94,7 +96,8 @@ export function ImportAuditLogTable({
                                         "rounded-full px-2.5 py-1 text-[10px] font-black tracking-wider uppercase",
                                         auditLog.event_type === "upload" && "border border-emerald-200 bg-emerald-100 text-emerald-800",
                                         auditLog.event_type === "activate" && "border border-blue-200 bg-blue-100 text-blue-800",
-                                        auditLog.event_type !== "upload" && auditLog.event_type !== "activate" && "border border-slate-200 bg-slate-100 text-slate-700",
+                                        auditLog.event_type === "release" && "border border-amber-200 bg-amber-100 text-amber-800",
+                                        auditLog.event_type !== "upload" && auditLog.event_type !== "activate" && auditLog.event_type !== "release" && "border border-slate-200 bg-slate-100 text-slate-700",
                                     )}>
                                         {eventLabel(auditLog.event_type)}
                                     </span>

@@ -107,7 +107,11 @@ export function ActiveStudentImportList({
                         type="button"
                         variant="outline"
                         onClick={() => setIsEditMode((enabled) => !enabled)}
-                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                        className={
+                            isEditMode
+                                ? "rounded-xl border-[#395886] bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
+                                : "rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                        }
                     >
                         <FilePenLine className="size-3.5" />
                         {isEditMode ? "Selesai mengelola" : "Kelola file"}
@@ -221,15 +225,20 @@ export function ActiveStudentImportList({
                             onSuccess={() => setSelectedVersion(null)}
                         >
                             {({ processing }) => (
-                                <>
+                                <div className="grid gap-5">
                                     <DialogHeader>
                                         <DialogTitle className="text-[#395886]">Hapus versi file?</DialogTitle>
                                         <DialogDescription className="text-[#395886]/70">
                                             {selectedVersion.original_filename} akan dihapus dari penyimpanan beserta data roster versi ini. Riwayat audit tetap tersimpan, tetapi file tidak dapat dipulihkan dari aplikasi.
                                         </DialogDescription>
                                     </DialogHeader>
-                                    <DialogFooter>
-                                        <Button type="button" variant="outline" onClick={() => setSelectedVersion(null)} className="border-[#8AAEE0] text-[#395886]">
+                                    <DialogFooter className="gap-3 sm:gap-3">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setSelectedVersion(null)}
+                                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#F0F3FA] hover:text-[#395886]"
+                                        >
                                             Batal
                                         </Button>
                                         <Button type="submit" disabled={processing} className="bg-rose-600 text-white hover:bg-rose-700 hover:text-white">
@@ -237,7 +246,7 @@ export function ActiveStudentImportList({
                                             {processing ? "Menghapus…" : "Hapus file"}
                                         </Button>
                                     </DialogFooter>
-                                </>
+                                </div>
                             )}
                         </Form>
                     ) : null}
