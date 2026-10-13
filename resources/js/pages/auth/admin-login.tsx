@@ -3,7 +3,6 @@ import { Eye, EyeOff, LockKeyhole, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { store } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
 import { Button } from '@/components/ui/button';
-import { sikompenForm, sikompenUrl } from '@/lib/sikompen-url';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
     Card,
@@ -55,7 +54,7 @@ export default function AdminLogin({
                         </div>
                     </CardHeader>
 
-                    <Form {...sikompenForm(store.form())} resetOnError>
+                    <Form {...store.form()} resetOnError>
                         {({ errors, processing }) => (
                             <>
                                 <CardContent className="grid gap-5 pt-6">
@@ -156,7 +155,7 @@ export default function AdminLogin({
                                     </Button>
 
                                     <Link
-                                        href={sikompenUrl(home.url())}
+                                        href={home.url()}
                                         className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[#395886]/70 transition-all duration-200 hover:-translate-x-1 hover:text-[#395886]"
                                     >
                                         <ArrowLeft className="size-3.5" />

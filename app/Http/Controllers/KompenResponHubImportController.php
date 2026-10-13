@@ -3,9 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Actions\KompenResponHub\ValidateKompenResponHubWorkbookArchive;
-use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\DestroyKompenResponHubImportRequest;
+use App\Http\Requests\RestoreKompenResponHubImportRequest;
 use App\Http\Requests\StoreKompenResponHubImportRequest;
 use App\Http\Requests\UpdateKompenResponHubImportRequest;
 use App\Jobs\ProcessKompenResponHubImport;
@@ -13,7 +14,6 @@ use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
-use App\Models\KompenResponHubStudent;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -56,7 +56,7 @@ class KompenResponHubImportController extends Controller
 
     public function update(
         UpdateKompenResponHubImportRequest $request,
-        SiAdminProxyAccess $access,
+        SikompenAdminAccess $access,
         RecordKompenResponHubActivity $activity,
         KompenResponHubImport $import,
     ): RedirectResponse {
@@ -105,14 +105,14 @@ class KompenResponHubImportController extends Controller
 
     public function destroy(
         DestroyKompenResponHubImportRequest $request,
-        SiAdminProxyAccess $access,
+        SikompenAdminAccess $access,
         RecordKompenResponHubActivity $activity,
         KompenResponHubImport $import,
     ): RedirectResponse {
         $actor = $access->actor($request);
         $admin = $this->adminForActor($actor['id']);
 
-        /** @var array{id: int, display_filename: string, original_filename: string, stored_path: string, periode_semester: string, class_count: int, student_count: int, detail_count: int} $deletedImport */
+        /** @var array{id: int, display_filename: string, original_filename: string, periode_semester: string, class_count: int, student_count: int, detail_count: int} $deletedImport */
         $deletedImport = DB::connection(config('kompen-respon-hub.database_connection'))
             ->transaction(function () use ($import, $admin, $actor): array {
                 $lockedImport = KompenResponHubImport::query()
@@ -124,20 +124,10 @@ class KompenResponHubImportController extends Controller
                     422,
                     'Workbook yang sedang digunakan tidak dapat dihapus. Pilih versi lain untuk periode ini terlebih dahulu.',
                 );
-                abort_if(
-                    KompenResponHubStudent::query()
-                        ->where('kompen_respon_hub_import_id', $lockedImport->id)
-                        ->lockForUpdate()
-                        ->exists(),
-                    422,
-                    'Workbook ini masih menjadi sumber data mahasiswa dan tidak dapat dihapus.',
-                );
-
                 $snapshot = [
                     'id' => $lockedImport->id,
                     'display_filename' => $lockedImport->display_filename ?? $lockedImport->original_filename,
                     'original_filename' => $lockedImport->original_filename,
-                    'stored_path' => $lockedImport->stored_path,
                     'periode_semester' => $lockedImport->periode_semester,
                     'class_count' => $lockedImport->class_count,
                     'student_count' => $lockedImport->student_count,
@@ -154,7 +144,10 @@ class KompenResponHubImportController extends Controller
                     'class_count' => $lockedImport->class_count,
                     'student_count' => $lockedImport->student_count,
                     'detail_count' => $lockedImport->detail_count,
-                    'metadata' => ['original_filename' => $lockedImport->original_filename],
+                    'metadata' => [
+                        'original_filename' => $lockedImport->original_filename,
+                        'moved_to_recycle_bin' => true,
+                    ],
                     'occurred_at' => now(),
                 ]);
 
@@ -163,10 +156,6 @@ class KompenResponHubImportController extends Controller
                 return $snapshot;
             });
 
-        if (str_starts_with($deletedImport['stored_path'], 'kompen-respon-hub/imports/')) {
-            Storage::disk('local')->delete($deletedImport['stored_path']);
-        }
-
         $activity->execute(
             'import.deleted',
             'import',
@@ -174,7 +163,7 @@ class KompenResponHubImportController extends Controller
             $admin,
             $request,
             period: $deletedImport['periode_semester'],
-            reason: 'Versi workbook dihapus dari List File.',
+            reason: 'Versi workbook dipindahkan ke recycle bin.',
             beforeState: [
                 'display_filename' => $deletedImport['display_filename'],
                 'original_filename' => $deletedImport['original_filename'],
@@ -182,12 +171,65 @@ class KompenResponHubImportController extends Controller
         );
 
         return to_route('admin.kompen-respon.index', ['tab' => 'files'])
-            ->with('success', "Versi {$deletedImport['display_filename']} berhasil dihapus. Riwayat audit tetap tersimpan.");
+            ->with('success', "Versi {$deletedImport['display_filename']} dipindahkan ke recycle bin. File dapat dipulihkan sebelum masa retensi berakhir.");
+    }
+
+    public function restore(
+        RestoreKompenResponHubImportRequest $request,
+        SikompenAdminAccess $access,
+        RecordKompenResponHubActivity $activity,
+        string $import,
+    ): RedirectResponse {
+        $actor = $access->actor($request);
+        $admin = $this->adminForActor($actor['id']);
+
+        /** @var KompenResponHubImport $restoredImport */
+        $restoredImport = DB::connection(config('kompen-respon-hub.database_connection'))
+            ->transaction(function () use ($actor, $admin, $import): KompenResponHubImport {
+                $trashedImport = KompenResponHubImport::withTrashed()
+                    ->lockForUpdate()
+                    ->findOrFail((int) $import);
+
+                abort_unless($trashedImport->trashed(), 422, 'Versi workbook ini tidak berada di recycle bin.');
+                abort_unless(Storage::disk('local')->exists($trashedImport->stored_path), 422, 'File workbook sudah tidak tersedia dan tidak dapat dipulihkan.');
+
+                $trashedImport->restore();
+
+                KompenResponHubImportAuditLog::create([
+                    'event_type' => KompenResponHubImportAuditLog::EVENT_RESTORE,
+                    'source_import_id' => $trashedImport->id,
+                    'actor_name' => $admin instanceof KompenResponHubAdmin ? $admin->email : $actor['email'],
+                    'actor_email' => $actor['email'],
+                    'periode_semester' => $trashedImport->periode_semester,
+                    'original_filename' => $trashedImport->display_filename ?? $trashedImport->original_filename,
+                    'class_count' => $trashedImport->class_count,
+                    'student_count' => $trashedImport->student_count,
+                    'detail_count' => $trashedImport->detail_count,
+                    'metadata' => ['restored_from_recycle_bin' => true],
+                    'occurred_at' => now(),
+                ]);
+
+                return $trashedImport;
+            });
+
+        $activity->execute(
+            'import.restored_from_recycle_bin',
+            'import',
+            (string) $restoredImport->id,
+            $admin,
+            $request,
+            period: $restoredImport->periode_semester,
+            reason: 'Versi workbook dipulihkan dari recycle bin.',
+            subjectName: $restoredImport->display_filename ?? $restoredImport->original_filename,
+        );
+
+        return to_route('admin.kompen-respon.index', ['tab' => 'files'])
+            ->with('success', "Versi {$restoredImport->display_filename} dipulihkan dari recycle bin.");
     }
 
     public function store(
         StoreKompenResponHubImportRequest $request,
-        SiAdminProxyAccess $access,
+        SikompenAdminAccess $access,
         ValidateKompenResponHubWorkbookArchive $archiveValidator,
     ): RedirectResponse {
         $actor = $access->actor($request);

@@ -3,13 +3,13 @@
 namespace App\Console\Commands;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubExportTask;
 use App\Models\KompenResponHubImportTask;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Storage;
 
 #[Signature('sikompen:reconcile-tasks')]
 #[Description('Mark stalled Sikompen import and export tasks as failed.')]
@@ -20,9 +20,10 @@ class ReconcileKompenResponHubTasks extends Command
         $stalledAfterMinutes = max(15, (int) config('kompen-respon-hub.queue.stalled_task_minutes', 15));
         $threshold = now()->subMinutes($stalledAfterMinutes);
         $importCount = $this->reconcileImports($threshold, $stalledAfterMinutes, $activity);
+        $activeStudentImportCount = $this->reconcileActiveStudentImports($threshold, $stalledAfterMinutes, $activity);
         $exportCount = $this->reconcileExports($threshold, $stalledAfterMinutes, $activity);
 
-        $this->components->info("{$importCount} task impor dan {$exportCount} task ekspor macet ditandai gagal.");
+        $this->components->info("{$importCount} task workbook, {$activeStudentImportCount} task roster, dan {$exportCount} task ekspor macet ditandai gagal.");
 
         return self::SUCCESS;
     }
@@ -46,13 +47,47 @@ class ReconcileKompenResponHubTasks extends Command
                         'failed_at' => now(),
                     ]);
 
-                    if (str_starts_with($task->stored_path, 'kompen-respon-hub/imports/')) {
-                        Storage::disk('local')->delete($task->stored_path);
-                    }
-
                     $activity->execute(
                         'import.timed_out',
                         'import_task',
+                        (string) $task->id,
+                        null,
+                        reason: $message,
+                        metadata: [
+                            'original_filename' => $task->original_filename,
+                            'stalled_after_minutes' => $stalledAfterMinutes,
+                        ],
+                        subjectName: $task->original_filename,
+                    );
+                    $count++;
+                }
+            });
+
+        return $count;
+    }
+
+    private function reconcileActiveStudentImports(
+        \DateTimeInterface $threshold,
+        int $stalledAfterMinutes,
+        RecordKompenResponHubActivity $activity,
+    ): int {
+        $count = 0;
+
+        $this->stalledActiveStudentImportTasks($threshold)
+            ->chunkById(200, function ($tasks) use (&$count, $activity, $stalledAfterMinutes): void {
+                foreach ($tasks as $task) {
+                    $message = 'Proses impor daftar mahasiswa aktif melewati batas waktu pemrosesan dan ditandai gagal. Coba ulangi dari Diagnostik Pekerjaan atau unggah ulang file bila diperlukan.';
+                    $task->update([
+                        'status' => KompenResponHubActiveStudentImportTask::StatusFailed,
+                        'progress' => 100,
+                        'progress_message' => 'Impor roster berhenti karena waktu pemrosesan terlewati.',
+                        'error_message' => $message,
+                        'failed_at' => now(),
+                    ]);
+
+                    $activity->execute(
+                        'active_students.timed_out',
+                        'active_student_import_task',
                         (string) $task->id,
                         null,
                         reason: $message,
@@ -87,10 +122,6 @@ class ReconcileKompenResponHubTasks extends Command
                         'error_message' => $message,
                         'failed_at' => now(),
                     ]);
-
-                    if ($task->output_path !== null && str_starts_with($task->output_path, 'kompen-respon-hub/exports/')) {
-                        Storage::disk('local')->delete($task->output_path);
-                    }
 
                     $activity->execute(
                         'export.timed_out',
@@ -136,6 +167,25 @@ class ReconcileKompenResponHubTasks extends Command
             ->whereIn('status', [
                 KompenResponHubExportTask::StatusQueued,
                 KompenResponHubExportTask::StatusProcessing,
+            ])
+            ->where(function (Builder $query) use ($threshold): void {
+                $query
+                    ->where('started_at', '<=', $threshold)
+                    ->orWhere(function (Builder $queuedQuery) use ($threshold): void {
+                        $queuedQuery
+                            ->whereNull('started_at')
+                            ->where('queued_at', '<=', $threshold);
+                    });
+            });
+    }
+
+    /** @return Builder<KompenResponHubActiveStudentImportTask> */
+    private function stalledActiveStudentImportTasks(\DateTimeInterface $threshold): Builder
+    {
+        return KompenResponHubActiveStudentImportTask::query()
+            ->whereIn('status', [
+                KompenResponHubActiveStudentImportTask::StatusQueued,
+                KompenResponHubActiveStudentImportTask::StatusProcessing,
             ])
             ->where(function (Builder $query) use ($threshold): void {
                 $query

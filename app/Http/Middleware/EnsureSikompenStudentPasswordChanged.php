@@ -16,10 +16,6 @@ class EnsureSikompenStudentPasswordChanged
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (config('si-admin-proxy.enabled')) {
-            return $next($request);
-        }
-
         $student = $request->user('student');
 
         if ($student instanceof KompenResponHubStudentAccount && $student->requiresPasswordChange()) {

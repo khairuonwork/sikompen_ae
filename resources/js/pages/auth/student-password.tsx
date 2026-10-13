@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { sikompenForm } from "@/lib/sikompen-url";
 
 type StudentPasswordProps = {
     nim: string;
@@ -44,7 +43,7 @@ export default function StudentPassword({
                             <p className="mt-3 rounded-xl bg-[#F0F3FA] px-3 py-2 font-mono text-xs font-bold text-[#395886]">NIM: {nim}</p>
                         </div>
                     </CardHeader>
-                    <Form {...sikompenForm(update.form())} resetOnError resetOnSuccess>
+                    <Form {...update.form()} resetOnError resetOnSuccess>
                         {({ errors, processing }) => (
                             <>
                                 <CardContent className="grid gap-5 pt-6">

@@ -24,6 +24,10 @@ Schedule::command('sikompen:purge-import-audit-logs')
     ->daily()
     ->withoutOverlapping();
 
+Schedule::command('sikompen:purge-recycled-workbooks')
+    ->daily()
+    ->withoutOverlapping();
+
 Schedule::command('sikompen:reconcile-tasks')
     ->everyFiveMinutes()
     ->withoutOverlapping();

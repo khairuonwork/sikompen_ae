@@ -2,7 +2,6 @@
 
 namespace App\Actions\KompenResponHub;
 
-use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Models\KompenResponHubActiveStudent;
 use App\Models\KompenResponHubActiveStudentImportReference;
 use App\Models\KompenResponHubStudentAccount;
@@ -10,14 +9,8 @@ use Illuminate\Http\Request;
 
 class SikompenStudentAccess
 {
-    public function __construct(private SiAdminProxyAccess $proxyAccess) {}
-
     public function hasStudentAccess(Request $request): bool
     {
-        if (config('si-admin-proxy.enabled')) {
-            return $this->proxyAccess->studentNim($request) !== null;
-        }
-
         $student = $this->studentAccount($request);
 
         return $student !== null && $this->activeStudentExists($student->nim);
@@ -25,10 +18,6 @@ class SikompenStudentAccess
 
     public function studentNim(Request $request): ?string
     {
-        if (config('si-admin-proxy.enabled')) {
-            return $this->proxyAccess->studentNim($request);
-        }
-
         return $this->studentAccount($request)?->nim;
     }
 

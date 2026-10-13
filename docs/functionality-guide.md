@@ -15,7 +15,7 @@ Dokumen ini menjelaskan perilaku aplikasi dari sudut pandang pengguna. Hak akses
 | Lihat Log Upload dan Riwayat Aktivitas | Ya | Tidak |
 | Buat ekspor XLSX/PDF | Ya | Ya, sesuai scope aksesnya |
 
-Saat proxy Si-Admin aktif, scope mahasiswa dapat dipaksa berdasarkan NIM dari session gateway. Jangan mengandalkan filter URL untuk membatasi data mahasiswa.
+Scope mahasiswa dipaksa berdasarkan NIM dari session Laravel. Jangan mengandalkan filter URL untuk membatasi data mahasiswa.
 
 ## 1. Upload Dokumen
 
@@ -96,4 +96,4 @@ Jika ekspor gagal, gunakan pesan task sebagai petunjuk; periksa filter dan ulang
 
 Pada standalone mode, setup admin pertama terbuka otomatis ketika belum ada akun admin. Admin aktif dapat membuka jendela setup tambahan dengan kode sekali pakai dan masa berlaku terbatas. Login, setup, upload, dan aksi sensitif dilindungi throttle serta validasi server.
 
-Dalam mode gateway Si-Admin, akses admin datang dari session proxy yang telah diverifikasi HMAC; halaman setup/login lokal dapat dinonaktifkan sesuai konfigurasi deployment.
+Admin memakai guard session Laravel; halaman setup/login lokal selalu mengikuti kebijakan jendela setup admin.

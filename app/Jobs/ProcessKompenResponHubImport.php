@@ -189,8 +189,6 @@ class ProcessKompenResponHubImport implements ShouldQueue
             ],
         );
 
-        Storage::disk('local')->delete($importTask->stored_path);
-
         $activity->execute(
             'import.failed',
             'import_task',

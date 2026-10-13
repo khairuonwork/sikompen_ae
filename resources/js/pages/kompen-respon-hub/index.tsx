@@ -17,7 +17,6 @@ import { show as studentProfile } from "@/actions/App/Http/Controllers/StudentPr
 import { settings as adminSettings } from "@/actions/App/Http/Controllers/KompenResponHubAdminSetupController";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { sikompenUrl } from "@/lib/sikompen-url";
 import { cn } from "@/lib/utils";
 import { home } from "@/routes";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
@@ -38,6 +37,9 @@ import { ImportAuditFilterPanel } from "@/features/kompen-respon-hub/log-upload/
 import { ImportAuditRetentionPanel } from "@/features/kompen-respon-hub/log-upload/import-audit-retention-panel";
 import { ImportVersionList } from "@/features/kompen-respon-hub/list-file/import-version-list";
 import { ActiveStudentImportList } from "@/features/kompen-respon-hub/list-file/active-student-import-list";
+import { DataConsistencyPanel } from "@/features/kompen-respon-hub/list-file/data-consistency-panel";
+import { RecycleBinPanel } from "@/features/kompen-respon-hub/list-file/recycle-bin-panel";
+import { TaskDiagnosticPanel } from "@/features/kompen-respon-hub/diagnostics/task-diagnostic-panel";
 import { ActivityFilterPanel, ActivityLogTable, ActivityRetentionPanel } from "@/features/kompen-respon-hub/riwayat-aktivitas/activity-panel";
 import { EmptyTableState, TableGuide } from "@/features/kompen-respon-hub/shared/components/feedback";
 import { FilterPanel } from "@/features/kompen-respon-hub/shared/components/data-filter-panel";
@@ -72,17 +74,22 @@ export default function KompenResponHubIndex({
     activeImportVersions,
     activeStudentImportVersions,
     activeStudentImportReferences,
+    recycledImportVersions,
+    recycledActiveStudentImportVersions,
+    dataConsistencyReport,
     warnings,
     warningCandidates,
     rolledBackWarnings,
     activityLogs,
     activityRetentionDays,
     importAuditRetentionDays,
+    workbookRecycleBinRetentionDays,
     cutoffs,
     managedPeriodHasActiveWarnings,
     activeImportTasks,
     exportTasks,
     exportStalledAfterMinutes,
+    taskDiagnostics,
 }: KompenResponHubPageProps): React.JSX.Element {
     const indexAction = isAdmin ? adminIndex : studentIndex;
     const tabs = isAdmin ? adminTabs : studentTabs;
@@ -213,7 +220,7 @@ export default function KompenResponHubIndex({
                                         variant="outline"
                                         className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white active:scale-95"
                                     >
-                                        <Link href={sikompenUrl(studentProfile.url())} className="flex items-center gap-1.5">
+                                        <Link href={studentProfile.url()} className="flex items-center gap-1.5">
                                             <UserRound className="size-4" />
                                             Profil
                                         </Link>
@@ -223,7 +230,7 @@ export default function KompenResponHubIndex({
                                         variant="outline"
                                         className="rounded-2xl border-rose-300 bg-white/80 px-4 py-2.5 text-xs font-bold text-rose-700 shadow-2xs transition-all duration-300 hover:border-rose-600 hover:bg-rose-600 hover:text-white active:scale-95"
                                     >
-                                        <Link href={sikompenUrl(studentLogout.url())} method="post" as="button" className="flex items-center gap-1.5">
+                                        <Link href={studentLogout.url()} method="post" as="button" className="flex items-center gap-1.5">
                                             <LogOut className="size-4" />
                                             Keluar
                                         </Link>
@@ -235,7 +242,7 @@ export default function KompenResponHubIndex({
                                         variant="outline"
                                         className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white active:scale-95"
                                     >
-                                        <Link href={sikompenUrl(home.url())} className="flex items-center gap-1.5">
+                                        <Link href={home.url()} className="flex items-center gap-1.5">
                                             <LogOut className="size-4" />
                                             Kembali
                                         </Link>
@@ -330,7 +337,8 @@ export default function KompenResponHubIndex({
                                         tab === "files" ||
                                         tab === "imports" ||
                                         tab === "warnings" ||
-                                        tab === "activity"
+                                        tab === "activity" ||
+                                        tab === "diagnostics"
                                             ? { tab }
                                             : { ...filters, tab },
                                 })}
@@ -447,6 +455,7 @@ export default function KompenResponHubIndex({
                                     versions={activeStudentImportVersions}
                                 />
                             ) : null}
+                            <DataConsistencyPanel records={dataConsistencyReport} />
                             {importVersions?.data.length && activeImportVersions !== null ? (
                                 <ImportVersionList
                                     activeVersions={activeImportVersions}
@@ -457,7 +466,20 @@ export default function KompenResponHubIndex({
                                     Belum ada workbook yang siap dipilih. Upload dokumen terlebih dahulu.
                                 </div>
                             )}
+                            {recycledImportVersions !== null &&
+                            recycledActiveStudentImportVersions !== null &&
+                            workbookRecycleBinRetentionDays !== null ? (
+                                <RecycleBinPanel
+                                    activeStudentVersions={recycledActiveStudentImportVersions}
+                                    kompenResponVersions={recycledImportVersions}
+                                    retentionDays={workbookRecycleBinRetentionDays}
+                                />
+                            ) : null}
                         </section>
+                    ) : null}
+
+                    {activeTab === "diagnostics" && isAdmin ? (
+                        <TaskDiagnosticPanel diagnostics={taskDiagnostics} />
                     ) : null}
 
                     {activeTab === "warnings" && isAdmin ? (

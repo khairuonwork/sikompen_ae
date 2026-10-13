@@ -832,7 +832,7 @@ test('an admin can rename an inactive workbook version and the audit trail remai
         ->assertSessionHasErrors('display_filename');
 });
 
-test('an admin can delete an inactive workbook version while its audit trail remains', function () {
+test('an admin can move an inactive workbook version to the recycle bin while its audit trail remains', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
     $import = KompenResponHubImport::create([
@@ -853,7 +853,8 @@ test('an admin can delete an inactive workbook version while its audit trail rem
         ->assertRedirect('/admin?tab=files');
 
     expect(KompenResponHubImport::query()->find($import->id))->toBeNull()
-        ->and(Storage::disk('local')->exists($import->stored_path))->toBeFalse()
+        ->and(KompenResponHubImport::onlyTrashed()->find($import->id))->not->toBeNull()
+        ->and(Storage::disk('local')->exists($import->stored_path))->toBeTrue()
         ->and(KompenResponHubImportAuditLog::query()
             ->where('event_type', KompenResponHubImportAuditLog::EVENT_DELETE)
             ->where('source_import_id', $import->id)

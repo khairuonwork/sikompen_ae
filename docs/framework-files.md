@@ -3,16 +3,15 @@
 | File | Peran di Sikompen |
 | --- | --- |
 | `config/kompen-respon-hub.php` | Koneksi domain, limit upload/archive XLSX, batas XLSX export, retensi task, dan ambang task macet. |
-| `config/si-admin-proxy.php` | Mode proxy Si-Admin, shared secret HMAC, TTL, role, serta public path. |
 | `config/database.php` | Koneksi MariaDB `kompen_db` untuk data Sikompen. |
 | `config/auth.php` | Guard session `admin` dengan provider `KompenResponHubAdmin`; tidak memakai user default. |
 | `config/session.php` | Session database `sikompen_sessions`, encryption, cookie, dan SameSite. |
 | `config/queue.php` | Database queue pada `kompen_db`; timeout/retry mendukung job hingga 10 menit. |
 | `config/filesystems.php` | Disk local private untuk import/export; tidak ada file XLSX di database/public disk. |
 | `app/Providers/AppServiceProvider.php` | Password policy produksi, Carbon immutable, guard command destruktif, serta limiter. |
-| `bootstrap/app.php` | Route registration, middleware Inertia, alias middleware Sikompen/proxy, serta error response API. |
+| `bootstrap/app.php` | Route registration, middleware Inertia, alias middleware Sikompen, serta error response API. |
 | `routes/web.php` | Semua surface browser dan mutasi admin. |
-| `routes/api.php` | Data API filter/mahasiswa/detail yang dilindungi context session dan limiter. |
+| `routes/api.php` | Data API filter/mahasiswa/detail yang dilindungi session dan limiter. |
 | `routes/console.php` | Jadwal reconciling task dan retensi. |
 | `resources/views/app.blade.php` | Shell Blade Inertia/Vite. |
 | `resources/views/exports/kompen-respon-hub.blade.php` | Layout PDF landscape untuk export. |
@@ -38,7 +37,6 @@ Nilai rahasia hanya ada di `.env`, tidak di Git.
 | `SIKOMPEN_IMPORT_*` | Batas file/archive workbook. |
 | `SIKOMPEN_EXPORT_MAX_ROWS`, `SIKOMPEN_EXPORT_RETENTION_HOURS` | Batas XLSX dan usia hasil export. |
 | `SIKOMPEN_IMPORT_TASK_RETENTION_DAYS`, `SIKOMPEN_STALLED_TASK_MINUTES` | Retensi task dan deteksi task macet. |
-| `SI_ADMIN_PROXY_*` | Mengaktifkan proxy HMAC, secret, TTL, session max age, dan public path. |
 
 ## Route generated untuk frontend
 

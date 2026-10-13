@@ -6,7 +6,7 @@ use App\Actions\KompenResponHub\ActivateKompenResponHubImportVersion;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Actions\KompenResponHub\ReleaseKompenResponHubImportVersion;
-use App\Actions\SiAdminProxy\SiAdminProxyAccess;
+use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Http\Requests\ActivateKompenResponHubImportVersionRequest;
 use App\Http\Requests\ReleaseKompenResponHubImportVersionRequest;
 use App\Models\KompenResponHubAdmin;
@@ -19,7 +19,7 @@ class KompenResponHubImportActivationController extends Controller
 {
     public function store(
         ActivateKompenResponHubImportVersionRequest $request,
-        SiAdminProxyAccess $access,
+        SikompenAdminAccess $access,
         RecordKompenResponHubActivity $activity,
         ActivateKompenResponHubImportVersion $activateImportVersion,
         KompenResponHubImport $import,
@@ -74,7 +74,7 @@ class KompenResponHubImportActivationController extends Controller
 
     public function destroy(
         ReleaseKompenResponHubImportVersionRequest $request,
-        SiAdminProxyAccess $access,
+        SikompenAdminAccess $access,
         RecordKompenResponHubActivity $activity,
         ReleaseKompenResponHubImportVersion $releaseImportVersion,
         KompenResponHubImport $import,

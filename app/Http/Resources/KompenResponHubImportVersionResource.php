@@ -27,6 +27,7 @@ class KompenResponHubImportVersionResource extends JsonResource
             'uploaded_by_name' => $this->uploader_name,
             'uploaded_by_email' => $this->uploader_email,
             'imported_at' => $this->imported_at->toIso8601String(),
+            'deleted_at' => $this->deleted_at?->toIso8601String(),
             'is_active' => $this->activeReference !== null,
             'activated_at' => $this->activeReference?->activated_at?->toIso8601String(),
             'activated_by_email' => $this->activeReference?->activatedByAdmin?->email,

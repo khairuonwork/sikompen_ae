@@ -95,7 +95,7 @@ test('an administrator can queue an active student list import and select it as 
             ->exists())->toBeTrue();
 });
 
-test('an administrator can delete an unused active student roster version', function (): void {
+test('an administrator can move an unused active student roster version to the recycle bin', function (): void {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
     $import = KompenResponHubActiveStudentImport::factory()->create([
@@ -113,10 +113,11 @@ test('an administrator can delete an unused active student roster version', func
         ->assertRedirect('/admin?tab=files');
 
     expect(KompenResponHubActiveStudentImport::query()->find($import->id))->toBeNull()
+        ->and(KompenResponHubActiveStudentImport::onlyTrashed()->find($import->id))->not->toBeNull()
         ->and(KompenResponHubActiveStudent::query()
             ->where('sikompen_active_student_import_id', $import->id)
-            ->exists())->toBeFalse()
-        ->and(Storage::disk('local')->exists($import->stored_path))->toBeFalse()
+            ->exists())->toBeTrue()
+        ->and(Storage::disk('local')->exists($import->stored_path))->toBeTrue()
         ->and(KompenResponHubImportAuditLog::query()
             ->where('event_type', KompenResponHubImportAuditLog::EVENT_DELETE)
             ->where('import_type', KompenResponHubImportAuditLog::ImportTypeActiveStudents)

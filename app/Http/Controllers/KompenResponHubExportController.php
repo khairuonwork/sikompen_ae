@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Actions\KompenResponHub\SikompenStudentAccess;
-use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\KompenResponHubExportTaskAccessRequest;
 use App\Http\Requests\StoreKompenResponHubExportRequest;
 use App\Http\Resources\KompenResponHubExportTaskResource;
@@ -20,7 +20,7 @@ class KompenResponHubExportController extends Controller
 {
     public function store(
         StoreKompenResponHubExportRequest $request,
-        SiAdminProxyAccess $access,
+        SikompenAdminAccess $access,
         SikompenStudentAccess $studentAccess,
         RecordKompenResponHubActivity $activity,
     ): RedirectResponse {
@@ -100,7 +100,7 @@ class KompenResponHubExportController extends Controller
     public function destroy(
         KompenResponHubExportTaskAccessRequest $request,
         KompenResponHubExportTask $exportTask,
-        SiAdminProxyAccess $access,
+        SikompenAdminAccess $access,
         RecordKompenResponHubActivity $activity,
     ): RedirectResponse {
         $this->authorizeAccess($request, $exportTask);

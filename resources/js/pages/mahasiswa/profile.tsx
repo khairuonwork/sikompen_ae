@@ -6,7 +6,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Student } from "@/features/kompen-respon-hub/shared/types";
-import { sikompenUrl } from "@/lib/sikompen-url";
 import { home } from "@/routes";
 
 type StudentProfileProps = {
@@ -48,17 +47,17 @@ export default function StudentProfile({ profile }: StudentProfileProps): React.
                         </div>
                         <div className="flex flex-wrap gap-2">
                             <Button asChild variant="outline" className="rounded-2xl border-[#8AAEE0] bg-white/80 text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
-                                <Link href={sikompenUrl(home.url())}>
+                                <Link href={home.url()}>
                                     <ArrowLeft className="size-4" /> Kembali ke beranda
                                 </Link>
                             </Button>
                             <Button asChild className="rounded-2xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
-                                <Link href={sikompenUrl(editPassword.url())}>
+                                <Link href={editPassword.url()}>
                                     <KeyRound className="size-4" /> Ganti password
                                 </Link>
                             </Button>
                             <Button asChild variant="outline" className="rounded-2xl border-rose-300 bg-white/80 text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white">
-                                <Link href={sikompenUrl(logout.url())} method="post" as="button">
+                                <Link href={logout.url()} method="post" as="button">
                                     <LogOut className="size-4" /> Keluar
                                 </Link>
                             </Button>

@@ -3,9 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
-use App\Actions\SiAdminProxy\SiAdminProxyAccess;
+use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Http\Requests\UpdateKompenResponHubActivityRetentionRequest;
 use App\Http\Requests\UpdateKompenResponHubImportAuditRetentionRequest;
+use App\Http\Requests\UpdateKompenResponHubWorkbookRetentionRequest;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubSystemSetting;
 use Illuminate\Http\RedirectResponse;
@@ -14,7 +15,7 @@ class KompenResponHubActivityRetentionController extends Controller
 {
     public function update(
         UpdateKompenResponHubActivityRetentionRequest $request,
-        SiAdminProxyAccess $access,
+        SikompenAdminAccess $access,
         RecordKompenResponHubActivity $activity,
     ): RedirectResponse {
         $settings = KompenResponHubSystemSetting::current();
@@ -42,7 +43,7 @@ class KompenResponHubActivityRetentionController extends Controller
 
     public function updateImportAudit(
         UpdateKompenResponHubImportAuditRetentionRequest $request,
-        SiAdminProxyAccess $access,
+        SikompenAdminAccess $access,
         RecordKompenResponHubActivity $activity,
     ): RedirectResponse {
         $settings = KompenResponHubSystemSetting::current();
@@ -68,5 +69,35 @@ class KompenResponHubActivityRetentionController extends Controller
         );
 
         return back()->with('success', 'Retensi Log Upload berhasil diperbarui.');
+    }
+
+    public function updateWorkbookRecycleBin(
+        UpdateKompenResponHubWorkbookRetentionRequest $request,
+        SikompenAdminAccess $access,
+        RecordKompenResponHubActivity $activity,
+    ): RedirectResponse {
+        $settings = KompenResponHubSystemSetting::current();
+        $previousRetentionDays = $settings->workbook_recycle_bin_retention_days;
+        $retentionDays = $request->integer('workbook_recycle_bin_retention_days');
+
+        $settings->update(['workbook_recycle_bin_retention_days' => $retentionDays]);
+
+        $actor = $access->actor($request);
+        $admin = is_int($actor['id'])
+            ? KompenResponHubAdmin::query()->find($actor['id'])
+            : null;
+        $activity->execute(
+            'maintenance.workbook_recycle_bin_retention_updated',
+            'system_setting',
+            'workbook_recycle_bin_retention',
+            $admin,
+            $request,
+            reason: "Retensi recycle bin workbook diubah menjadi {$retentionDays} hari.",
+            beforeState: ['workbook_recycle_bin_retention_days' => $previousRetentionDays],
+            afterState: ['workbook_recycle_bin_retention_days' => $retentionDays],
+            subjectName: 'Retensi recycle bin workbook',
+        );
+
+        return back()->with('success', 'Retensi recycle bin workbook berhasil diperbarui.');
     }
 }

@@ -142,6 +142,7 @@ export type ImportVersion = {
         status: "passed";
         checks: { label: string; status: "passed"; detail: string }[];
     } | null;
+    deleted_at: string | null;
 };
 
 export type ActiveStudentImportVersion = {
@@ -155,6 +156,7 @@ export type ActiveStudentImportVersion = {
     imported_at: string;
     is_active: boolean;
     activated_at: string | null;
+    deleted_at: string | null;
 };
 
 export type ActiveStudentImportReference = {
@@ -281,7 +283,8 @@ export type KompenResponHubPageProps = {
         | "files"
         | "imports"
         | "warnings"
-        | "activity";
+        | "activity"
+        | "diagnostics";
     isAdmin: boolean;
     hasStudentSession: boolean;
     filters: Filters;
@@ -298,15 +301,42 @@ export type KompenResponHubPageProps = {
     activeImportVersions: Pagination<ImportVersion> | null;
     activeStudentImportVersions: Pagination<ActiveStudentImportVersion> | null;
     activeStudentImportReferences: Pagination<ActiveStudentImportReference> | null;
+    recycledImportVersions: Pagination<ImportVersion> | null;
+    recycledActiveStudentImportVersions: Pagination<ActiveStudentImportVersion> | null;
+    dataConsistencyReport: DataConsistencyRecord[];
     warnings: Pagination<Warning> | null;
     warningCandidates: Pagination<Student> | null;
     rolledBackWarnings: Pagination<Warning> | null;
     activityLogs: Pagination<ActivityLog> | null;
     activityRetentionDays: number | null;
     importAuditRetentionDays: number | null;
+    workbookRecycleBinRetentionDays: number | null;
+    taskDiagnostics: TaskDiagnostic[];
     cutoffs: Cutoff[];
     activeImportTasks: ImportTask[];
     exportTasks: ExportTask[];
     exportStalledAfterMinutes: number;
     managedPeriodHasActiveWarnings: boolean;
+};
+
+export type DataConsistencyRecord = {
+    periode_semester: string;
+    status: "ready" | "roster_missing" | "mismatch";
+    kompen_respon_students: number;
+    roster_students: number;
+    missing_from_roster: string[];
+    missing_from_kompen_respon: string[];
+};
+
+export type TaskDiagnostic = {
+    id: number;
+    task_type: "kompen_respon" | "active_students" | "export";
+    label: string;
+    status: "failed" | "stalled";
+    progress_message: string;
+    error_message: string | null;
+    queued_at: string | null;
+    started_at: string | null;
+    failed_at: string | null;
+    can_retry: boolean;
 };

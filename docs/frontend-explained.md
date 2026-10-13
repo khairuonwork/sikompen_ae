@@ -66,7 +66,7 @@ Mode perbaikan diaktifkan dahulu. Form muncul sebagai panel buka/tutup, bukan se
 
 ### Akses mahasiswa
 
-Mahasiswa hanya melihat data dan ekspor sesuai scope; tombolnya adalah **Keluar** ke landing. Pada proxy mode, pembatasan NIM diberikan server-side sehingga mengubah URL browser tidak memperluas data.
+Mahasiswa hanya melihat data dan ekspor sesuai scope NIM session; tombolnya adalah **Keluar** ke landing. Pembatasan NIM dilakukan server-side sehingga mengubah URL browser tidak memperluas data.
 
 ## Visual system
 

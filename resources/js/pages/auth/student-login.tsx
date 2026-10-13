@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { sikompenForm, sikompenUrl } from "@/lib/sikompen-url";
 import { home } from "@/routes";
 
 export default function StudentLogin(): React.JSX.Element {
@@ -38,7 +37,7 @@ export default function StudentLogin(): React.JSX.Element {
                         </div>
                     </CardHeader>
 
-                    <Form {...sikompenForm(store.form())} resetOnError>
+                    <Form {...store.form()} resetOnError>
                         {({ errors, processing }) => (
                             <>
                                 <CardContent className="grid gap-5 pt-6">
@@ -93,7 +92,7 @@ export default function StudentLogin(): React.JSX.Element {
                                         <LockKeyhole className="mr-2 size-4" />
                                         {processing ? "Memeriksa…" : "Masuk"}
                                     </Button>
-                                    <Link href={sikompenUrl(home.url())} className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[#395886]/70 hover:text-[#395886]">
+                                    <Link href={home.url()} className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[#395886]/70 hover:text-[#395886]">
                                         <ArrowLeft className="size-3.5" />
                                         Kembali ke pilihan akses
                                     </Link>

@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\KompenResponHub\BuildKompenResponHubDataConsistencyReport;
+use App\Actions\KompenResponHub\BuildKompenResponHubTaskDiagnostics;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Actions\KompenResponHub\SikompenStudentAccess;
-use App\Actions\SiAdminProxy\SiAdminProxyAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
 use App\Http\Requests\SearchKompenResponHubStudentRequest;
 use App\Http\Resources\KompenResponHubActiveStudentImportReferenceResource;
@@ -41,8 +42,9 @@ class KompenResponHubController extends Controller
 {
     public function __construct(
         private KompenResponHubDataQuery $dataQuery,
-        private SiAdminProxyAccess $proxyAccess,
         private SikompenStudentAccess $studentAccess,
+        private BuildKompenResponHubDataConsistencyReport $dataConsistencyReport,
+        private BuildKompenResponHubTaskDiagnostics $taskDiagnostics,
     ) {}
 
     public function studentIndex(KompenResponHubTableRequest $request): Response
@@ -158,7 +160,7 @@ class KompenResponHubController extends Controller
     ): Response {
         $filters = $this->filtersForRequest($request, $scopeToAuthenticatedStudent);
         $activeTab = $filters['tab'] ?? 'students';
-        if (! $isAdmin && in_array($activeTab, ['upload', 'files', 'imports', 'warnings', 'activity'], true)) {
+        if (! $isAdmin && in_array($activeTab, ['upload', 'files', 'imports', 'warnings', 'activity', 'diagnostics'], true)) {
             $activeTab = 'students';
         }
 
@@ -191,7 +193,6 @@ class KompenResponHubController extends Controller
         return Inertia::render('kompen-respon-hub/index', [
             'activeTab' => $activeTab,
             'isAdmin' => $isAdmin,
-            'isProxySession' => $this->proxyAccess->hasValidProxySession($request),
             'hasStudentSession' => ! $isAdmin
                 && $request->user('student') instanceof KompenResponHubStudentAccount
                 && ! $request->user('student')->requiresPasswordChange(),
@@ -250,6 +251,9 @@ class KompenResponHubController extends Controller
             'importAuditRetentionDays' => $isAdmin
                 ? KompenResponHubSystemSetting::current()->import_audit_log_retention_days
                 : null,
+            'workbookRecycleBinRetentionDays' => $isAdmin
+                ? KompenResponHubSystemSetting::current()->workbook_recycle_bin_retention_days
+                : null,
             'students' => $activeTab === 'students'
                 ? $this->resourcePaginator(
                     $this->dataQuery->students($filters)->paginate($this->perPage($filters))->withQueryString(),
@@ -287,6 +291,15 @@ class KompenResponHubController extends Controller
             'activeStudentImportReferences' => $isAdmin && $activeTab === 'files'
                 ? $this->activeStudentImportReferencePaginator($filters)
                 : null,
+            'recycledImportVersions' => $isAdmin && $activeTab === 'files'
+                ? $this->recycledImportVersionPaginator($filters)
+                : null,
+            'recycledActiveStudentImportVersions' => $isAdmin && $activeTab === 'files'
+                ? $this->recycledActiveStudentImportVersionPaginator($filters)
+                : null,
+            'dataConsistencyReport' => $isAdmin && $activeTab === 'files'
+                ? $this->dataConsistencyReport->execute()
+                : [],
             'warnings' => $isAdmin && $activeTab === 'warnings'
                 ? $this->resourcePaginator(
                     $this->dataQuery->warnings($filters)->paginate($this->perPage($filters))->withQueryString(),
@@ -315,6 +328,9 @@ class KompenResponHubController extends Controller
                     'page',
                 )
                 : null,
+            'taskDiagnostics' => $isAdmin && $activeTab === 'diagnostics'
+                ? $this->taskDiagnostics->execute()
+                : [],
         ]);
     }
 
@@ -396,6 +412,36 @@ class KompenResponHubController extends Controller
             $paginator,
             KompenResponHubActiveStudentImportReferenceResource::class,
             $pageName,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function recycledImportVersionPaginator(array $filters): array
+    {
+        return $this->resourcePaginator(
+            $this->dataQuery->recycledImportVersions()
+                ->paginate($this->perPage($filters), ['*'], 'recycled_import_page')
+                ->withQueryString(),
+            KompenResponHubImportVersionResource::class,
+            'recycled_import_page',
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function recycledActiveStudentImportVersionPaginator(array $filters): array
+    {
+        return $this->resourcePaginator(
+            $this->dataQuery->recycledActiveStudentImportVersions()
+                ->paginate($this->perPage($filters), ['*'], 'recycled_active_student_import_page')
+                ->withQueryString(),
+            KompenResponHubActiveStudentImportResource::class,
+            'recycled_active_student_import_page',
         );
     }
 

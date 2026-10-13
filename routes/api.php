@@ -5,7 +5,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('kompen-respon')->middleware([
     'web',
-    'sikompen.proxy-session',
     'sikompen.student-password-changed',
     'sikompen.data-access',
     'throttle:sikompen-data',

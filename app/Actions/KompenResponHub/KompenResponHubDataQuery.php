@@ -121,6 +121,15 @@ class KompenResponHubDataQuery
     }
 
     /** @return Builder<KompenResponHubImport> */
+    public function recycledImportVersions(): Builder
+    {
+        return KompenResponHubImport::onlyTrashed()
+            ->with(['uploadedByAdmin:id,email'])
+            ->orderByDesc('deleted_at')
+            ->orderByDesc('id');
+    }
+
+    /** @return Builder<KompenResponHubImport> */
     public function activeImportVersions(): Builder
     {
         return $this->importVersions()
@@ -139,6 +148,15 @@ class KompenResponHubDataQuery
                 'activeReference:id,periode_semester,sikompen_active_student_import_id,activated_at',
             ])
             ->orderByDesc('imported_at')
+            ->orderByDesc('id');
+    }
+
+    /** @return Builder<KompenResponHubActiveStudentImport> */
+    public function recycledActiveStudentImportVersions(): Builder
+    {
+        return KompenResponHubActiveStudentImport::onlyTrashed()
+            ->with(['uploadedByAdmin:id,email'])
+            ->orderByDesc('deleted_at')
             ->orderByDesc('id');
     }
 

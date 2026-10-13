@@ -30,7 +30,7 @@ class KompenResponHubTableRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'tab' => ['nullable', 'in:upload,students,details,files,imports,warnings,activity'],
+            'tab' => ['nullable', 'in:upload,students,details,files,imports,warnings,activity,diagnostics'],
             'nim' => ['nullable', 'string', 'regex:/^[0-9]{9,20}$/'],
             'nama' => ['nullable', 'string', 'max:100', new SafeSearchTerm],
             'search' => ['nullable', 'string', 'max:100', new SafeSearchTerm],
@@ -50,6 +50,8 @@ class KompenResponHubTableRequest extends FormRequest
             'active_import_page' => ['nullable', 'integer', 'min:1'],
             'active_student_import_page' => ['nullable', 'integer', 'min:1'],
             'active_student_import_reference_page' => ['nullable', 'integer', 'min:1'],
+            'recycled_import_page' => ['nullable', 'integer', 'min:1'],
+            'recycled_active_student_import_page' => ['nullable', 'integer', 'min:1'],
         ];
     }
 

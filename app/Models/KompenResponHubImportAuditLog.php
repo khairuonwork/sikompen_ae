@@ -49,6 +49,8 @@ class KompenResponHubImportAuditLog extends Model
 
     public const EVENT_DELETE = 'delete';
 
+    public const EVENT_PURGE = 'purge';
+
     public const ImportTypeKompenRespon = 'kompen_respon';
 
     public const ImportTypeActiveStudents = 'active_students';

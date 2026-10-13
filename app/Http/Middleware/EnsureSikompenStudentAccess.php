@@ -26,11 +26,6 @@ class EnsureSikompenStudentAccess
             abort(401, 'Autentikasi mahasiswa diperlukan.');
         }
 
-        if (config('si-admin-proxy.enabled')) {
-            abort(403);
-        }
-
         return to_route('student.login');
-
     }
 }

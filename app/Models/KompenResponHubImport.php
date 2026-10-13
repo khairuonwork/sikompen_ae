@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * @property int $id
@@ -33,6 +34,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 class KompenResponHubImport extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'sikompen_imports';
 
     protected $fillable = [

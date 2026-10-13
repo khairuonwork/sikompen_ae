@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\SiAdminProxy\SiAdminProxyAccess;
+use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Http\Requests\StoreKompenResponHubAdminSetupRequest;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubAdminSetupWindow;
@@ -75,7 +75,7 @@ class KompenResponHubAdminSetupController extends Controller
         ]);
     }
 
-    public function enable(Request $request, SiAdminProxyAccess $access): RedirectResponse
+    public function enable(Request $request, SikompenAdminAccess $access): RedirectResponse
     {
         $activationCode = Str::upper(Str::random(20));
         $actor = $access->actor($request);

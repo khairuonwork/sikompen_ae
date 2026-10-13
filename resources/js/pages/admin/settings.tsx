@@ -17,7 +17,6 @@ import {
 } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { sikompenForm, sikompenUrl } from '@/lib/sikompen-url';
 import {
     Card,
     CardContent,
@@ -90,7 +89,7 @@ export default function AdminSettings({
                             variant="outline"
                             className="border-[#8AAEE0] text-[#395886] bg-white/80 hover:bg-[#395886] hover:text-white hover:border-[#395886] transition-all duration-300 rounded-2xl font-bold text-xs px-4 py-2.5 active:scale-95 shadow-2xs"
                         >
-                            <Link href={sikompenUrl(adminIndex.url())} className="flex items-center gap-2">
+                            <Link href={adminIndex.url()} className="flex items-center gap-2">
                                 <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-1" />
                                 Kembali ke panel
                             </Link>
@@ -173,7 +172,7 @@ export default function AdminSettings({
                             {setupWindow.isOpen && (
                                 <Form
                                     method="delete"
-                                    {...sikompenForm({ action: disable.url() })}
+                                    action={disable.url()}
                                 >
                                     {({ processing }) => (
                                         <Button
@@ -191,7 +190,7 @@ export default function AdminSettings({
 
                             <Form
                                 method="post"
-                                {...sikompenForm({ action: enable.url() })}
+                                action={enable.url()}
                             >
                                 {({ processing }) => (
                                     <Button

@@ -184,8 +184,6 @@ class ProcessKompenResponHubActiveStudentImport implements ShouldQueue
             ],
         );
 
-        Storage::disk('local')->delete($task->stored_path);
-
         $activity->execute(
             'active_students.import_failed',
             'active_student_import_task',

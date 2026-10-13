@@ -3,7 +3,6 @@ import { GraduationCap, ShieldCheck, UserPlus, ArrowRight } from 'lucide-react';
 import { create as adminLogin } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
 import { create as adminSetup } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
 import { Button } from '@/components/ui/button';
-import { sikompenUrl } from '@/lib/sikompen-url';
 import {
     Card,
     CardContent,
@@ -78,8 +77,8 @@ export default function Welcome({
                                     <Link
                                         href={
                                             isAdminAuthenticated
-                                                ? sikompenUrl(adminIndex.url())
-                                                : sikompenUrl(adminLogin.url())
+                                                ? adminIndex.url()
+                                                : adminLogin.url()
                                         }
                                         className="flex items-center justify-center gap-2"
                                     >
@@ -96,7 +95,7 @@ export default function Welcome({
                                         variant="outline"
                                         className="w-full border-[#8AAEE0] text-[#395886] bg-white/80 hover:bg-[#395886] hover:text-white hover:border-[#395886] transition-all duration-300 rounded-2xl font-bold active:scale-95 text-xs py-2.5 shadow-2xs"
                                     >
-                                        <Link href={sikompenUrl(adminSetup.url())} className="flex items-center justify-center gap-2">
+                                        <Link href={adminSetup.url()} className="flex items-center justify-center gap-2">
                                             <UserPlus className="size-4" />
                                             {isInitialAdminSetupAvailable
                                                 ? 'Buat akun admin pertama'
@@ -131,7 +130,7 @@ export default function Welcome({
                                     variant="outline"
                                     className="w-full border-[#8AAEE0] text-[#395886] bg-white/80 hover:bg-[#395886] hover:text-white hover:border-[#395886] transition-all duration-300 rounded-2xl font-bold active:scale-95 text-xs py-3 shadow-2xs"
                                 >
-                                    <Link href={sikompenUrl(studentIndex.url())} className="flex items-center justify-center gap-2">
+                                    <Link href={studentIndex.url()} className="flex items-center justify-center gap-2">
                                         Buka data mahasiswa
                                         <ArrowRight className="size-4 group-hover:translate-x-1 transition-transform" />
                                     </Link>

@@ -25,6 +25,7 @@ class KompenResponHubActiveStudentImportResource extends JsonResource
             'uploader_name' => $this->uploader_name,
             'uploader_email' => $this->uploader_email,
             'imported_at' => $this->imported_at->toIso8601String(),
+            'deleted_at' => $this->deleted_at?->toIso8601String(),
             'is_active' => $this->relationLoaded('activeReference') && $this->activeReference !== null,
             'activated_at' => $this->relationLoaded('activeReference')
                 ? $this->activeReference?->activated_at?->toIso8601String()
