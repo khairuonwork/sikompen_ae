@@ -15,6 +15,10 @@ import {
     disable,
     enable,
 } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
+import {
+    destroyRecipient,
+    storeRecipient,
+} from '@/actions/App/Http/Controllers/KompenResponHubPasswordResetSettingsController';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,6 +40,11 @@ type AdminSettingsProps = {
         adminSetupCode: string | null;
         success: string | null;
     };
+    passwordResetRecipients: Array<{ id: number; email: string; createdAt: string | null }>;
+    studentPasswordResetRequests: {
+        data: Array<{ id: number; nim: string; name: string; class: string; code: string; requestedAt: string; expiresAt: string; isExpired: boolean }>;
+        meta: { current_page: number; last_page: number; total: number };
+    };
 };
 
 function formatExpiry(expiresAt: string): string {
@@ -48,6 +57,8 @@ function formatExpiry(expiresAt: string): string {
 export default function AdminSettings({
     setupWindow,
     flash,
+    passwordResetRecipients,
+    studentPasswordResetRequests,
 }: AdminSettingsProps): React.JSX.Element {
     const [copied, setCopied] = useState(false);
 
@@ -206,6 +217,33 @@ export default function AdminSettings({
                                 )}
                             </Form>
                         </CardFooter>
+                    </Card>
+
+                    <Card className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
+                        <CardHeader>
+                            <CardTitle className="text-xl font-black text-[#395886]">Penerima OTP Reset Admin</CardTitle>
+                            <CardDescription>Hanya Gmail yang terdaftar di bawah ini yang dapat menerima OTP reset password admin.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <Form method="post" action={storeRecipient.url()} className="flex flex-col gap-2 sm:flex-row">
+                                {({ errors, processing }) => <>
+                                    <input name="email" type="email" required placeholder="admin@gmail.com" className="h-10 min-w-0 flex-1 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm" />
+                                    <Button type="submit" disabled={processing} className="rounded-xl bg-[#395886] text-white">Tambah Gmail</Button>
+                                    {errors.email && <p className="basis-full text-xs font-bold text-rose-600">{errors.email}</p>}
+                                </>}
+                            </Form>
+                            <div className="overflow-x-auto rounded-xl border border-[#D5DEEF]">
+                                <table className="w-full min-w-[480px] text-left text-sm"><thead className="bg-[#F0F3FA] text-xs uppercase tracking-wider"><tr><th className="p-3">Gmail</th><th className="p-3">Tindakan</th></tr></thead><tbody>{passwordResetRecipients.length === 0 ? <tr><td className="p-3 text-[#395886]/65" colSpan={2}>Belum ada Gmail penerima OTP.</td></tr> : passwordResetRecipients.map((recipient) => <tr key={recipient.id} className="border-t border-[#F0F3FA]"><td className="p-3 font-medium">{recipient.email}</td><td className="p-3"><Form method="delete" action={destroyRecipient.url(recipient.id)}><Button type="submit" variant="outline" className="h-8 rounded-lg border-rose-300 text-rose-700">Hapus</Button></Form></td></tr>)}</tbody></table>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
+                        <CardHeader>
+                            <CardTitle className="text-xl font-black text-[#395886]">Mahasiswa Reset Password</CardTitle>
+                            <CardDescription>Berikan kode kepada mahasiswa yang meminta reset. Kode berlaku 24 jam dan hilang otomatis setelah digunakan.</CardDescription>
+                        </CardHeader>
+                        <CardContent><div className="overflow-x-auto rounded-xl border border-[#D5DEEF]"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-[#F0F3FA] text-xs uppercase tracking-wider"><tr><th className="p-3">Mahasiswa</th><th className="p-3">Kelas</th><th className="p-3">Kode</th><th className="p-3">Berlaku hingga</th><th className="p-3">Status</th></tr></thead><tbody>{studentPasswordResetRequests.data.length === 0 ? <tr><td className="p-3 text-[#395886]/65" colSpan={5}>Belum ada permintaan reset mahasiswa.</td></tr> : studentPasswordResetRequests.data.map((item) => <tr key={item.id} className="border-t border-[#F0F3FA]"><td className="p-3"><p className="font-bold">{item.name}</p><p className="font-mono text-xs text-[#395886]/70">{item.nim}</p></td><td className="p-3">{item.class}</td><td className="p-3 font-mono font-bold tracking-wider">{item.code}</td><td className="p-3">{formatExpiry(item.expiresAt)}</td><td className="p-3"><span className={item.isExpired ? 'text-rose-700' : 'text-emerald-700'}>{item.isExpired ? 'Kedaluwarsa — mahasiswa harus meminta ulang' : 'Aktif'}</span></td></tr>)}</tbody></table></div><p className="mt-3 text-xs text-[#395886]/65">Halaman {studentPasswordResetRequests.meta.current_page} dari {studentPasswordResetRequests.meta.last_page} · {studentPasswordResetRequests.meta.total} permintaan.</p></CardContent>
                     </Card>
                 </section>
             </main>

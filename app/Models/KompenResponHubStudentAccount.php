@@ -11,6 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
  * @property int $id
  * @property string $nim
  * @property string $password
+ * @property int $session_version
  * @property CarbonInterface|null $password_changed_at
  * @property CarbonInterface|null $last_login_at
  * @property string|null $remember_token
@@ -29,6 +30,7 @@ class KompenResponHubStudentAccount extends Authenticatable
         'password',
         'password_changed_at',
         'last_login_at',
+        'session_version',
     ];
 
     protected $hidden = [

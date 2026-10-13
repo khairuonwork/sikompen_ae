@@ -24,6 +24,10 @@ class SikompenAdminAccess
 
     public function hasAdminAccess(Request $request): bool
     {
-        return $request->user('admin') instanceof KompenResponHubAdmin;
+        $admin = $request->user('admin');
+
+        return $admin instanceof KompenResponHubAdmin
+            && (! $request->session()->has('admin_session_version')
+                || $request->session()->get('admin_session_version') === $admin->session_version);
     }
 }

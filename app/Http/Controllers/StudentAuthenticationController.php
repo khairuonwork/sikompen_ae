@@ -76,6 +76,7 @@ class StudentAuthenticationController extends Controller
         RateLimiter::clear($throttleKey);
         $request->session()->regenerate();
         $account->forceFill(['last_login_at' => now()])->save();
+        $request->session()->put('student_session_version', $account->session_version);
 
         return $account->requiresPasswordChange()
             ? to_route('student.password.edit')

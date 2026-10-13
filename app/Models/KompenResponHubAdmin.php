@@ -11,6 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
  * @property int $id
  * @property string $email
  * @property string $password
+ * @property int $session_version
  * @property string|null $remember_token
  * @property CarbonInterface|null $created_at
  * @property CarbonInterface|null $updated_at
@@ -25,6 +26,7 @@ class KompenResponHubAdmin extends Authenticatable
     protected $fillable = [
         'email',
         'password',
+        'session_version',
     ];
 
     protected $hidden = [

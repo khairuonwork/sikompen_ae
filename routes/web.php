@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminAuthenticationController;
+use App\Http\Controllers\AdminPasswordResetController;
 use App\Http\Controllers\KompenResponHubActiveStudentImportController;
 use App\Http\Controllers\KompenResponHubActivityRetentionController;
 use App\Http\Controllers\KompenResponHubAdminSetupController;
@@ -11,8 +12,10 @@ use App\Http\Controllers\KompenResponHubImportController;
 use App\Http\Controllers\KompenResponHubImportTaskController;
 use App\Http\Controllers\KompenResponHubLandingController;
 use App\Http\Controllers\KompenResponHubLifecycleController;
+use App\Http\Controllers\KompenResponHubPasswordResetSettingsController;
 use App\Http\Controllers\StudentAuthenticationController;
 use App\Http\Controllers\StudentPasswordController;
+use App\Http\Controllers\StudentPasswordResetController;
 use App\Http\Controllers\StudentProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -23,6 +26,12 @@ Route::middleware('guest:admin')->group(function (): void {
     Route::post('admin/login', [AdminAuthenticationController::class, 'store'])
         ->middleware('throttle:admin-login')
         ->name('admin.login.store');
+    Route::get('admin/lupa-password', [AdminPasswordResetController::class, 'createRequest'])->name('admin.password-reset.request');
+    Route::post('admin/lupa-password', [AdminPasswordResetController::class, 'storeRequest'])
+        ->middleware('throttle:admin-password-reset-request')->name('admin.password-reset.request.store');
+    Route::get('admin/reset-password', [AdminPasswordResetController::class, 'edit'])->name('admin.password-reset.edit');
+    Route::put('admin/reset-password', [AdminPasswordResetController::class, 'update'])
+        ->middleware('throttle:admin-password-reset-confirm')->name('admin.password-reset.update');
 });
 
 Route::middleware('guest:student')->group(function (): void {
@@ -30,6 +39,12 @@ Route::middleware('guest:student')->group(function (): void {
     Route::post('mahasiswa/login', [StudentAuthenticationController::class, 'store'])
         ->middleware('throttle:student-login')
         ->name('student.login.store');
+    Route::get('mahasiswa/lupa-password', [StudentPasswordResetController::class, 'createRequest'])->name('student.password-reset.request');
+    Route::post('mahasiswa/lupa-password', [StudentPasswordResetController::class, 'storeRequest'])
+        ->middleware('throttle:student-password-reset-request')->name('student.password-reset.request.store');
+    Route::get('mahasiswa/reset-password', [StudentPasswordResetController::class, 'edit'])->name('student.password-reset.edit');
+    Route::put('mahasiswa/reset-password', [StudentPasswordResetController::class, 'update'])
+        ->middleware('throttle:student-password-reset-confirm')->name('student.password-reset.update');
 });
 
 Route::get('admin/setup', [KompenResponHubAdminSetupController::class, 'create'])->name('admin.setup.create');
@@ -164,5 +179,9 @@ Route::middleware('sikompen.admin')->prefix('admin')->name('admin.')->group(func
         ->name('settings.admin-setup.enable');
     Route::delete('settings/admin-setup', [KompenResponHubAdminSetupController::class, 'disable'])
         ->name('settings.admin-setup.disable');
+    Route::post('settings/password-reset-recipients', [KompenResponHubPasswordResetSettingsController::class, 'storeRecipient'])
+        ->middleware('throttle:10,1')->name('settings.password-reset-recipients.store');
+    Route::delete('settings/password-reset-recipients/{recipient}', [KompenResponHubPasswordResetSettingsController::class, 'destroyRecipient'])
+        ->middleware('throttle:10,1')->name('settings.password-reset-recipients.destroy');
     Route::post('logout', [AdminAuthenticationController::class, 'destroy'])->name('logout');
 });

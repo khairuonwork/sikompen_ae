@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { home } from '@/routes';
+import { createRequest as passwordResetRequest } from '@/actions/App/Http/Controllers/AdminPasswordResetController';
 
 type AdminLoginProps = {
     flash: {
@@ -154,6 +155,12 @@ export default function AdminLogin({
                                             : 'Masuk ke panel admin'}
                                     </Button>
 
+                                    <Link
+                                        href={passwordResetRequest.url()}
+                                        className="text-xs font-bold text-[#395886] underline"
+                                    >
+                                        Lupa password?
+                                    </Link>
                                     <Link
                                         href={home.url()}
                                         className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[#395886]/70 transition-all duration-200 hover:-translate-x-1 hover:text-[#395886]"

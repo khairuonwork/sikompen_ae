@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreAdminLoginRequest;
+use App\Models\KompenResponHubAdmin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -40,6 +41,9 @@ class AdminAuthenticationController extends Controller
 
         RateLimiter::clear($throttleKey);
         $request->session()->regenerate();
+        /** @var KompenResponHubAdmin $admin */
+        $admin = Auth::guard('admin')->user();
+        $request->session()->put('admin_session_version', $admin->session_version);
 
         return to_route('admin.kompen-respon.index');
     }

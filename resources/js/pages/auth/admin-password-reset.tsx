@@ -1,0 +1,8 @@
+import { usePage } from '@inertiajs/react';
+import { update } from '@/actions/App/Http/Controllers/AdminPasswordResetController';
+import { PasswordResetForm } from './password-reset-form';
+
+export default function AdminPasswordReset(): React.JSX.Element {
+    const email = new URLSearchParams(usePage().url.split('?')[1] ?? '').get('email') ?? '';
+    return <PasswordResetForm title="Buat Password Admin Baru" description="Masukkan OTP enam digit dari email terdaftar." identifierLabel="Gmail admin" identifierName="email" identifierType="email" identifierDefaultValue={email} codeLabel="Kode OTP" codeName="otp" action={update.form()} loginHref="/admin/login" />;
+}

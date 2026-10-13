@@ -29,8 +29,10 @@ class StudentPasswordController extends Controller
         $student->update([
             'password' => $request->string('password')->toString(),
             'password_changed_at' => now(),
+            'session_version' => $student->session_version + 1,
         ]);
         $request->session()->regenerate();
+        $request->session()->put('student_session_version', $student->session_version);
 
         return to_route('student.kompen-respon.index')
             ->with('success', 'Password berhasil diperbarui. Data Kompen/Respon Anda kini dapat diakses.');

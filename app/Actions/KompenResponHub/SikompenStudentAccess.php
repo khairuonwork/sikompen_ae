@@ -13,7 +13,10 @@ class SikompenStudentAccess
     {
         $student = $this->studentAccount($request);
 
-        return $student !== null && $this->activeStudentExists($student->nim);
+        return $student !== null
+            && (! $request->session()->has('student_session_version')
+                || $request->session()->get('student_session_version') === $student->session_version)
+            && $this->activeStudentExists($student->nim);
     }
 
     public function studentNim(Request $request): ?string

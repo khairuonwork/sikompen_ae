@@ -71,6 +71,26 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by(Str::transliterate("admin-setup|{$request->ip()}"));
         });
 
+        RateLimiter::for('admin-password-reset-request', function (Request $request): Limit {
+            $email = Str::lower($request->string('email')->toString());
+
+            return Limit::perMinute(3)->by(Str::transliterate("admin-reset-request|{$email}|{$request->ip()}"));
+        });
+
+        RateLimiter::for('admin-password-reset-confirm', function (Request $request): Limit {
+            $email = Str::lower($request->string('email')->toString());
+
+            return Limit::perMinute(5)->by(Str::transliterate("admin-reset-confirm|{$email}|{$request->ip()}"));
+        });
+
+        RateLimiter::for('student-password-reset-request', function (Request $request): Limit {
+            return Limit::perMinute(3)->by(Str::transliterate("student-reset-request|{$request->string('nim')->toString()}|{$request->ip()}"));
+        });
+
+        RateLimiter::for('student-password-reset-confirm', function (Request $request): Limit {
+            return Limit::perMinute(5)->by(Str::transliterate("student-reset-confirm|{$request->string('nim')->toString()}|{$request->ip()}"));
+        });
+
         RateLimiter::for('sikompen-data', function (Request $request): Limit {
             $sessionId = $request->hasSession() ? $request->session()->getId() : 'no-session';
 

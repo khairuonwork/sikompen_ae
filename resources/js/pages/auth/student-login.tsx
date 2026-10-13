@@ -7,6 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { home } from "@/routes";
+import { createRequest as passwordResetRequest } from "@/actions/App/Http/Controllers/StudentPasswordResetController";
 
 export default function StudentLogin(): React.JSX.Element {
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -92,6 +93,9 @@ export default function StudentLogin(): React.JSX.Element {
                                         <LockKeyhole className="mr-2 size-4" />
                                         {processing ? "Memeriksa…" : "Masuk"}
                                     </Button>
+                                    <Link href={passwordResetRequest.url()} className="text-xs font-bold text-[#395886] underline">
+                                        Lupa password?
+                                    </Link>
                                     <Link href={home.url()} className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[#395886]/70 hover:text-[#395886]">
                                         <ArrowLeft className="size-3.5" />
                                         Kembali ke pilihan akses
