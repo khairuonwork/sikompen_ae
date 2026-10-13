@@ -241,6 +241,9 @@ export function WarningPanel({
     const [selectedFilterClass, setSelectedFilterClass] = useState(
         filters.kelas ?? "",
     );
+    const [selectedFilterLevel, setSelectedFilterLevel] = useState(
+        filters.tingkat?.toString() ?? "",
+    );
     const [isOtherPeriodPickerOpen, setIsOtherPeriodPickerOpen] = useState(
         isInspectionMode,
     );
@@ -262,9 +265,10 @@ export function WarningPanel({
 
     useEffect(() => {
         setSelectedFilterClass(filters.kelas ?? "");
+        setSelectedFilterLevel(filters.tingkat?.toString() ?? "");
         setIsOtherPeriodPickerOpen(isInspectionMode);
         setSelectedInspectionPeriod(selectedListPeriod);
-    }, [filters.kelas, isInspectionMode, selectedListPeriod]);
+    }, [filters.kelas, filters.tingkat, isInspectionMode, selectedListPeriod]);
 
     function openCutoffEditor(period: string): void {
         setEditingCutoffPeriod(period);
@@ -277,6 +281,7 @@ export function WarningPanel({
                 query: {
                     tab: "warnings",
                     warning_period: period,
+                    tingkat: filters.tingkat,
                     kelas: filters.kelas,
                     search: filters.search,
                     per_page: filters.per_page,
@@ -340,8 +345,8 @@ export function WarningPanel({
                     className={cn(
                         "mt-4 grid gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 p-3 md:items-end",
                         isOtherPeriodPickerOpen
-                            ? "md:grid-cols-[minmax(190px,1fr)_minmax(150px,0.7fr)_minmax(180px,0.85fr)_auto]"
-                            : "md:grid-cols-[minmax(190px,1fr)_minmax(150px,0.7fr)_auto]",
+                            ? "md:grid-cols-2 xl:grid-cols-[minmax(190px,1fr)_minmax(130px,0.55fr)_minmax(150px,0.7fr)_minmax(180px,0.85fr)_auto]"
+                            : "md:grid-cols-2 xl:grid-cols-[minmax(190px,1fr)_minmax(130px,0.55fr)_minmax(150px,0.7fr)_auto]",
                     )}
                 >
                     <input name="tab" type="hidden" value="warnings" />
@@ -349,6 +354,11 @@ export function WarningPanel({
                         name="warning_period"
                         type="hidden"
                         value={selectedWarningPeriod}
+                    />
+                    <input
+                        name="tingkat"
+                        type="hidden"
+                        value={selectedFilterLevel}
                     />
                     <input
                         name="kelas"
@@ -371,6 +381,33 @@ export function WarningPanel({
                         placeholder="Cari nama atau NIM"
                         className="h-10 rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886]"
                     />
+                    <Select
+                        value={selectedFilterLevel || "all"}
+                        onValueChange={(value) =>
+                            setSelectedFilterLevel(value === "all" ? "" : value)
+                        }
+                    >
+                        <SelectTrigger className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
+                            <SelectValue placeholder="Semua tingkat" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl text-xs font-semibold">
+                            <SelectItem
+                                value="all"
+                                className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                            >
+                                Semua tingkat
+                            </SelectItem>
+                            {filterOptions.tingkat.map((tingkat) => (
+                                <SelectItem
+                                    key={tingkat}
+                                    value={tingkat.toString()}
+                                    className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                                >
+                                    Tingkat {tingkat}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     <Select
                         value={selectedFilterClass || "all"}
                         onValueChange={(value) =>

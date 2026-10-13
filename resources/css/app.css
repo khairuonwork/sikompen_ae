@@ -162,7 +162,7 @@
     }
 
     .data-table {
-        @apply w-max min-w-full table-auto text-sm;
+        @apply min-w-full w-full table-auto text-sm;
     }
 
     .data-table th {

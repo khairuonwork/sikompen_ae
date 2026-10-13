@@ -157,11 +157,12 @@ class KompenResponHubController extends Controller
         bool $scopeToAuthenticatedStudent,
     ): Response {
         $filters = $this->filtersForRequest($request, $scopeToAuthenticatedStudent);
-        $filterOptions = $this->dataQuery->filterOptions($filters);
         $activeTab = $filters['tab'] ?? 'students';
         if (! $isAdmin && in_array($activeTab, ['upload', 'files', 'imports', 'warnings', 'activity'], true)) {
             $activeTab = 'students';
         }
+
+        $filterOptions = $this->dataQuery->filterOptions($filters);
 
         $cutoffs = $isAdmin
             ? KompenResponHubPeriodCutoff::query()
@@ -175,6 +176,16 @@ class KompenResponHubController extends Controller
                 $cutoffs,
                 $filterOptions['periode_semester'],
             );
+        }
+
+        if (
+            $isAdmin
+            && in_array($activeTab, ['students', 'details'], true)
+            && filled($filters['warning_period'] ?? null)
+            && in_array($filters['warning_period'], $filterOptions['periode_semester'], true)
+        ) {
+            $filters['periode_semester'] = $filters['warning_period'];
+            unset($filters['list_period']);
         }
 
         return Inertia::render('kompen-respon-hub/index', [
