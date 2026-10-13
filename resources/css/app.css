@@ -146,7 +146,6 @@
     .data-table-scroll {
         @apply w-full overflow-x-auto overscroll-x-contain;
         scrollbar-color: #8aaee0 transparent;
-        scrollbar-gutter: stable both-edges;
         scrollbar-width: thin;
     }
 
