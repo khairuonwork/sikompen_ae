@@ -12,6 +12,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
  * @property string $email
  * @property string $password
  * @property int $session_version
+ * @property bool $is_emergency_admin
  * @property string|null $remember_token
  * @property CarbonInterface|null $created_at
  * @property CarbonInterface|null $updated_at
@@ -27,6 +28,7 @@ class KompenResponHubAdmin extends Authenticatable
         'email',
         'password',
         'session_version',
+        'is_emergency_admin',
     ];
 
     protected $hidden = [
@@ -38,6 +40,7 @@ class KompenResponHubAdmin extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'is_emergency_admin' => 'boolean',
         ];
     }
 

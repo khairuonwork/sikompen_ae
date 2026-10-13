@@ -179,9 +179,9 @@ Route::middleware('sikompen.admin')->prefix('admin')->name('admin.')->group(func
         ->name('settings.admin-setup.enable');
     Route::delete('settings/admin-setup', [KompenResponHubAdminSetupController::class, 'disable'])
         ->name('settings.admin-setup.disable');
-    Route::post('settings/password-reset-recipients', [KompenResponHubPasswordResetSettingsController::class, 'storeRecipient'])
-        ->middleware('throttle:10,1')->name('settings.password-reset-recipients.store');
-    Route::delete('settings/password-reset-recipients/{recipient}', [KompenResponHubPasswordResetSettingsController::class, 'destroyRecipient'])
-        ->middleware('throttle:10,1')->name('settings.password-reset-recipients.destroy');
+    Route::post('settings/admin-password-resets/{resetCode}/code', [KompenResponHubPasswordResetSettingsController::class, 'storeCode'])
+        ->middleware('throttle:10,1')->name('settings.admin-password-resets.code.store');
+    Route::delete('settings/admin-password-resets/{resetCode}', [KompenResponHubPasswordResetSettingsController::class, 'destroyCode'])
+        ->middleware('throttle:10,1')->name('settings.admin-password-resets.destroy');
     Route::post('logout', [AdminAuthenticationController::class, 'destroy'])->name('logout');
 });

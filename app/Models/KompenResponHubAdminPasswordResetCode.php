@@ -6,14 +6,17 @@ use Carbon\CarbonInterface;
 use Database\Factories\KompenResponHubAdminPasswordResetCodeFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
  * @property int $admin_id
- * @property int $recipient_id
- * @property string $code_hash
+ * @property int|null $recipient_id
+ * @property int|null $generated_by_admin_id
+ * @property string|null $code_hash
  * @property int $attempts
- * @property CarbonInterface $expires_at
+ * @property CarbonInterface|null $requested_at
+ * @property CarbonInterface|null $expires_at
  * @property CarbonInterface|null $used_at
  */
 class KompenResponHubAdminPasswordResetCode extends Model
@@ -23,15 +26,21 @@ class KompenResponHubAdminPasswordResetCode extends Model
 
     protected $table = 'sikompen_admin_password_reset_codes';
 
-    protected $fillable = ['admin_id', 'recipient_id', 'code_hash', 'attempts', 'expires_at', 'used_at'];
+    protected $fillable = ['admin_id', 'recipient_id', 'generated_by_admin_id', 'code_hash', 'attempts', 'requested_at', 'expires_at', 'used_at'];
 
     protected function casts(): array
     {
-        return ['expires_at' => 'datetime', 'used_at' => 'datetime'];
+        return ['requested_at' => 'datetime', 'expires_at' => 'datetime', 'used_at' => 'datetime'];
     }
 
     public function getConnectionName(): ?string
     {
         return config('kompen-respon-hub.database_connection');
+    }
+
+    /** @return BelongsTo<KompenResponHubAdmin, $this> */
+    public function admin(): BelongsTo
+    {
+        return $this->belongsTo(KompenResponHubAdmin::class, 'admin_id');
     }
 }

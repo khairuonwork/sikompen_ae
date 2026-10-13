@@ -6,7 +6,7 @@ use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Http\Requests\StoreKompenResponHubAdminSetupRequest;
 use App\Models\KompenResponHubActiveStudent;
 use App\Models\KompenResponHubAdmin;
-use App\Models\KompenResponHubAdminPasswordResetRecipient;
+use App\Models\KompenResponHubAdminPasswordResetCode;
 use App\Models\KompenResponHubAdminSetupWindow;
 use App\Models\KompenResponHubStudentPasswordResetRequest;
 use Illuminate\Http\RedirectResponse;
@@ -86,14 +86,26 @@ class KompenResponHubAdminSetupController extends Controller
                     ? $setupWindow->expires_at?->toIso8601String()
                     : null,
             ],
-            'passwordResetRecipients' => KompenResponHubAdminPasswordResetRecipient::query()
+            'emergencyAdmins' => KompenResponHubAdmin::query()
+                ->where('is_emergency_admin', true)
                 ->orderBy('email')
-                ->get(['id', 'email', 'created_at'])
-                ->map(fn (KompenResponHubAdminPasswordResetRecipient $recipient): array => [
-                    'id' => $recipient->id,
-                    'email' => $recipient->email,
-                    'createdAt' => $recipient->created_at?->toIso8601String(),
-                ]),
+                ->get(['id', 'email'])
+                ->map(fn (KompenResponHubAdmin $admin): array => ['id' => $admin->id, 'email' => $admin->email]),
+            'canManageAdminResets' => $request->user('admin')?->is_emergency_admin === true,
+            'adminPasswordResetRequests' => $request->user('admin')?->is_emergency_admin === true
+                ? KompenResponHubAdminPasswordResetCode::query()
+                    ->with('admin:id,email')
+                    ->whereNull('used_at')
+                    ->latest('requested_at')
+                    ->get()
+                    ->map(fn (KompenResponHubAdminPasswordResetCode $resetCode): array => [
+                        'id' => $resetCode->id,
+                        'email' => $resetCode->admin->email,
+                        'requestedAt' => $resetCode->requested_at?->toIso8601String(),
+                        'expiresAt' => $resetCode->expires_at?->toIso8601String(),
+                        'isIssued' => $resetCode->code_hash !== null && $resetCode->expires_at?->isFuture(),
+                    ])->values()
+                : [],
             'studentPasswordResetRequests' => [
                 'data' => $studentRequests->getCollection()->map(function (KompenResponHubStudentPasswordResetRequest $resetRequest) use ($students): array {
                     $student = $students->get($resetRequest->nim);

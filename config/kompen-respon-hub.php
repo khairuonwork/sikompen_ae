@@ -25,4 +25,9 @@ return [
     'queue' => [
         'stalled_task_minutes' => (int) env('SIKOMPEN_STALLED_TASK_MINUTES', 15),
     ],
+
+    'emergency_admins' => [
+        ['email' => env('SIKOMPEN_EMERGENCY_ADMIN_1_EMAIL'), 'password' => env('SIKOMPEN_EMERGENCY_ADMIN_1_PASSWORD')],
+        ['email' => env('SIKOMPEN_EMERGENCY_ADMIN_2_EMAIL'), 'password' => env('SIKOMPEN_EMERGENCY_ADMIN_2_PASSWORD')],
+    ],
 ];

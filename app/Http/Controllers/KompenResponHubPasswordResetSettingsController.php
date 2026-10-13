@@ -3,48 +3,52 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
-use App\Http\Requests\DestroyKompenResponHubAdminPasswordResetRecipientRequest;
-use App\Http\Requests\StoreKompenResponHubAdminPasswordResetRecipientRequest;
-use App\Models\KompenResponHubAdminPasswordResetRecipient;
+use App\Http\Requests\DestroyAdminPasswordResetCodeRequest;
+use App\Http\Requests\StoreAdminPasswordResetCodeRequest;
+use App\Models\KompenResponHubAdminPasswordResetCode;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Hash;
 
 class KompenResponHubPasswordResetSettingsController extends Controller
 {
-    public function storeRecipient(StoreKompenResponHubAdminPasswordResetRecipientRequest $request): RedirectResponse
-    {
-        $recipient = KompenResponHubAdminPasswordResetRecipient::query()->firstOrCreate(
-            ['email' => $request->string('email')->toString()],
-            ['added_by_admin_id' => $request->user('admin')?->id],
-        );
-
-        if ($recipient->wasRecentlyCreated) {
-            app(RecordKompenResponHubActivity::class)->execute(
-                'admin_reset_recipient_added',
-                'admin_password_reset_recipient',
-                (string) $recipient->id,
-                $request->user('admin'),
-                $request,
-                subjectName: $recipient->email,
-            );
-        }
-
-        return to_route('admin.settings')->with('success', 'Email penerima OTP admin disimpan.');
-    }
-
-    public function destroyRecipient(
-        DestroyKompenResponHubAdminPasswordResetRecipientRequest $request,
-        KompenResponHubAdminPasswordResetRecipient $recipient,
+    public function storeCode(
+        StoreAdminPasswordResetCodeRequest $request,
+        KompenResponHubAdminPasswordResetCode $resetCode,
     ): RedirectResponse {
+        $code = (string) random_int(100_000, 999_999);
+        $resetCode->forceFill([
+            'generated_by_admin_id' => $request->user('admin')->id,
+            'code_hash' => Hash::make($code),
+            'attempts' => 0,
+            'expires_at' => now()->addMinutes(15),
+            'used_at' => null,
+        ])->save();
         app(RecordKompenResponHubActivity::class)->execute(
-            'admin_reset_recipient_removed',
-            'admin_password_reset_recipient',
-            (string) $recipient->id,
+            'admin_reset_code_issued',
+            'admin_password_reset',
+            (string) $resetCode->id,
             $request->user('admin'),
             $request,
-            subjectName: $recipient->email,
+            subjectName: $resetCode->admin?->email,
         );
-        $recipient->delete();
 
-        return to_route('admin.settings')->with('success', 'Email penerima OTP admin dihapus.');
+        return to_route('admin.settings')->with('admin_reset_code', $code)->with('success', 'Kode reset admin berhasil dibuat dan berlaku 15 menit.');
+    }
+
+    public function destroyCode(
+        DestroyAdminPasswordResetCodeRequest $request,
+        KompenResponHubAdminPasswordResetCode $resetCode,
+    ): RedirectResponse {
+        app(RecordKompenResponHubActivity::class)->execute(
+            'admin_reset_request_cancelled',
+            'admin_password_reset',
+            (string) $resetCode->id,
+            $request->user('admin'),
+            $request,
+            subjectName: $resetCode->admin?->email,
+        );
+        $resetCode->delete();
+
+        return to_route('admin.settings')->with('success', 'Permintaan reset admin dibatalkan.');
     }
 }

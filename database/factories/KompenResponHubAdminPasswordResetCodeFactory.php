@@ -4,7 +4,6 @@ namespace Database\Factories;
 
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubAdminPasswordResetCode;
-use App\Models\KompenResponHubAdminPasswordResetRecipient;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 
@@ -22,9 +21,11 @@ class KompenResponHubAdminPasswordResetCodeFactory extends Factory
     {
         return [
             'admin_id' => KompenResponHubAdmin::factory(),
-            'recipient_id' => KompenResponHubAdminPasswordResetRecipient::factory(),
+            'recipient_id' => null,
+            'generated_by_admin_id' => null,
             'code_hash' => Hash::make('123456'),
             'attempts' => 0,
+            'requested_at' => now(),
             'expires_at' => now()->addMinutes(15),
             'used_at' => null,
         ];

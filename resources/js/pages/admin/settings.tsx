@@ -16,8 +16,8 @@ import {
     enable,
 } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
 import {
-    destroyRecipient,
-    storeRecipient,
+    destroyCode,
+    storeCode,
 } from '@/actions/App/Http/Controllers/KompenResponHubPasswordResetSettingsController';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -38,9 +38,12 @@ type AdminSettingsProps = {
     };
     flash: {
         adminSetupCode: string | null;
+        adminResetCode: string | null;
         success: string | null;
     };
-    passwordResetRecipients: Array<{ id: number; email: string; createdAt: string | null }>;
+    emergencyAdmins: Array<{ id: number; email: string }>;
+    canManageAdminResets: boolean;
+    adminPasswordResetRequests: Array<{ id: number; email: string; requestedAt: string | null; expiresAt: string | null; isIssued: boolean }>;
     studentPasswordResetRequests: {
         data: Array<{ id: number; nim: string; name: string; class: string; code: string; requestedAt: string; expiresAt: string; isExpired: boolean }>;
         meta: { current_page: number; last_page: number; total: number };
@@ -57,7 +60,9 @@ function formatExpiry(expiresAt: string): string {
 export default function AdminSettings({
     setupWindow,
     flash,
-    passwordResetRecipients,
+    emergencyAdmins,
+    canManageAdminResets,
+    adminPasswordResetRequests,
     studentPasswordResetRequests,
 }: AdminSettingsProps): React.JSX.Element {
     const [copied, setCopied] = useState(false);
@@ -146,6 +151,13 @@ export default function AdminSettings({
                         </Alert>
                     )}
 
+                    {flash.adminResetCode && (
+                        <Alert className="border-[#8AAEE0] bg-white text-[#395886]">
+                            <AlertTitle>Kode reset admin — tampilkan sekali</AlertTitle>
+                            <AlertDescription className="flex flex-wrap items-center gap-3"><code className="rounded-lg bg-[#F0F3FA] px-3 py-2 font-mono text-lg font-black tracking-widest">{flash.adminResetCode}</code><Button type="button" variant="outline" className="h-9" onClick={() => handleCopy(flash.adminResetCode!)}>Salin kode</Button><span className="text-xs">Berlaku 15 menit.</span></AlertDescription>
+                        </Alert>
+                    )}
+
                     {/* Main Card */}
                     <Card className="group bg-white/80 border border-white/80 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(57,88,134,0.15)] transition-all duration-500 overflow-hidden backdrop-blur-xl hover:-translate-y-1">
                         <CardHeader className="border-b border-[#F0F3FA] pb-6">
@@ -221,20 +233,14 @@ export default function AdminSettings({
 
                     <Card className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
                         <CardHeader>
-                            <CardTitle className="text-xl font-black text-[#395886]">Penerima OTP Reset Admin</CardTitle>
-                            <CardDescription>Hanya Gmail yang terdaftar di bawah ini yang dapat menerima OTP reset password admin.</CardDescription>
+                            <CardTitle className="text-xl font-black text-[#395886]">Akun Darurat Reset Admin</CardTitle>
+                            <CardDescription>Dua akun ini dapat menerbitkan kode reset. Password akun darurat tidak pernah ditampilkan aplikasi.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <Form method="post" action={storeRecipient.url()} className="flex flex-col gap-2 sm:flex-row">
-                                {({ errors, processing }) => <>
-                                    <input name="email" type="email" required placeholder="admin@gmail.com" className="h-10 min-w-0 flex-1 rounded-xl border border-[#8AAEE0] bg-white px-3 text-sm" />
-                                    <Button type="submit" disabled={processing} className="rounded-xl bg-[#395886] text-white">Tambah Gmail</Button>
-                                    {errors.email && <p className="basis-full text-xs font-bold text-rose-600">{errors.email}</p>}
-                                </>}
-                            </Form>
                             <div className="overflow-x-auto rounded-xl border border-[#D5DEEF]">
-                                <table className="w-full min-w-[480px] text-left text-sm"><thead className="bg-[#F0F3FA] text-xs uppercase tracking-wider"><tr><th className="p-3">Gmail</th><th className="p-3">Tindakan</th></tr></thead><tbody>{passwordResetRecipients.length === 0 ? <tr><td className="p-3 text-[#395886]/65" colSpan={2}>Belum ada Gmail penerima OTP.</td></tr> : passwordResetRecipients.map((recipient) => <tr key={recipient.id} className="border-t border-[#F0F3FA]"><td className="p-3 font-medium">{recipient.email}</td><td className="p-3"><Form method="delete" action={destroyRecipient.url(recipient.id)}><Button type="submit" variant="outline" className="h-8 rounded-lg border-rose-300 text-rose-700">Hapus</Button></Form></td></tr>)}</tbody></table>
+                                <table className="w-full min-w-[480px] text-left text-sm"><thead className="bg-[#F0F3FA] text-xs uppercase tracking-wider"><tr><th className="p-3">Akun</th><th className="p-3">Status</th></tr></thead><tbody>{emergencyAdmins.length === 0 ? <tr><td className="p-3 text-[#395886]/65" colSpan={2}>Akun darurat belum di-seed.</td></tr> : emergencyAdmins.map((admin) => <tr key={admin.id} className="border-t border-[#F0F3FA]"><td className="p-3 font-medium">{admin.email}</td><td className="p-3 text-emerald-700">Dapat menerbitkan kode</td></tr>)}</tbody></table>
                             </div>
+                            {canManageAdminResets && <div className="overflow-x-auto rounded-xl border border-[#D5DEEF]"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-[#F0F3FA] text-xs uppercase tracking-wider"><tr><th className="p-3">Admin pemohon</th><th className="p-3">Diminta</th><th className="p-3">Status</th><th className="p-3">Tindakan</th></tr></thead><tbody>{adminPasswordResetRequests.length === 0 ? <tr><td className="p-3 text-[#395886]/65" colSpan={4}>Belum ada permintaan reset admin.</td></tr> : adminPasswordResetRequests.map((item) => <tr key={item.id} className="border-t border-[#F0F3FA]"><td className="p-3 font-medium">{item.email}</td><td className="p-3">{item.requestedAt ? formatExpiry(item.requestedAt) : '-'}</td><td className="p-3">{item.isIssued && item.expiresAt ? `Kode aktif hingga ${formatExpiry(item.expiresAt)}` : 'Menunggu kode'}</td><td className="flex gap-2 p-3"><Form method="post" action={storeCode.url(item.id)}><Button type="submit" className="h-8 rounded-lg bg-[#395886] text-white">{item.isIssued ? 'Buat ulang' : 'Buat kode'}</Button></Form><Form method="delete" action={destroyCode.url(item.id)}><Button type="submit" variant="outline" className="h-8 rounded-lg border-rose-300 text-rose-700">Batalkan</Button></Form></td></tr>)}</tbody></table></div>}
                         </CardContent>
                     </Card>
 

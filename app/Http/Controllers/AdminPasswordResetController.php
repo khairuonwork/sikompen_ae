@@ -4,14 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreAdminPasswordResetRequest;
 use App\Http\Requests\UpdateAdminPasswordResetRequest;
-use App\Mail\AdminPasswordResetCodeMail;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubAdminPasswordResetCode;
-use App\Models\KompenResponHubAdminPasswordResetRecipient;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -28,27 +25,29 @@ class AdminPasswordResetController extends Controller
         $email = $request->string('email')->toString();
 
         DB::connection(config('kompen-respon-hub.database_connection'))->transaction(function () use ($email): void {
-            $recipient = KompenResponHubAdminPasswordResetRecipient::query()->where('email', $email)->lockForUpdate()->first();
             $admin = KompenResponHubAdmin::query()->where('email', $email)->lockForUpdate()->first();
 
-            if ($recipient === null || $admin === null) {
+            if ($admin === null) {
                 return;
             }
 
-            KompenResponHubAdminPasswordResetCode::query()->where('admin_id', $admin->id)->delete();
-            $otp = (string) random_int(100_000, 999_999);
-            KompenResponHubAdminPasswordResetCode::query()->create([
-                'admin_id' => $admin->id,
-                'recipient_id' => $recipient->id,
-                'code_hash' => Hash::make($otp),
-                'expires_at' => now()->addMinutes(15),
-            ]);
-            Mail::to($recipient->email)->queue((new AdminPasswordResetCodeMail($otp, $recipient->email))->afterCommit());
+            KompenResponHubAdminPasswordResetCode::query()->updateOrCreate(
+                ['admin_id' => $admin->id],
+                [
+                    'recipient_id' => null,
+                    'generated_by_admin_id' => null,
+                    'code_hash' => null,
+                    'attempts' => 0,
+                    'requested_at' => now(),
+                    'expires_at' => null,
+                    'used_at' => null,
+                ],
+            );
         });
 
         return to_route('admin.password-reset.edit', ['email' => $email])->with(
             'success',
-            'Jika email terdaftar sebagai penerima OTP reset, kode akan dikirim. Periksa email atau hubungi administrator.',
+            'Jika email terdaftar, permintaan reset dicatat. Hubungi pemegang akun darurat untuk memperoleh kode reset.',
         );
     }
 
@@ -66,13 +65,13 @@ class AdminPasswordResetController extends Controller
             $code = $admin === null ? null : KompenResponHubAdminPasswordResetCode::query()
                 ->where('admin_id', $admin->id)->whereNull('used_at')->latest('id')->lockForUpdate()->first();
 
-            if ($admin === null || $code === null || $code->expires_at->isPast() || $code->attempts >= 5) {
-                throw ValidationException::withMessages(['otp' => 'Kode OTP tidak valid atau sudah kedaluwarsa.']);
+            if ($admin === null || $code === null || $code->code_hash === null || $code->expires_at === null || $code->expires_at->isPast() || $code->attempts >= 5) {
+                throw ValidationException::withMessages(['otp' => 'Kode reset tidak valid atau sudah kedaluwarsa.']);
             }
 
             if (! Hash::check($request->string('otp')->toString(), $code->code_hash)) {
                 $code->increment('attempts');
-                throw ValidationException::withMessages(['otp' => 'Kode OTP tidak tepat.']);
+                throw ValidationException::withMessages(['otp' => 'Kode reset tidak tepat.']);
             }
 
             $admin->forceFill([

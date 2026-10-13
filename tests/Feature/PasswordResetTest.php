@@ -1,47 +1,46 @@
 <?php
 
-use App\Mail\AdminPasswordResetCodeMail;
 use App\Models\KompenResponHubActiveStudent;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubAdminPasswordResetCode;
-use App\Models\KompenResponHubAdminPasswordResetRecipient;
 use App\Models\KompenResponHubStudentAccount;
 use App\Models\KompenResponHubStudentPasswordResetRequest;
+use Database\Seeders\SikompenEmergencyAdminSeeder;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 
-test('an allowlisted administrator can request an emailed reset OTP', function (): void {
-    Mail::fake();
+test('an administrator can request a reset code without disclosing account availability', function (): void {
     $admin = KompenResponHubAdmin::factory()->create(['email' => 'admin@gmail.com']);
-    KompenResponHubAdminPasswordResetRecipient::query()->create(['email' => $admin->email]);
 
     $this->post('/admin/lupa-password', ['email' => $admin->email])
         ->assertRedirect('/admin/reset-password?email=admin%40gmail.com');
 
     $code = KompenResponHubAdminPasswordResetCode::query()->sole();
-    expect($code->admin_id)->toBe($admin->id)->and($code->expires_at->isFuture())->toBeTrue();
-    Mail::assertQueued(AdminPasswordResetCodeMail::class);
+    expect($code->admin_id)->toBe($admin->id)->and($code->code_hash)->toBeNull();
 });
 
-test('a non allowlisted admin reset request does not disclose account availability', function (): void {
-    Mail::fake();
-
+test('an unknown admin reset request does not disclose account availability', function (): void {
     $this->post('/admin/lupa-password', ['email' => 'unknown@gmail.com'])
         ->assertRedirect('/admin/reset-password?email=unknown%40gmail.com');
 
     expect(KompenResponHubAdminPasswordResetCode::query()->count())->toBe(0);
-    Mail::assertNothingQueued();
 });
 
-test('an administrator can reset their password with a valid one-time OTP', function (): void {
+test('an emergency admin can issue a one-time code for an administrator reset', function (): void {
+    $emergencyAdmin = KompenResponHubAdmin::factory()->create(['is_emergency_admin' => true]);
     $admin = KompenResponHubAdmin::factory()->create(['email' => 'admin@gmail.com']);
-    $recipient = KompenResponHubAdminPasswordResetRecipient::query()->create(['email' => $admin->email]);
-    KompenResponHubAdminPasswordResetCode::query()->create([
-        'admin_id' => $admin->id,
-        'recipient_id' => $recipient->id,
-        'code_hash' => Hash::make('123456'),
-        'expires_at' => now()->addMinutes(15),
-    ]);
+    $reset = KompenResponHubAdminPasswordResetCode::query()->create(['admin_id' => $admin->id, 'requested_at' => now()]);
+
+    $this->actingAs($emergencyAdmin, 'admin')
+        ->post("/admin/settings/admin-password-resets/{$reset->id}/code")
+        ->assertRedirect('/admin/settings')
+        ->assertSessionHas('admin_reset_code');
+
+    expect($reset->fresh()->code_hash)->not->toBeNull();
+});
+
+test('an administrator can reset their password with a valid one-time code', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create(['email' => 'admin@gmail.com']);
+    KompenResponHubAdminPasswordResetCode::query()->create(['admin_id' => $admin->id, 'code_hash' => Hash::make('123456'), 'requested_at' => now(), 'expires_at' => now()->addMinutes(15)]);
 
     $this->put('/admin/reset-password', [
         'email' => $admin->email,
@@ -88,4 +87,15 @@ test('a pending student reset request retains its code until it expires', functi
     $this->post('/mahasiswa/lupa-password', ['nim' => $nim]);
 
     expect($existing->fresh()->reset_code)->toBe('ABCDEFG1');
+});
+
+test('the emergency admin seeder creates the two configured emergency accounts', function (): void {
+    config()->set('kompen-respon-hub.emergency_admins', [
+        ['email' => 'darurat-satu@example.test', 'password' => 'Password-Darurat#2026'],
+        ['email' => 'darurat-dua@example.test', 'password' => 'Password-Darurat#2026'],
+    ]);
+
+    $this->seed(SikompenEmergencyAdminSeeder::class);
+
+    expect(KompenResponHubAdmin::query()->where('is_emergency_admin', true)->count())->toBe(2);
 });

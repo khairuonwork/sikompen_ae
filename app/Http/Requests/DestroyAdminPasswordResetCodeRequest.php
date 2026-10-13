@@ -4,10 +4,10 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class DestroyKompenResponHubAdminPasswordResetRecipientRequest extends FormRequest
+class DestroyAdminPasswordResetCodeRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user('admin') !== null;
+        return $this->user('admin')?->is_emergency_admin === true;
     }
 }
