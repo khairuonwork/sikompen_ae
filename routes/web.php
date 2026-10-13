@@ -11,7 +11,6 @@ use App\Http\Controllers\KompenResponHubImportController;
 use App\Http\Controllers\KompenResponHubImportTaskController;
 use App\Http\Controllers\KompenResponHubLandingController;
 use App\Http\Controllers\KompenResponHubLifecycleController;
-use App\Http\Controllers\KompenResponHubTaskDiagnosticController;
 use App\Http\Controllers\StudentAuthenticationController;
 use App\Http\Controllers\StudentPasswordController;
 use App\Http\Controllers\StudentProfileController;
@@ -160,9 +159,6 @@ Route::middleware('sikompen.admin')->prefix('admin')->name('admin.')->group(func
     Route::post('kompen-respon/active-students/imports/{import}/restore', [KompenResponHubActiveStudentImportController::class, 'restore'])
         ->middleware('throttle:10,1')
         ->name('kompen-respon.active-students.imports.restore');
-    Route::post('kompen-respon/tasks/retry', [KompenResponHubTaskDiagnosticController::class, 'retry'])
-        ->middleware('throttle:10,15')
-        ->name('kompen-respon.tasks.retry');
     Route::get('settings', [KompenResponHubAdminSetupController::class, 'settings'])->name('settings');
     Route::post('settings/admin-setup', [KompenResponHubAdminSetupController::class, 'enable'])
         ->name('settings.admin-setup.enable');

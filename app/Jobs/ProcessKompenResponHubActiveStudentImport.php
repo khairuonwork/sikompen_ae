@@ -57,7 +57,7 @@ class ProcessKompenResponHubActiveStudentImport implements ShouldQueue
         } catch (Throwable) {
             $this->markAsFailed(
                 $task,
-                'Daftar mahasiswa aktif tidak dapat dibaca. Simpan ulang sebagai XLSX dari template lalu unggah kembali.',
+                'Daftar mahasiswa aktif tidak dapat dibaca.',
                 $activity,
             );
 
@@ -132,7 +132,7 @@ class ProcessKompenResponHubActiveStudentImport implements ShouldQueue
 
         $this->markAsFailed(
             $task,
-            'Proses impor daftar mahasiswa aktif berhenti karena terjadi kendala pada server. Silakan unggah kembali atau hubungi administrator.',
+            'Proses impor daftar mahasiswa aktif berhenti karena terjadi kendala pada server.',
             app(RecordKompenResponHubActivity::class),
         );
     }
@@ -173,13 +173,16 @@ class ProcessKompenResponHubActiveStudentImport implements ShouldQueue
             return;
         }
 
+        $sourceWorkbookRemoved = $this->deleteSourceWorkbook($task->stored_path);
+        $failureMessage = $this->failureMessage($message);
+
         $this->updateProgress(
             $task,
             KompenResponHubActiveStudentImportTask::StatusFailed,
             100,
-            'Impor daftar mahasiswa aktif gagal. Periksa keterangan di bawah.',
+            'Impor daftar mahasiswa aktif gagal. Perbaiki file lalu unggah ulang.',
             [
-                'error_message' => $message,
+                'error_message' => $failureMessage,
                 'failed_at' => now(),
             ],
         );
@@ -189,9 +192,30 @@ class ProcessKompenResponHubActiveStudentImport implements ShouldQueue
             'active_student_import_task',
             (string) $task->id,
             KompenResponHubAdmin::query()->find($task->uploaded_by_admin_id),
-            reason: $message,
-            metadata: ['original_filename' => $task->original_filename],
+            reason: $failureMessage,
+            metadata: [
+                'original_filename' => $task->original_filename,
+                'source_workbook_removed' => $sourceWorkbookRemoved,
+            ],
             subjectName: $task->original_filename,
         );
+    }
+
+    private function failureMessage(string $message): string
+    {
+        return "{$message} File unggahan dibersihkan demi konsistensi data. Perbaiki daftar lalu unggah ulang.";
+    }
+
+    private function deleteSourceWorkbook(string $storedPath): bool
+    {
+        if (! str_starts_with($storedPath, 'kompen-respon-hub/imports/active-students/')) {
+            return false;
+        }
+
+        try {
+            return Storage::disk('local')->delete($storedPath);
+        } catch (Throwable) {
+            return false;
+        }
     }
 }

@@ -39,7 +39,6 @@ import { ImportVersionList } from "@/features/kompen-respon-hub/list-file/import
 import { ActiveStudentImportList } from "@/features/kompen-respon-hub/list-file/active-student-import-list";
 import { DataConsistencyPanel } from "@/features/kompen-respon-hub/list-file/data-consistency-panel";
 import { RecycleBinPanel } from "@/features/kompen-respon-hub/list-file/recycle-bin-panel";
-import { TaskDiagnosticPanel } from "@/features/kompen-respon-hub/diagnostics/task-diagnostic-panel";
 import { ActivityFilterPanel, ActivityLogTable, ActivityRetentionPanel } from "@/features/kompen-respon-hub/riwayat-aktivitas/activity-panel";
 import { EmptyTableState, TableGuide } from "@/features/kompen-respon-hub/shared/components/feedback";
 import { FilterPanel } from "@/features/kompen-respon-hub/shared/components/data-filter-panel";
@@ -89,7 +88,6 @@ export default function KompenResponHubIndex({
     activeImportTasks,
     exportTasks,
     exportStalledAfterMinutes,
-    taskDiagnostics,
 }: KompenResponHubPageProps): React.JSX.Element {
     const indexAction = isAdmin ? adminIndex : studentIndex;
     const tabs = isAdmin ? adminTabs : studentTabs;
@@ -337,8 +335,7 @@ export default function KompenResponHubIndex({
                                         tab === "files" ||
                                         tab === "imports" ||
                                         tab === "warnings" ||
-                                        tab === "activity" ||
-                                        tab === "diagnostics"
+                                        tab === "activity"
                                             ? { tab }
                                             : { ...filters, tab },
                                 })}
@@ -476,10 +473,6 @@ export default function KompenResponHubIndex({
                                 />
                             ) : null}
                         </section>
-                    ) : null}
-
-                    {activeTab === "diagnostics" && isAdmin ? (
-                        <TaskDiagnosticPanel diagnostics={taskDiagnostics} />
                     ) : null}
 
                     {activeTab === "warnings" && isAdmin ? (

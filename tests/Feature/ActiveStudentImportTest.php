@@ -174,6 +174,8 @@ test('a duplicate NIM leaves the existing active student master list unchanged',
 
     expect($task->status)->toBe(KompenResponHubActiveStudentImportTask::StatusFailed)
         ->and($task->error_message)->toContain('duplikat')
+        ->and($task->error_message)->toContain('unggah ulang')
+        ->and(Storage::disk('local')->exists($task->stored_path))->toBeFalse()
         ->and(KompenResponHubActiveStudent::query()->pluck('nim')->all())
         ->toBe(['111111111']);
 });

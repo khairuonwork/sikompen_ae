@@ -283,8 +283,7 @@ export type KompenResponHubPageProps = {
         | "files"
         | "imports"
         | "warnings"
-        | "activity"
-        | "diagnostics";
+        | "activity";
     isAdmin: boolean;
     hasStudentSession: boolean;
     filters: Filters;
@@ -311,7 +310,6 @@ export type KompenResponHubPageProps = {
     activityRetentionDays: number | null;
     importAuditRetentionDays: number | null;
     workbookRecycleBinRetentionDays: number | null;
-    taskDiagnostics: TaskDiagnostic[];
     cutoffs: Cutoff[];
     activeImportTasks: ImportTask[];
     exportTasks: ExportTask[];
@@ -326,17 +324,4 @@ export type DataConsistencyRecord = {
     roster_students: number;
     missing_from_roster: string[];
     missing_from_kompen_respon: string[];
-};
-
-export type TaskDiagnostic = {
-    id: number;
-    task_type: "kompen_respon" | "active_students" | "export";
-    label: string;
-    status: "failed" | "stalled";
-    progress_message: string;
-    error_message: string | null;
-    queued_at: string | null;
-    started_at: string | null;
-    failed_at: string | null;
-    can_retry: boolean;
 };

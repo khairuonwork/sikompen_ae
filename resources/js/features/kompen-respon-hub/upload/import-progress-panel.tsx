@@ -61,6 +61,47 @@ export function ImportProgressPanel({
     }, [initialImportTasks]);
 
     useEffect(() => {
+        const failedTasks = importTasks.filter(
+            (importTask) =>
+                importTask.status === "failed" &&
+                !dismissedTaskKeys.has(taskKey(importTask)),
+        );
+
+        if (failedTasks.length === 0) {
+            return;
+        }
+
+        failedTasks.forEach((task) => {
+            const failedTaskKey = taskKey(task);
+
+            if (notifiedFailedTaskIds.current.has(failedTaskKey)) {
+                return;
+            }
+
+            notifiedFailedTaskIds.current.add(failedTaskKey);
+            toast.error("Impor gagal", {
+                description:
+                    task.error_message ??
+                    "File unggahan dibersihkan. Perbaiki file lalu unggah ulang.",
+            });
+        });
+
+        setDismissedTaskKeys((currentTaskKeys) => {
+            const updatedTaskKeys = new Set(currentTaskKeys);
+            failedTasks.forEach((task) => updatedTaskKeys.add(taskKey(task)));
+
+            try {
+                window.sessionStorage.setItem(
+                    dismissedImportTasksStorageKey,
+                    JSON.stringify([...updatedTaskKeys]),
+                );
+            } catch {}
+
+            return updatedTaskKeys;
+        });
+    }, [dismissedTaskKeys, importTasks]);
+
+    useEffect(() => {
         if (activeTaskIds.length === 0) {
             return;
         }
@@ -108,23 +149,6 @@ export function ImportProgressPanel({
                 if (!isMounted) {
                     return;
                 }
-
-                updatedTasks
-                    .filter((task) => task.status === "failed")
-                    .forEach((task) => {
-                        const taskKey = `${task.import_type}:${task.id}`;
-
-                        if (notifiedFailedTaskIds.current.has(taskKey)) {
-                            return;
-                        }
-
-                        notifiedFailedTaskIds.current.add(taskKey);
-                        toast.error("Impor perlu diperbaiki", {
-                            description:
-                                task.error_message ??
-                                "Periksa keterangan pada proses impor.",
-                        });
-                    });
 
                 setImportTasks((currentTasks) =>
                     currentTasks.map(

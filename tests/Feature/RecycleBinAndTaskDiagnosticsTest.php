@@ -4,8 +4,8 @@ use App\Jobs\ProcessKompenResponHubImport;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportTask;
-use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 test('an admin can restore a workbook from the recycle bin without deleting its private file', function (): void {
     Storage::fake('local');
@@ -41,34 +41,20 @@ test('an admin can restore a workbook from the recycle bin without deleting its 
     expect(KompenResponHubImport::query()->find($import->id))->not->toBeNull();
 });
 
-test('an admin can retry a failed workbook task when the private source is retained', function (): void {
+test('a failed workbook task removes its private source and instructs the admin to upload again', function (): void {
     Storage::fake('local');
-    Queue::fake();
-    $admin = KompenResponHubAdmin::factory()->create();
-    $path = 'kompen-respon-hub/imports/retryable-source.xlsx';
+    $path = 'kompen-respon-hub/imports/failed-source.xlsx';
     Storage::disk('local')->put($path, 'private workbook');
     $task = KompenResponHubImportTask::factory()->create([
-        'status' => KompenResponHubImportTask::STATUS_FAILED,
+        'status' => KompenResponHubImportTask::STATUS_PROCESSING,
         'stored_path' => $path,
-        'failed_at' => now(),
-        'error_message' => 'Parser berhenti.',
     ]);
 
-    $this->actingAs($admin, 'admin')
-        ->post('/admin/kompen-respon/tasks/retry', [
-            'task_type' => 'kompen_respon',
-            'task_id' => $task->id,
-        ])
-        ->assertSessionHas('success');
+    (new ProcessKompenResponHubImport($task->id))->failed(new RuntimeException('Worker stopped.'));
 
-    expect($task->refresh()->status)->toBe(KompenResponHubImportTask::STATUS_QUEUED)
-        ->and($task->error_message)->toBeNull()
-        ->and($task->progress)->toBe(0);
-
-    Queue::assertPushed(
-        ProcessKompenResponHubImport::class,
-        fn (ProcessKompenResponHubImport $job): bool => $job->importTaskId === $task->id,
-    );
+    expect($task->refresh()->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($task->error_message)->toContain('unggah ulang')
+        ->and(Storage::disk('local')->exists($path))->toBeFalse();
 });
 
 test('the file list reports roster consistency and exposes recycled versions', function (): void {

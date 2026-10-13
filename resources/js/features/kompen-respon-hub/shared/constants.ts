@@ -6,7 +6,6 @@ export const adminTabs = [
     ["imports", "Log Upload"],
     ["warnings", "Surat Peringatan"],
     ["activity", "Riwayat Aktivitas"],
-    ["diagnostics", "Diagnostik Pekerjaan"],
 ] as const;
 
 export const studentTabs = [

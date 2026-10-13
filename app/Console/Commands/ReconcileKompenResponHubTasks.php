@@ -10,6 +10,7 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Storage;
 
 #[Signature('sikompen:reconcile-tasks')]
 #[Description('Mark stalled Sikompen import and export tasks as failed.')]
@@ -38,7 +39,8 @@ class ReconcileKompenResponHubTasks extends Command
         $this->stalledImportTasks($threshold)
             ->chunkById(200, function ($tasks) use (&$count, $activity, $stalledAfterMinutes): void {
                 foreach ($tasks as $task) {
-                    $message = 'Proses impor melewati batas waktu pemrosesan dan ditandai gagal. Unggah ulang workbook bila masih diperlukan.';
+                    $sourceWorkbookRemoved = $this->deleteSourceWorkbook($task->stored_path, 'kompen-respon-hub/imports/');
+                    $message = 'Proses impor melewati batas waktu pemrosesan dan ditandai gagal. File unggahan dibersihkan demi konsistensi data. Unggah ulang workbook bila masih diperlukan.';
                     $task->update([
                         'status' => KompenResponHubImportTask::STATUS_FAILED,
                         'progress' => 100,
@@ -56,6 +58,7 @@ class ReconcileKompenResponHubTasks extends Command
                         metadata: [
                             'original_filename' => $task->original_filename,
                             'stalled_after_minutes' => $stalledAfterMinutes,
+                            'source_workbook_removed' => $sourceWorkbookRemoved,
                         ],
                         subjectName: $task->original_filename,
                     );
@@ -76,7 +79,8 @@ class ReconcileKompenResponHubTasks extends Command
         $this->stalledActiveStudentImportTasks($threshold)
             ->chunkById(200, function ($tasks) use (&$count, $activity, $stalledAfterMinutes): void {
                 foreach ($tasks as $task) {
-                    $message = 'Proses impor daftar mahasiswa aktif melewati batas waktu pemrosesan dan ditandai gagal. Coba ulangi dari Diagnostik Pekerjaan atau unggah ulang file bila diperlukan.';
+                    $sourceWorkbookRemoved = $this->deleteSourceWorkbook($task->stored_path, 'kompen-respon-hub/imports/active-students/');
+                    $message = 'Proses impor daftar mahasiswa aktif melewati batas waktu pemrosesan dan ditandai gagal. File unggahan dibersihkan demi konsistensi data. Unggah ulang file bila masih diperlukan.';
                     $task->update([
                         'status' => KompenResponHubActiveStudentImportTask::StatusFailed,
                         'progress' => 100,
@@ -94,6 +98,7 @@ class ReconcileKompenResponHubTasks extends Command
                         metadata: [
                             'original_filename' => $task->original_filename,
                             'stalled_after_minutes' => $stalledAfterMinutes,
+                            'source_workbook_removed' => $sourceWorkbookRemoved,
                         ],
                         subjectName: $task->original_filename,
                     );
@@ -196,5 +201,18 @@ class ReconcileKompenResponHubTasks extends Command
                             ->where('queued_at', '<=', $threshold);
                     });
             });
+    }
+
+    private function deleteSourceWorkbook(string $storedPath, string $trustedDirectory): bool
+    {
+        if (! str_starts_with($storedPath, $trustedDirectory)) {
+            return false;
+        }
+
+        try {
+            return Storage::disk('local')->delete($storedPath);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

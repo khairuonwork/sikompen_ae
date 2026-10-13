@@ -6,7 +6,7 @@ Dokumen ini mencakup file aplikasi yang langsung membentuk fitur Sikompen. File 
 
 | Lokasi | Tanggung jawab |
 | --- | --- |
-| `routes/web.php` | Halaman, aksi admin, import/version, lifecycle SP, export task, setup, dan diagnostik pekerjaan. |
+| `routes/web.php` | Halaman, aksi admin, import/version, lifecycle SP, export task, dan setup. |
 | `routes/api.php` | API filter/mahasiswa/detail dengan limiter dan session lokal. |
 | `app/Http/Controllers/KompenResponHubController.php` | Props halaman admin/mahasiswa, endpoint data, global search, profil mahasiswa, filter periode SP. |
 | `KompenResponHubImportController.php` | Template, upload, download workbook, rename tampilan, dan delete versi. |
@@ -18,7 +18,6 @@ Dokumen ini mencakup file aplikasi yang langsung membentuk fitur Sikompen. File 
 | `AdminAuthenticationController.php` | Login/logout admin standalone. |
 | `KompenResponHubAdminSetupController.php` | Setup admin pertama, setup tambahan, dan pengaturan jendela setup. |
 | `KompenResponHubLandingController.php` | Landing pemilih akses admin atau mahasiswa. |
-| `KompenResponHubTaskDiagnosticController.php` | Menjadwalkan ulang task impor/ekspor yang gagal. |
 | `app/Http/Requests/*.php` | Validasi khusus untuk tiap operasi. `KompenResponHubTableRequest` adalah filter utama; request lain mengamankan mutasi import, lifecycle, export, dan autentikasi. |
 
 ## Actions domain
@@ -34,13 +33,12 @@ Dokumen ini mencakup file aplikasi yang langsung membentuk fitur Sikompen. File 
 | `…/BuildKompenResponHubExport.php` | Data query dan rendering XLSX/PDF landscape. |
 | `…/RecordKompenResponHubActivity.php` | Satu pintu pencatatan activity log. |
 | `…/BuildKompenResponHubDataConsistencyReport.php` | Membandingkan NIM workbook aktif dan roster aktif per periode. |
-| `…/RetryKompenResponHubTask.php` | Mereset task gagal secara aman sebelum didispatch ulang. |
 
 ## Jobs, command, dan scheduler
 
 | File | Tanggung jawab |
 | --- | --- |
-| `Jobs/ProcessKompenResponHubImport.php` | Worker impor, state/progres task, validasi, storage, audit, dan kegagalan aman. |
+| `Jobs/ProcessKompenResponHubImport.php` | Worker impor, state/progres task, validasi, storage, audit, dan pembersihan sumber file saat gagal. |
 | `Jobs/GenerateKompenResponHubExport.php` | Worker ekspor serial dengan `WithoutOverlapping`, progress, cancel-safe cleanup, dan error logging. |
 | `Console/Commands/ReconcileKompenResponHubTasks.php` | Menandai task import/export macet sebagai gagal setiap lima menit. |
 | `…/PurgeKompenResponHubExports.php` | Menghapus hasil ekspor kedaluwarsa tiap jam. |

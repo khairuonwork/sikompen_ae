@@ -7,6 +7,7 @@ use App\Jobs\GenerateKompenResponHubExport;
 use App\Jobs\ProcessKompenResponHubImport;
 use App\Models\KompenResponHubActiveImport;
 use App\Models\KompenResponHubActiveStudent;
+use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
@@ -1197,9 +1198,20 @@ test('expired import task records are purged while imports and audit logs are re
 
 test('stalled import and export tasks are marked failed and added to the audit trail', function () {
     config(['kompen-respon-hub.queue.stalled_task_minutes' => 15]);
+    Storage::fake('local');
+    $workbookPath = 'kompen-respon-hub/imports/stalled-workbook.xlsx';
+    $rosterPath = 'kompen-respon-hub/imports/active-students/stalled-roster.xlsx';
+    Storage::disk('local')->put($workbookPath, 'workbook');
+    Storage::disk('local')->put($rosterPath, 'roster');
     $importTask = KompenResponHubImportTask::factory()->create([
         'status' => KompenResponHubImportTask::STATUS_QUEUED,
         'queued_at' => now()->subMinutes(16),
+        'stored_path' => $workbookPath,
+    ]);
+    $activeStudentImportTask = KompenResponHubActiveStudentImportTask::factory()->create([
+        'status' => KompenResponHubActiveStudentImportTask::StatusQueued,
+        'queued_at' => now()->subMinutes(16),
+        'stored_path' => $rosterPath,
     ]);
     $exportTask = KompenResponHubExportTask::factory()->create([
         'status' => KompenResponHubExportTask::StatusProcessing,
@@ -1209,8 +1221,12 @@ test('stalled import and export tasks are marked failed and added to the audit t
     $this->artisan('sikompen:reconcile-tasks')->assertSuccessful();
 
     expect($importTask->refresh()->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($activeStudentImportTask->refresh()->status)->toBe(KompenResponHubActiveStudentImportTask::StatusFailed)
         ->and($exportTask->refresh()->status)->toBe(KompenResponHubExportTask::StatusFailed)
+        ->and(Storage::disk('local')->exists($workbookPath))->toBeFalse()
+        ->and(Storage::disk('local')->exists($rosterPath))->toBeFalse()
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.timed_out')->exists())->toBeTrue()
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'active_students.timed_out')->exists())->toBeTrue()
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'export.timed_out')->exists())->toBeTrue();
 });
 
@@ -1237,6 +1253,8 @@ test('an invalid academic year marks the queued import as failed', function () {
     $importTask = KompenResponHubImportTask::query()->sole();
     expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
         ->and($importTask->error_message)->toContain('Tahun ajaran wajib berformat')
+        ->and($importTask->error_message)->toContain('unggah ulang')
+        ->and(Storage::disk('local')->exists($importTask->stored_path))->toBeFalse()
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.failed')->exists())->toBeTrue();
 });
 

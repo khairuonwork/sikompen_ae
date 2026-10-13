@@ -30,7 +30,7 @@ class KompenResponHubTableRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'tab' => ['nullable', 'in:upload,students,details,files,imports,warnings,activity,diagnostics'],
+            'tab' => ['nullable', 'in:upload,students,details,files,imports,warnings,activity'],
             'nim' => ['nullable', 'string', 'regex:/^[0-9]{9,20}$/'],
             'nama' => ['nullable', 'string', 'max:100', new SafeSearchTerm],
             'search' => ['nullable', 'string', 'max:100', new SafeSearchTerm],

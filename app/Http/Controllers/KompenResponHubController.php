@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\BuildKompenResponHubDataConsistencyReport;
-use App\Actions\KompenResponHub\BuildKompenResponHubTaskDiagnostics;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Actions\KompenResponHub\SikompenStudentAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
@@ -44,7 +43,6 @@ class KompenResponHubController extends Controller
         private KompenResponHubDataQuery $dataQuery,
         private SikompenStudentAccess $studentAccess,
         private BuildKompenResponHubDataConsistencyReport $dataConsistencyReport,
-        private BuildKompenResponHubTaskDiagnostics $taskDiagnostics,
     ) {}
 
     public function studentIndex(KompenResponHubTableRequest $request): Response
@@ -160,7 +158,7 @@ class KompenResponHubController extends Controller
     ): Response {
         $filters = $this->filtersForRequest($request, $scopeToAuthenticatedStudent);
         $activeTab = $filters['tab'] ?? 'students';
-        if (! $isAdmin && in_array($activeTab, ['upload', 'files', 'imports', 'warnings', 'activity', 'diagnostics'], true)) {
+        if (! $isAdmin && in_array($activeTab, ['upload', 'files', 'imports', 'warnings', 'activity'], true)) {
             $activeTab = 'students';
         }
 
@@ -328,9 +326,6 @@ class KompenResponHubController extends Controller
                     'page',
                 )
                 : null,
-            'taskDiagnostics' => $isAdmin && $activeTab === 'diagnostics'
-                ? $this->taskDiagnostics->execute()
-                : [],
         ]);
     }
 
