@@ -5,7 +5,9 @@ namespace App\Actions\KompenResponHub;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 class RecordKompenResponHubActivity
 {
@@ -50,27 +52,40 @@ class RecordKompenResponHubActivity
         ?array $afterState = null,
         ?array $metadata = null,
         ?string $subjectName = null,
-    ): void {
-        KompenResponHubActivityLog::create([
-            'event_type' => $this->limit($eventType, 80),
-            'subject_type' => $this->limit($subjectType, 80),
-            'subject_reference' => $this->limit($subjectReference, 100),
-            'nim' => $this->limit($nim, 20),
-            'subject_name' => $this->limit($subjectName, 100),
-            'periode_semester' => $this->limit($period, 50),
-            'kelas' => $this->limit($class, 20),
-            'actor_type' => $actor === null ? 'system' : 'admin',
-            'actor_admin_id' => $actor?->id,
-            'actor_name' => $this->limit($actor?->username, 100),
-            'actor_username' => $this->limit($actor?->username, 100),
-            'reason' => $this->limit($reason, self::MaxReasonLength),
-            'before_state' => $this->sanitizeState($beforeState),
-            'after_state' => $this->sanitizeState($afterState),
-            'metadata' => $this->sanitizeState($metadata),
-            'ip_address' => $request?->ip(),
-            'user_agent' => $this->limit($request?->userAgent(), 512),
-            'occurred_at' => now('Asia/Jakarta'),
-        ]);
+    ): bool {
+        try {
+            KompenResponHubActivityLog::create([
+                'event_type' => $this->limit($eventType, 80),
+                'subject_type' => $this->limit($subjectType, 80),
+                'subject_reference' => $this->limit($subjectReference, 100),
+                'nim' => $this->limit($nim, 20),
+                'subject_name' => $this->limit($subjectName, 100),
+                'periode_semester' => $this->limit($period, 50),
+                'kelas' => $this->limit($class, 20),
+                'actor_type' => $actor === null ? 'system' : 'admin',
+                'actor_admin_id' => $actor?->id,
+                'actor_name' => $this->limit($actor?->username, 100),
+                'actor_username' => $this->limit($actor?->username, 100),
+                'reason' => $this->limit($reason, self::MaxReasonLength),
+                'before_state' => $this->sanitizeState($beforeState),
+                'after_state' => $this->sanitizeState($afterState),
+                'metadata' => $this->sanitizeState($metadata),
+                'ip_address' => $request?->ip(),
+                'user_agent' => $this->limit($request?->userAgent(), 512),
+                'occurred_at' => now('Asia/Jakarta'),
+            ]);
+
+            return true;
+        } catch (Throwable $exception) {
+            Log::warning('Sikompen activity log could not be persisted.', [
+                'event_type' => $this->limit($eventType, 80),
+                'subject_type' => $this->limit($subjectType, 80),
+                'subject_reference' => $this->limit($subjectReference, 100),
+                'exception' => $exception,
+            ]);
+
+            return false;
+        }
     }
 
     /**

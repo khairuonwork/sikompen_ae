@@ -12,6 +12,10 @@ Schedule::command('sikompen:purge-exports')
     ->hourly()
     ->withoutOverlapping();
 
+Schedule::command('sikompen:purge-api-sync-artifacts')
+    ->hourly()
+    ->withoutOverlapping();
+
 Schedule::command('sikompen:purge-import-tasks')
     ->daily()
     ->withoutOverlapping();

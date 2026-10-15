@@ -94,6 +94,17 @@ class ProcessKompenResponHubActiveStudentImport implements ShouldQueue
             (string) $task->uploader_username,
         );
 
+        $this->updateProgress(
+            $task,
+            KompenResponHubActiveStudentImportTask::StatusCompleted,
+            100,
+            "Selesai: {$result['student_count']} mahasiswa aktif pada {$result['class_count']} kelas untuk {$result['periode_semester']} siap digunakan.",
+            [
+                'sikompen_active_student_import_id' => $result['import_id'],
+                'completed_at' => now(),
+            ],
+        );
+
         $activity->execute(
             eventType: 'active_students.imported',
             subjectType: 'active_student_import',
@@ -108,17 +119,6 @@ class ProcessKompenResponHubActiveStudentImport implements ShouldQueue
                 'periode_semester' => $result['periode_semester'],
             ],
             subjectName: $task->original_filename,
-        );
-
-        $this->updateProgress(
-            $task,
-            KompenResponHubActiveStudentImportTask::StatusCompleted,
-            100,
-            "Selesai: {$result['student_count']} mahasiswa aktif pada {$result['class_count']} kelas untuk {$result['periode_semester']} siap digunakan.",
-            [
-                'sikompen_active_student_import_id' => $result['import_id'],
-                'completed_at' => now(),
-            ],
         );
     }
 

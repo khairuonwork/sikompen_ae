@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\KompenResponHubAdmin;
+use App\Models\KompenResponHubApiClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -99,6 +100,18 @@ class AppServiceProvider extends ServiceProvider
             $sessionId = $request->hasSession() ? $request->session()->getId() : 'no-session';
 
             return Limit::perMinute(30)->by(Str::transliterate("{$sessionId}|{$request->ip()}"));
+        });
+
+        RateLimiter::for('sikompen-api', function (Request $request): Limit {
+            $client = $request->attributes->get('sikompen_api_client');
+            $limit = $client instanceof KompenResponHubApiClient ? $client->rate_limit_per_minute : 10;
+            $key = $client instanceof KompenResponHubApiClient ? $client->client_id : 'unknown';
+
+            return Limit::perMinute($limit)->by(Str::transliterate("sikompen-api|{$key}|{$request->ip()}"));
+        });
+
+        RateLimiter::for('sikompen-api-auth', function (Request $request): Limit {
+            return Limit::perMinute(60)->by(Str::transliterate("sikompen-api-auth|{$request->ip()}"));
         });
     }
 }

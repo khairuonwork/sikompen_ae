@@ -95,6 +95,17 @@ class ProcessKompenResponHubImport implements ShouldQueue
             $importTask->uploader_username,
         );
 
+        $this->updateProgress(
+            $importTask,
+            KompenResponHubImportTask::STATUS_COMPLETED,
+            100,
+            "Selesai: versi file siap diaktifkan untuk periode {$result['periode_semester']}.",
+            [
+                'kompen_respon_hub_import_id' => $result['import_id'],
+                'completed_at' => now(),
+            ],
+        );
+
         $activity->execute(
             'import.completed',
             'import',
@@ -110,17 +121,6 @@ class ProcessKompenResponHubImport implements ShouldQueue
                 'student_count' => $result['student_count'],
                 'detail_count' => $result['detail_count'],
                 'original_filename' => $importTask->original_filename,
-            ],
-        );
-
-        $this->updateProgress(
-            $importTask,
-            KompenResponHubImportTask::STATUS_COMPLETED,
-            100,
-            "Selesai: versi file siap diaktifkan untuk periode {$result['periode_semester']}.",
-            [
-                'kompen_respon_hub_import_id' => $result['import_id'],
-                'completed_at' => now(),
             ],
         );
     }

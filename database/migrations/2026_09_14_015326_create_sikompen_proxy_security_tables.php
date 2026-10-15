@@ -25,20 +25,6 @@ return new class extends Migration
             $table->bigInteger('expiration')->index();
         });
 
-        $schema->create('sikompen_proxy_access_logs', function (Blueprint $table): void {
-            $table->id();
-            $table->string('si_admin_user_id', 64);
-            $table->string('email');
-            $table->string('role', 20);
-            $table->char('nonce_hash', 64)->unique();
-            $table->string('ip_address', 45)->nullable();
-            $table->string('user_agent', 500)->nullable();
-            $table->timestamp('accessed_at');
-            $table->timestamps();
-
-            $table->index(['si_admin_user_id', 'accessed_at'], 'sikompen_proxy_user_accessed_idx');
-            $table->index(['role', 'accessed_at'], 'sikompen_proxy_role_accessed_idx');
-        });
     }
 
     /**
@@ -48,7 +34,6 @@ return new class extends Migration
     {
         $schema = Schema::connection(config('kompen-respon-hub.database_connection'));
 
-        $schema->dropIfExists('sikompen_proxy_access_logs');
         $schema->dropIfExists('sikompen_cache_locks');
         $schema->dropIfExists('sikompen_cache');
     }

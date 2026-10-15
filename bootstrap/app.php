@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureSikompenAdminAccess;
+use App\Http\Middleware\EnsureSikompenApiClient;
 use App\Http\Middleware\EnsureSikompenDataAccess;
 use App\Http\Middleware\EnsureSikompenStudentAccess;
 use App\Http\Middleware\EnsureSikompenStudentPasswordChanged;
@@ -30,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'sikompen.admin' => EnsureSikompenAdminAccess::class,
+            'sikompen.api-client' => EnsureSikompenApiClient::class,
             'sikompen.data-access' => EnsureSikompenDataAccess::class,
             'sikompen.student' => EnsureSikompenStudentAccess::class,
             'sikompen.student-password-changed' => EnsureSikompenStudentPasswordChanged::class,

@@ -1295,19 +1295,22 @@ test('expired import task records are purged while imports and audit logs are re
 
 test('stalled import and export tasks are marked failed and added to the audit trail', function () {
     config(['kompen-respon-hub.queue.stalled_task_minutes' => 15]);
+    config(['kompen-respon-hub.queue.queued_task_minutes' => 60]);
     Storage::fake('local');
     $workbookPath = 'kompen-respon-hub/imports/stalled-workbook.xlsx';
     $rosterPath = 'kompen-respon-hub/imports/active-students/stalled-roster.xlsx';
     Storage::disk('local')->put($workbookPath, 'workbook');
     Storage::disk('local')->put($rosterPath, 'roster');
     $importTask = KompenResponHubImportTask::factory()->create([
-        'status' => KompenResponHubImportTask::STATUS_QUEUED,
+        'status' => KompenResponHubImportTask::STATUS_PROCESSING,
         'queued_at' => now()->subMinutes(16),
+        'started_at' => now()->subMinutes(16),
         'stored_path' => $workbookPath,
     ]);
     $activeStudentImportTask = KompenResponHubActiveStudentImportTask::factory()->create([
-        'status' => KompenResponHubActiveStudentImportTask::StatusQueued,
+        'status' => KompenResponHubActiveStudentImportTask::StatusProcessing,
         'queued_at' => now()->subMinutes(16),
+        'started_at' => now()->subMinutes(16),
         'stored_path' => $rosterPath,
     ]);
     $exportTask = KompenResponHubExportTask::factory()->create([
@@ -1325,6 +1328,30 @@ test('stalled import and export tasks are marked failed and added to the audit t
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.timed_out')->exists())->toBeTrue()
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'active_students.timed_out')->exists())->toBeTrue()
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'export.timed_out')->exists())->toBeTrue();
+});
+
+test('queued tasks are not failed while they are still within the queue grace period', function () {
+    config(['kompen-respon-hub.queue.stalled_task_minutes' => 15]);
+    config(['kompen-respon-hub.queue.queued_task_minutes' => 60]);
+
+    $importTask = KompenResponHubImportTask::factory()->create([
+        'status' => KompenResponHubImportTask::STATUS_QUEUED,
+        'queued_at' => now()->subMinutes(16),
+    ]);
+    $activeStudentImportTask = KompenResponHubActiveStudentImportTask::factory()->create([
+        'status' => KompenResponHubActiveStudentImportTask::StatusQueued,
+        'queued_at' => now()->subMinutes(16),
+    ]);
+    $exportTask = KompenResponHubExportTask::factory()->create([
+        'status' => KompenResponHubExportTask::StatusQueued,
+        'queued_at' => now()->subMinutes(16),
+    ]);
+
+    $this->artisan('sikompen:reconcile-tasks')->assertSuccessful();
+
+    expect($importTask->refresh()->status)->toBe(KompenResponHubImportTask::STATUS_QUEUED)
+        ->and($activeStudentImportTask->refresh()->status)->toBe(KompenResponHubActiveStudentImportTask::StatusQueued)
+        ->and($exportTask->refresh()->status)->toBe(KompenResponHubExportTask::StatusQueued);
 });
 
 test('an admin can download the empty Sikompen import template', function () {
