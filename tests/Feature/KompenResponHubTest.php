@@ -155,6 +155,44 @@ test('the admin activity history excludes student activity records and filter op
         );
 });
 
+test('activity records redact credentials and bound retained payloads', function (): void {
+    app(RecordKompenResponHubActivity::class)->execute(
+        'admin.password_updated',
+        'system_setting',
+        str_repeat('R', 120),
+        null,
+        reason: str_repeat('A', 2_100),
+        beforeState: ['password' => 'Rahasia#123', 'username' => 'admin-lama'],
+        metadata: [
+            'reset_code' => 'ABCDEF12',
+            'nested' => ['token' => 'token-rahasia'],
+            'description' => str_repeat('B', 1_100),
+        ],
+        subjectName: str_repeat('N', 120),
+    );
+
+    $activity = KompenResponHubActivityLog::query()->sole();
+
+    expect($activity->subject_reference)->toHaveLength(100)
+        ->and($activity->subject_name)->toHaveLength(100)
+        ->and($activity->reason)->toHaveLength(2_000)
+        ->and($activity->before_state)->toMatchArray(['password' => '[disamarkan]', 'username' => 'admin-lama'])
+        ->and($activity->metadata)->toMatchArray([
+            'reset_code' => '[disamarkan]',
+            'nested' => ['token' => '[disamarkan]'],
+        ])
+        ->and($activity->metadata['description'])->toHaveLength(1_000);
+});
+
+test('Sikompen log retention defaults to ninety days', function (): void {
+    KompenResponHubSystemSetting::query()->delete();
+
+    $settings = KompenResponHubSystemSetting::current();
+
+    expect($settings->activity_log_retention_days)->toBe(90)
+        ->and($settings->import_audit_log_retention_days)->toBe(90);
+});
+
 test('an export rejects a class that does not match its selected level', function (): void {
     $admin = KompenResponHubAdmin::factory()->create();
 
@@ -863,15 +901,15 @@ test('an admin can rename an inactive workbook version and the audit trail remai
 
     $this->actingAs($admin, 'admin')
         ->put("/admin/kompen-respon/imports/{$import->id}", [
-            'display_filename' => 'rekap-kompen-genap.xlsx',
+            'display_filename' => 'rekap kompen 2026/2027 genap',
         ])
         ->assertRedirect('/admin?tab=files');
 
-    expect($import->refresh()->display_filename)->toBe('rekap-kompen-genap.xlsx')
+    expect($import->refresh()->display_filename)->toBe('rekap_kompen_2026_2027_genap.xlsx')
         ->and(KompenResponHubImportAuditLog::query()
             ->where('event_type', KompenResponHubImportAuditLog::EVENT_RENAME)
             ->where('source_import_id', $import->id)
-            ->where('original_filename', 'rekap-kompen-genap.xlsx')
+            ->where('original_filename', 'rekap_kompen_2026_2027_genap.xlsx')
             ->exists())->toBeTrue()
         ->and(KompenResponHubActivityLog::query()
             ->where('event_type', 'import.renamed')
@@ -880,13 +918,16 @@ test('an admin can rename an inactive workbook version and the audit trail remai
 
     $this->actingAs($admin, 'admin')
         ->get("/admin/kompen-respon/imports/{$import->id}/download")
-        ->assertDownload('rekap-kompen-genap.xlsx');
+        ->assertDownload('rekap_kompen_2026_2027_genap.xlsx');
 
     $this->actingAs($admin, 'admin')
         ->put("/admin/kompen-respon/imports/{$import->id}", [
-            'display_filename' => '../tidak-valid.xlsx',
+            'display_filename' => '<script>alert(1)</script>--uji.xlsx.xlsx',
         ])
-        ->assertSessionHasErrors('display_filename');
+        ->assertRedirect('/admin?tab=files')
+        ->assertSessionHas('success');
+
+    expect($import->refresh()->display_filename)->toBe('script_alert(1)_script_--uji.xlsx');
 });
 
 test('an admin can move an inactive workbook version to the recycle bin while its audit trail remains', function () {

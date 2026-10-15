@@ -28,6 +28,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property CarbonInterface $imported_at
  * @property CarbonInterface|null $created_at
  * @property CarbonInterface|null $updated_at
+ * @property CarbonInterface|null $deleted_at
  * @property-read Collection<int, KompenResponHubStudent> $students
  * @property-read KompenResponHubAdmin|null $uploadedByAdmin
  * @property-read KompenResponHubActiveImport|null $activeReference

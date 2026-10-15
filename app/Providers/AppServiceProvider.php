@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\KompenResponHubAdmin;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -72,7 +73,10 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('admin-password-reset-request', function (Request $request): Limit {
-            $username = Str::lower($request->string('username')->toString());
+            $admin = $request->user('admin');
+            $username = $admin instanceof KompenResponHubAdmin
+                ? $admin->username
+                : Str::lower($request->string('username')->toString());
 
             return Limit::perMinute(3)->by(Str::transliterate("admin-reset-request|{$username}|{$request->ip()}"));
         });

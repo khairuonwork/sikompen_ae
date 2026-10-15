@@ -12,12 +12,22 @@ use Illuminate\Console\Command;
 #[Description('Remove Sikompen upload audit logs older than the configured retention period.')]
 class PurgeKompenResponHubImportAuditLogs extends Command
 {
+    private const DeleteBatchSize = 500;
+
     public function handle(): int
     {
         $retentionDays = KompenResponHubSystemSetting::current()->import_audit_log_retention_days;
-        $deletedCount = KompenResponHubImportAuditLog::query()
-            ->where('occurred_at', '<', now()->subDays($retentionDays))
-            ->delete();
+        $deletedCount = 0;
+        $threshold = now('Asia/Jakarta')->subDays($retentionDays);
+
+        KompenResponHubImportAuditLog::query()
+            ->where('occurred_at', '<', $threshold)
+            ->select('id')
+            ->chunkById(self::DeleteBatchSize, function ($logs) use (&$deletedCount): void {
+                $deletedCount += KompenResponHubImportAuditLog::query()
+                    ->whereKey($logs->modelKeys())
+                    ->delete();
+            });
 
         $this->components->info("{$deletedCount} Log Upload yang melewati retensi dihapus.");
 

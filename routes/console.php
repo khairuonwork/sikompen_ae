@@ -17,12 +17,14 @@ Schedule::command('sikompen:purge-import-tasks')
     ->withoutOverlapping();
 
 Schedule::command('sikompen:purge-activity-logs')
-    ->daily()
-    ->withoutOverlapping();
+    ->dailyAt('02:15')
+    ->timezone('Asia/Jakarta')
+    ->withoutOverlapping(30);
 
 Schedule::command('sikompen:purge-import-audit-logs')
-    ->daily()
-    ->withoutOverlapping();
+    ->dailyAt('02:30')
+    ->timezone('Asia/Jakarta')
+    ->withoutOverlapping(30);
 
 Schedule::command('sikompen:purge-recycled-workbooks')
     ->daily()

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\CarbonInterface;
 use Database\Factories\KompenResponHubActivityLogFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -47,5 +48,14 @@ class KompenResponHubActivityLog extends Model
     public function getConnectionName(): ?string
     {
         return config('kompen-respon-hub.database_connection');
+    }
+
+    /**
+     * @param  Builder<KompenResponHubActivityLog>  $query
+     * @return Builder<KompenResponHubActivityLog>
+     */
+    public function scopeAdministrative(Builder $query): Builder
+    {
+        return $query->whereIn('actor_type', ['admin', 'system']);
     }
 }

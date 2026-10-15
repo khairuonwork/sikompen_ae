@@ -263,8 +263,7 @@ class KompenResponHubDataQuery
      */
     public function activityLogs(array $filters): Builder
     {
-        $query = KompenResponHubActivityLog::query()
-            ->whereIn('actor_type', ['admin', 'system']);
+        $query = KompenResponHubActivityLog::query()->administrative();
 
         if (filled($filters['periode_semester'] ?? null)) {
             $query->where('periode_semester', $filters['periode_semester']);
@@ -332,8 +331,7 @@ class KompenResponHubDataQuery
     /** @return array{event_types: list<string>, actor_usernames: list<string>} */
     public function activityFilterOptions(): array
     {
-        $activityLogs = KompenResponHubActivityLog::query()
-            ->whereIn('actor_type', ['admin', 'system']);
+        $activityLogs = KompenResponHubActivityLog::query()->administrative();
 
         return [
             'event_types' => array_values((clone $activityLogs)->distinct()->orderBy('event_type')->pluck('event_type')->map(static fn (mixed $eventType): string => (string) $eventType)->all()),

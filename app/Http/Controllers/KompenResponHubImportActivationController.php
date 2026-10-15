@@ -30,9 +30,7 @@ class KompenResponHubImportActivationController extends Controller
         }
 
         $actor = $access->actor($request);
-        $admin = is_int($actor['id'])
-            ? KompenResponHubAdmin::query()->find($actor['id'])
-            : null;
+        $admin = KompenResponHubAdmin::query()->find($actor['id']);
 
         try {
             $activatedVersion = $activateImportVersion->execute(
@@ -80,9 +78,7 @@ class KompenResponHubImportActivationController extends Controller
         KompenResponHubImport $import,
     ): RedirectResponse {
         $actor = $access->actor($request);
-        $admin = is_int($actor['id'])
-            ? KompenResponHubAdmin::query()->find($actor['id'])
-            : null;
+        $admin = KompenResponHubAdmin::query()->find($actor['id']);
 
         try {
             $releasedVersion = $releaseImportVersion->execute(

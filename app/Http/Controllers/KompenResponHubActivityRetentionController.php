@@ -53,9 +53,7 @@ class KompenResponHubActivityRetentionController extends Controller
         $settings->update(['import_audit_log_retention_days' => $retentionDays]);
 
         $actor = $access->actor($request);
-        $admin = is_int($actor['id'])
-            ? KompenResponHubAdmin::query()->find($actor['id'])
-            : null;
+        $admin = KompenResponHubAdmin::query()->find($actor['id']);
         $activity->execute(
             'maintenance.import_audit_log_retention_updated',
             'system_setting',
@@ -83,9 +81,7 @@ class KompenResponHubActivityRetentionController extends Controller
         $settings->update(['workbook_recycle_bin_retention_days' => $retentionDays]);
 
         $actor = $access->actor($request);
-        $admin = is_int($actor['id'])
-            ? KompenResponHubAdmin::query()->find($actor['id'])
-            : null;
+        $admin = KompenResponHubAdmin::query()->find($actor['id']);
         $activity->execute(
             'maintenance.workbook_recycle_bin_retention_updated',
             'system_setting',

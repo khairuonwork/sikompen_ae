@@ -22,7 +22,10 @@ class AdminPasswordResetController extends Controller
 
     public function storeRequest(StoreAdminPasswordResetRequest $request): RedirectResponse
     {
-        $username = $request->string('username')->toString();
+        $authenticatedAdmin = $request->user('admin');
+        $username = $authenticatedAdmin instanceof KompenResponHubAdmin
+            ? $authenticatedAdmin->username
+            : $request->string('username')->toString();
 
         DB::connection(config('kompen-respon-hub.database_connection'))->transaction(function () use ($username): void {
             $admin = KompenResponHubAdmin::query()->where('username', $username)->lockForUpdate()->first();
@@ -58,6 +61,13 @@ class AdminPasswordResetController extends Controller
 
             $pendingResetCode->forceFill($values)->save();
         });
+
+        if ($authenticatedAdmin instanceof KompenResponHubAdmin) {
+            return to_route('admin.settings')->with(
+                'success',
+                'Permintaan reset dicatat. Hubungi pemegang akun darurat untuk memperoleh kode reset.',
+            );
+        }
 
         return to_route('admin.password-reset.edit')->with(
             'success',

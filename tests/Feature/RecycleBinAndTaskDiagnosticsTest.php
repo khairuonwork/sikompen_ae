@@ -1,9 +1,12 @@
 <?php
 
+use App\Actions\KompenResponHub\BuildKompenResponHubDataConsistencyReport;
 use App\Jobs\ProcessKompenResponHubImport;
+use App\Models\KompenResponHubActiveImport;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportTask;
+use App\Models\KompenResponHubStudent;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
@@ -79,4 +82,54 @@ test('the file list reports roster consistency and exposes recycled versions', f
             ->has('recycledImportVersions.data', 1)
             ->where('recycledImportVersions.data.0.id', $import->id)
             ->has('workbookRecycleBinRetentionDays'));
+});
+
+test('the data consistency report uses an ordered NIM list and a roster missing status', function (): void {
+    $period = '2026/2027 Gasal';
+    $import = KompenResponHubImport::query()->create([
+        'periode_semester' => $period,
+        'original_filename' => 'source.xlsx',
+        'display_filename' => 'source.xlsx',
+        'stored_path' => 'kompen-respon-hub/imports/source.xlsx',
+        'file_hash' => str_repeat('c', 64),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 0,
+        'imported_at' => now(),
+    ]);
+    KompenResponHubActiveImport::query()->create([
+        'periode_semester' => $period,
+        'kompen_respon_hub_import_id' => $import->id,
+        'activated_at' => now(),
+    ]);
+    KompenResponHubStudent::query()->create([
+        'kompen_respon_hub_import_id' => $import->id,
+        'nim' => '261000001',
+        'periode_semester' => $period,
+        'nama_mahasiswa' => 'Aditya Pratama',
+        'kelas' => '1AEA1',
+        'tingkat' => 1,
+        'total_jam_terlambat' => '0',
+        'total_jam_sakit' => '0',
+        'total_jam_izin' => '0',
+        'total_jam_bolos' => '0',
+        'total_kompensasi_jam' => '1',
+        'total_responsi_jam' => '0',
+        'total_hutang_jam' => '1',
+        'kompensasi_dikerjakan_jam' => '0',
+        'sisa_hutang_jam' => '1',
+    ]);
+
+    $report = app(BuildKompenResponHubDataConsistencyReport::class)->execute();
+
+    expect($report)->toBe([
+        [
+            'periode_semester' => $period,
+            'status' => 'roster_missing',
+            'kompen_respon_students' => 1,
+            'roster_students' => 0,
+            'missing_from_roster' => ['261000001'],
+            'missing_from_kompen_respon' => [],
+        ],
+    ]);
 });

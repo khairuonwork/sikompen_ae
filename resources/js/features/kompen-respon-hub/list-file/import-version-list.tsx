@@ -275,13 +275,14 @@ export function ImportVersionList({
                                             id="display_filename"
                                             name="display_filename"
                                             defaultValue={selectedVersion.display_filename}
+                                            placeholder="Mis. rekap kompen 2026"
                                             aria-invalid={Boolean(errors.display_filename)}
                                             className="border-[#8AAEE0] bg-white text-[#395886]"
                                         />
                                         {errors.display_filename ? (
                                             <p className="text-xs font-semibold text-rose-700">{errors.display_filename}</p>
                                         ) : (
-                                            <p className="text-[11px] text-[#395886]/60">Gunakan huruf, angka, spasi, titik, garis bawah, tanda kurung, atau tanda hubung. Nama harus berakhiran .xlsx.</p>
+                                            <p className="text-[11px] text-[#395886]/60">Akhiran .xlsx dibuat otomatis. Spasi menjadi _, tanda - dipertahankan, dan karakter tidak aman dibuang.</p>
                                         )}
                                     </div>
                                     <DialogFooter className="gap-3 sm:gap-3">

@@ -29,12 +29,13 @@ Route::middleware('guest:admin')->group(function (): void {
         ->middleware('throttle:admin-login')
         ->name('admin.login.store');
     Route::get('admin/lupa-password', [AdminPasswordResetController::class, 'createRequest'])->name('admin.password-reset.request');
-    Route::post('admin/lupa-password', [AdminPasswordResetController::class, 'storeRequest'])
-        ->middleware('throttle:admin-password-reset-request')->name('admin.password-reset.request.store');
     Route::get('admin/reset-password', [AdminPasswordResetController::class, 'edit'])->name('admin.password-reset.edit');
     Route::put('admin/reset-password', [AdminPasswordResetController::class, 'update'])
         ->middleware('throttle:admin-password-reset-confirm')->name('admin.password-reset.update');
 });
+
+Route::post('admin/lupa-password', [AdminPasswordResetController::class, 'storeRequest'])
+    ->middleware('throttle:admin-password-reset-request')->name('admin.password-reset.request.store');
 
 Route::middleware('guest:student')->group(function (): void {
     Route::get('mahasiswa/login', [StudentAuthenticationController::class, 'create'])->name('student.login');

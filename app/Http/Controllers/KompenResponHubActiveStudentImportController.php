@@ -244,9 +244,7 @@ class KompenResponHubActiveStudentImportController extends Controller
         RecordKompenResponHubActivity $activity,
     ): RedirectResponse {
         $actor = $access->actor($request);
-        $admin = is_int($actor['id'])
-            ? KompenResponHubAdmin::query()->find($actor['id'])
-            : null;
+        $admin = KompenResponHubAdmin::query()->find($actor['id']);
         try {
             $result = $activator->execute(
                 $import,

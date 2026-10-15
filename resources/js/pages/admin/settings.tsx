@@ -13,8 +13,10 @@ import {
     Eye,
     EyeOff,
     KeyRound,
+    RotateCcw,
     UserRound,
 } from 'lucide-react';
+import { storeRequest as storeAdminPasswordResetRequest } from '@/actions/App/Http/Controllers/AdminPasswordResetController';
 import {
     updatePassword,
     updateUsername,
@@ -362,6 +364,34 @@ export default function AdminSettings({
                                                 <DialogFooter className="border-t border-[#F0F3FA] pt-4">
                                                     <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl border-[#8AAEE0] text-[#395886]">Batal</Button></DialogClose>
                                                     <Button type="submit" disabled={processing} className="rounded-xl bg-[#395886] text-white hover:bg-[#1E293B]">{processing ? 'Menyimpan…' : 'Simpan password'}</Button>
+                                                </DialogFooter>
+                                            </>
+                                        )}
+                                    </Form>
+                                </DialogContent>
+                            </Dialog>
+
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" className="justify-start rounded-2xl border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-600 hover:text-white">
+                                        <RotateCcw className="size-4" /> Minta reset password
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto rounded-3xl border-[#D5DEEF] bg-white p-0 text-[#395886] sm:max-w-md">
+                                    <DialogHeader className="border-b border-[#F0F3FA] px-6 pt-6 pb-5 text-left">
+                                        <DialogTitle className="text-xl font-black text-[#395886]">Minta reset password</DialogTitle>
+                                        <DialogDescription className="text-[#395886]/70">Gunakan ini hanya jika password tidak lagi dapat digunakan. Pemegang akun darurat akan menerbitkan kode sekali pakai.</DialogDescription>
+                                    </DialogHeader>
+                                    <Form {...storeAdminPasswordResetRequest.form()} className="grid gap-4 px-6 py-5">
+                                        {({ processing }) => (
+                                            <>
+                                                <input name="username" type="hidden" value={currentAdmin.username} readOnly />
+                                                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-950">
+                                                    Permintaan akan dibuat untuk <span className="font-bold">{currentAdmin.username}</span>. Jika password saat ini masih diketahui, pilih <span className="font-bold">Ganti password</span> agar tidak perlu kode reset.
+                                                </div>
+                                                <DialogFooter className="border-t border-[#F0F3FA] pt-4">
+                                                    <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl border-[#8AAEE0] text-[#395886]">Batal</Button></DialogClose>
+                                                    <Button type="submit" disabled={processing} className="rounded-xl bg-[#395886] text-white hover:bg-[#1E293B]">{processing ? 'Mengirim…' : 'Minta kode reset'}</Button>
                                                 </DialogFooter>
                                             </>
                                         )}

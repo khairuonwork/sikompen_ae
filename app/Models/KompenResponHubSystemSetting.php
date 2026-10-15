@@ -20,9 +20,9 @@ class KompenResponHubSystemSetting extends Model
     /** @use HasFactory<KompenResponHubSystemSettingFactory> */
     use HasFactory;
 
-    public const DefaultActivityLogRetentionDays = 365;
+    public const DefaultActivityLogRetentionDays = 90;
 
-    public const DefaultImportAuditLogRetentionDays = 365;
+    public const DefaultImportAuditLogRetentionDays = 90;
 
     public const DefaultWorkbookRecycleBinRetentionDays = 30;
 

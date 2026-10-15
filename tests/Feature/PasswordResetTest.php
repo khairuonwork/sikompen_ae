@@ -27,6 +27,19 @@ test('an unknown admin reset request does not disclose account availability', fu
     expect(KompenResponHubAdminPasswordResetCode::query()->count())->toBe(0);
 });
 
+test('an authenticated administrator can request a reset only for their own account', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create(['username' => 'admin-saya']);
+    $otherAdmin = KompenResponHubAdmin::factory()->create(['username' => 'admin-lain']);
+
+    $this->actingAs($admin, 'admin')
+        ->post('/admin/lupa-password', ['username' => $otherAdmin->username])
+        ->assertRedirect('/admin/settings')
+        ->assertSessionHas('success', 'Permintaan reset dicatat. Hubungi pemegang akun darurat untuk memperoleh kode reset.');
+
+    $reset = KompenResponHubAdminPasswordResetCode::query()->sole();
+    expect($reset->admin_id)->toBe($admin->id);
+});
+
 test('an emergency admin can issue a one-time code for an administrator reset', function (): void {
     $emergencyAdmin = KompenResponHubAdmin::factory()->create(['is_emergency_admin' => true]);
     $admin = KompenResponHubAdmin::factory()->create(['username' => 'admin-reset']);
