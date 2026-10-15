@@ -19,7 +19,7 @@ class KompenResponHubAdminFactory extends Factory
     public function definition(): array
     {
         return [
-            'email' => fake()->unique()->safeEmail(),
+            'username' => fake()->unique()->userName(),
             'password' => Hash::make('password'),
         ];
     }

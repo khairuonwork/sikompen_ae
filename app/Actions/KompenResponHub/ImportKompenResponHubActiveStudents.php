@@ -20,7 +20,7 @@ class ImportKompenResponHubActiveStudents
         string $fileHash,
         int $uploadedByAdminId,
         string $uploaderName,
-        string $uploaderEmail,
+        string $uploaderUsername,
     ): array {
         $period = $payload['preview']['periode_semester'];
 
@@ -29,11 +29,11 @@ class ImportKompenResponHubActiveStudents
         }
 
         return DB::connection(config('kompen-respon-hub.database_connection'))
-            ->transaction(function () use ($fileHash, $originalFilename, $payload, $period, $storedPath, $uploadedByAdminId, $uploaderEmail, $uploaderName): array {
+            ->transaction(function () use ($fileHash, $originalFilename, $payload, $period, $storedPath, $uploadedByAdminId, $uploaderUsername, $uploaderName): array {
                 $import = KompenResponHubActiveStudentImport::create([
                     'uploaded_by_admin_id' => $uploadedByAdminId,
                     'uploader_name' => $uploaderName,
-                    'uploader_email' => $uploaderEmail,
+                    'uploader_username' => $uploaderUsername,
                     'original_filename' => $originalFilename,
                     'periode_semester' => $period,
                     'stored_path' => $storedPath,
@@ -64,7 +64,7 @@ class ImportKompenResponHubActiveStudents
                     'import_type' => KompenResponHubImportAuditLog::ImportTypeActiveStudents,
                     'source_active_student_import_id' => $import->id,
                     'actor_name' => $uploaderName,
-                    'actor_email' => $uploaderEmail,
+                    'actor_username' => $uploaderUsername,
                     'periode_semester' => $period,
                     'original_filename' => $originalFilename,
                     'class_count' => $payload['preview']['class_count'],

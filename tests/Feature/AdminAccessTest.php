@@ -47,12 +47,12 @@ test('guests cannot access admin imports or templates', function () {
 
 test('an admin can log in and receives an authenticated session', function () {
     $admin = KompenResponHubAdmin::factory()->create([
-        'email' => 'admin@example.test',
+        'username' => 'admin-sikompen',
         'password' => 'sangat-aman-untuk-admin',
     ]);
 
     $this->post('/admin/login', [
-        'email' => $admin->email,
+        'username' => $admin->username,
         'password' => 'sangat-aman-untuk-admin',
     ])
         ->assertRedirect('/admin');
@@ -63,19 +63,55 @@ test('an admin can log in and receives an authenticated session', function () {
 
 test('failed admin logins are rate limited after five attempts', function () {
     $admin = KompenResponHubAdmin::factory()->create([
-        'email' => 'admin@example.test',
+        'username' => 'admin-sikompen',
         'password' => 'sangat-aman-untuk-admin',
     ]);
 
     foreach (range(1, 5) as $attempt) {
         $this->post('/admin/login', [
-            'email' => $admin->email,
+            'username' => $admin->username,
             'password' => 'password-yang-salah',
-        ])->assertSessionHasErrors('email');
+        ])->assertSessionHasErrors('username');
     }
 
     $this->post('/admin/login', [
-        'email' => $admin->email,
+        'username' => $admin->username,
         'password' => 'sangat-aman-untuk-admin',
-    ])->assertSessionHasErrors('email');
+    ])->assertSessionHasErrors('username');
+});
+
+test('an authenticated admin can update their username and invalidate other sessions', function () {
+    $admin = KompenResponHubAdmin::factory()->create([
+        'username' => 'admin-lama',
+        'password' => 'Password-Lama#2026',
+    ]);
+    $previousSessionVersion = $admin->session_version;
+
+    $this->actingAs($admin, 'admin')
+        ->put('/admin/settings/username', [
+            'username' => 'admin-baru',
+            'current_password' => 'Password-Lama#2026',
+        ])
+        ->assertRedirect('/admin/settings');
+
+    expect($admin->fresh()->username)->toBe('admin-baru')
+        ->and($admin->fresh()->session_version)->toBe($previousSessionVersion + 1);
+});
+
+test('an authenticated admin can update their password with the current password', function () {
+    $admin = KompenResponHubAdmin::factory()->create([
+        'password' => 'Password-Lama#2026',
+    ]);
+    $previousSessionVersion = $admin->session_version;
+
+    $this->actingAs($admin, 'admin')
+        ->put('/admin/settings/password', [
+            'current_password' => 'Password-Lama#2026',
+            'password' => 'Password-Baru#2026',
+            'password_confirmation' => 'Password-Baru#2026',
+        ])
+        ->assertRedirect('/admin/settings');
+
+    expect(Hash::check('Password-Baru#2026', $admin->fresh()->password))->toBeTrue()
+        ->and($admin->fresh()->session_version)->toBe($previousSessionVersion + 1);
 });

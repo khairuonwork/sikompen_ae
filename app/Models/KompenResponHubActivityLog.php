@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $actor_type
  * @property int|null $actor_admin_id
  * @property string|null $actor_name
- * @property string|null $actor_email
+ * @property string|null $actor_username
  * @property string|null $reason
  * @property array<string, mixed>|null $before_state
  * @property array<string, mixed>|null $after_state
@@ -37,7 +37,7 @@ class KompenResponHubActivityLog extends Model
 
     protected $table = 'sikompen_activity_logs';
 
-    protected $fillable = ['event_type', 'subject_type', 'subject_reference', 'nim', 'subject_name', 'periode_semester', 'kelas', 'actor_type', 'actor_admin_id', 'actor_name', 'actor_email', 'reason', 'before_state', 'after_state', 'metadata', 'ip_address', 'user_agent', 'occurred_at'];
+    protected $fillable = ['event_type', 'subject_type', 'subject_reference', 'nim', 'subject_name', 'periode_semester', 'kelas', 'actor_type', 'actor_admin_id', 'actor_name', 'actor_username', 'reason', 'before_state', 'after_state', 'metadata', 'ip_address', 'user_agent', 'occurred_at'];
 
     protected function casts(): array
     {

@@ -21,7 +21,7 @@ class KompenResponHubActiveStudentImportFactory extends Factory
         return [
             'uploaded_by_admin_id' => KompenResponHubAdmin::factory(),
             'uploader_name' => fake()->name(),
-            'uploader_email' => fake()->unique()->safeEmail(),
+            'uploader_username' => fake()->unique()->userName(),
             'original_filename' => 'mahasiswa-aktif.xlsx',
             'periode_semester' => '2027/2028 Gasal',
             'stored_path' => 'kompen-respon-hub/imports/active-students/source.xlsx',

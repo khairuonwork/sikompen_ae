@@ -95,12 +95,23 @@ test('an admin student profile includes an interpretable before and after activi
         'kelas' => $student->kelas,
         'actor_type' => 'admin',
         'actor_admin_id' => $admin->id,
-        'actor_name' => $admin->email,
-        'actor_email' => $admin->email,
+        'actor_name' => $admin->username,
+        'actor_username' => $admin->username,
         'reason' => 'Kehadiran diverifikasi.',
         'before_state' => ['kompensasi_dikerjakan_jam' => 1],
         'after_state' => ['kompensasi_dikerjakan_jam' => 2.5],
         'occurred_at' => now(),
+    ]);
+    KompenResponHubActivityLog::create([
+        'event_type' => 'student.login',
+        'subject_type' => 'student_session',
+        'subject_reference' => $student->nim,
+        'nim' => $student->nim,
+        'periode_semester' => $student->periode_semester,
+        'kelas' => $student->kelas,
+        'actor_type' => 'student',
+        'actor_name' => $student->nama_mahasiswa,
+        'occurred_at' => now()->addSecond(),
     ]);
 
     $this->actingAs($admin, 'admin')
@@ -110,6 +121,51 @@ test('an admin student profile includes an interpretable before and after activi
         ->assertJsonPath('data.activities.0.before_state.kompensasi_dikerjakan_jam', 1)
         ->assertJsonPath('data.activities.0.after_state.kompensasi_dikerjakan_jam', 2.5)
         ->assertJsonPath('data.activities.0.reason', 'Kehadiran diverifikasi.');
+});
+
+test('the admin activity history excludes student activity records and filter options', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create(['username' => 'admin-riwayat']);
+    KompenResponHubActivityLog::create([
+        'event_type' => 'admin.password_updated',
+        'subject_type' => 'system_setting',
+        'subject_reference' => (string) $admin->id,
+        'actor_type' => 'admin',
+        'actor_admin_id' => $admin->id,
+        'actor_name' => $admin->username,
+        'actor_username' => $admin->username,
+        'occurred_at' => now(),
+    ]);
+    KompenResponHubActivityLog::create([
+        'event_type' => 'student.login',
+        'subject_type' => 'student_session',
+        'subject_reference' => '261000001',
+        'actor_type' => 'student',
+        'actor_name' => 'Mahasiswa Contoh',
+        'occurred_at' => now()->addSecond(),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=activity')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('activityLogs.data', 1)
+            ->where('activityLogs.data.0.event_type', 'admin.password_updated')
+            ->where('activityFilterOptions.event_types', ['admin.password_updated'])
+            ->where('activityFilterOptions.actor_usernames', [$admin->username]),
+        );
+});
+
+test('an export rejects a class that does not match its selected level', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')
+        ->post('/exports', [
+            'resource' => 'students',
+            'format' => 'xlsx',
+            'tingkat' => 1,
+            'kelas' => '2AEA1',
+        ])
+        ->assertSessionHasErrors(['kelas' => 'Kelas harus sesuai dengan tingkat yang dipilih.']);
 });
 
 test('the Kompen and Respon table filters students by class and level', function () {
@@ -348,7 +404,7 @@ test('an administrator can export upload logs with import type and period filter
         'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
         'import_type' => KompenResponHubImportAuditLog::ImportTypeActiveStudents,
         'actor_name' => 'Admin Akademik',
-        'actor_email' => $admin->email,
+        'actor_username' => $admin->username,
         'periode_semester' => '2027/2028 Gasal',
         'original_filename' => 'roster-1aea1.xlsx',
         'class_count' => 1,
@@ -676,7 +732,7 @@ test('an authenticated admin can stage a valid workbook then activate it for its
     expect($import->periode_semester)->toBe('2026/2027 Gasal')
         ->and($import->uploaded_by_admin_id)->toBe($admin->id)
         ->and($import->uploader_name)->toBe('Khairul Anwar')
-        ->and($import->uploader_email)->toBe($admin->email)
+        ->and($import->uploader_username)->toBe($admin->username)
         ->and($import->quality_report['status'])->toBe('passed')
         ->and($import->quality_report['checks'])->toHaveCount(6)
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.completed')->exists())->toBeTrue();
@@ -688,7 +744,7 @@ test('an authenticated admin can stage a valid workbook then activate it for its
             ->has('imports.data', 1)
             ->where('imports.data.0.event_type', 'upload')
             ->where('imports.data.0.actor_name', 'Khairul Anwar')
-            ->where('imports.data.0.actor_email', $admin->email)
+            ->where('imports.data.0.actor_username', $admin->username)
             ->where('imports.data.0.version_status', 'stored')
             ->where('imports.data.0.version_imported_at', $import->imported_at->toIso8601String())
             ->where('imports.data.0.quality_report.status', 'passed'),
@@ -1055,9 +1111,9 @@ test('admin login and uploader name reject HTML syntax', function () {
     $admin = KompenResponHubAdmin::factory()->create();
 
     $this->post('/admin/login', [
-        'email' => '<script>alert(1)</script>',
+        'username' => '<script>alert(1)</script>',
         'password' => 'invalid-password',
-    ])->assertSessionHasErrors(['email']);
+    ])->assertSessionHasErrors(['username']);
 
     $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
         'uploader_name' => '<script>alert(1)</script>',

@@ -34,11 +34,12 @@ class StudentPasswordResetController extends Controller
                     return;
                 }
 
+                $now = now('Asia/Jakarta');
                 $values = [
                     'reset_code' => Str::upper(Str::random(8)),
                     'attempts' => 0,
-                    'requested_at' => now(),
-                    'expires_at' => now()->addDay(),
+                    'requested_at' => $now,
+                    'expires_at' => $now->copy()->addDay(),
                     'fulfilled_at' => null,
                 ];
 
@@ -52,7 +53,7 @@ class StudentPasswordResetController extends Controller
             });
         }
 
-        return to_route('student.password-reset.edit', ['nim' => $nim])->with(
+        return to_route('student.password-reset.edit')->with(
             'success',
             'Jika NIM aktif, permintaan reset telah dicatat. Hubungi admin jurusan untuk memperoleh kode yang berlaku selama 24 jam.',
         );
@@ -71,17 +72,18 @@ class StudentPasswordResetController extends Controller
             throw ValidationException::withMessages(['reset_code' => 'Kode reset tidak valid atau sudah kedaluwarsa.']);
         }
 
-        DB::connection(config('kompen-respon-hub.database_connection'))->transaction(function () use ($request, $nim): void {
+        $resetError = DB::connection(config('kompen-respon-hub.database_connection'))->transaction(function () use ($request, $nim): ?string {
             $resetRequest = KompenResponHubStudentPasswordResetRequest::query()
                 ->where('nim', $nim)->whereNull('fulfilled_at')->lockForUpdate()->first();
 
             if ($resetRequest === null || $resetRequest->expires_at->isPast() || $resetRequest->attempts >= 5) {
-                throw ValidationException::withMessages(['reset_code' => 'Kode reset tidak valid atau sudah kedaluwarsa.']);
+                return 'Kode reset tidak valid atau sudah kedaluwarsa.';
             }
 
             if (! hash_equals($resetRequest->reset_code, $request->string('reset_code')->toString())) {
                 $resetRequest->increment('attempts');
-                throw ValidationException::withMessages(['reset_code' => 'Kode reset tidak tepat.']);
+
+                return 'Kode reset tidak tepat.';
             }
 
             $account = KompenResponHubStudentAccount::query()->firstOrCreate(['nim' => $nim], ['password' => Hash::make($nim)]);
@@ -92,7 +94,13 @@ class StudentPasswordResetController extends Controller
                 'session_version' => $account->session_version + 1,
             ])->save();
             $resetRequest->forceFill(['fulfilled_at' => now()])->save();
+
+            return null;
         });
+
+        if ($resetError !== null) {
+            throw ValidationException::withMessages(['reset_code' => $resetError]);
+        }
 
         return to_route('student.login')->with('success', 'Password berhasil diubah. Silakan masuk dengan password baru.');
     }

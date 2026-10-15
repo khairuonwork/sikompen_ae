@@ -23,7 +23,7 @@ class KompenResponHubActiveStudentImportResource extends JsonResource
             'student_count' => $this->student_count,
             'class_count' => $this->class_count,
             'uploader_name' => $this->uploader_name,
-            'uploader_email' => $this->uploader_email,
+            'uploader_username' => $this->uploader_username,
             'imported_at' => $this->imported_at->toIso8601String(),
             'deleted_at' => $this->deleted_at?->toIso8601String(),
             'is_active' => $this->relationLoaded('activeReference') && $this->activeReference !== null,

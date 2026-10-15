@@ -107,8 +107,8 @@ class KompenResponHubDataQuery
     {
         $query = KompenResponHubImport::query()
             ->with([
-                'activeReference.activatedByAdmin:id,email',
-                'uploadedByAdmin:id,email',
+                'activeReference.activatedByAdmin:id,username',
+                'uploadedByAdmin:id,username',
             ])
             ->orderByDesc('imported_at')
             ->orderByDesc('id');
@@ -124,7 +124,7 @@ class KompenResponHubDataQuery
     public function recycledImportVersions(): Builder
     {
         return KompenResponHubImport::onlyTrashed()
-            ->with(['uploadedByAdmin:id,email'])
+            ->with(['uploadedByAdmin:id,username'])
             ->orderByDesc('deleted_at')
             ->orderByDesc('id');
     }
@@ -144,7 +144,7 @@ class KompenResponHubDataQuery
     {
         return KompenResponHubActiveStudentImport::query()
             ->with([
-                'uploadedByAdmin:id,email',
+                'uploadedByAdmin:id,username',
                 'activeReference:id,periode_semester,sikompen_active_student_import_id,activated_at',
             ])
             ->orderByDesc('imported_at')
@@ -155,7 +155,7 @@ class KompenResponHubDataQuery
     public function recycledActiveStudentImportVersions(): Builder
     {
         return KompenResponHubActiveStudentImport::onlyTrashed()
-            ->with(['uploadedByAdmin:id,email'])
+            ->with(['uploadedByAdmin:id,username'])
             ->orderByDesc('deleted_at')
             ->orderByDesc('id');
     }
@@ -263,7 +263,8 @@ class KompenResponHubDataQuery
      */
     public function activityLogs(array $filters): Builder
     {
-        $query = KompenResponHubActivityLog::query();
+        $query = KompenResponHubActivityLog::query()
+            ->whereIn('actor_type', ['admin', 'system']);
 
         if (filled($filters['periode_semester'] ?? null)) {
             $query->where('periode_semester', $filters['periode_semester']);
@@ -274,7 +275,7 @@ class KompenResponHubDataQuery
         }
 
         if (filled($filters['activity_actor'] ?? null)) {
-            $query->where('actor_email', $filters['activity_actor']);
+            $query->where('actor_username', $filters['activity_actor']);
         }
 
         return $query->orderByDesc('occurred_at')->orderByDesc('id');
@@ -328,12 +329,15 @@ class KompenResponHubDataQuery
         ];
     }
 
-    /** @return array{event_types: list<string>, actor_emails: list<string>} */
+    /** @return array{event_types: list<string>, actor_usernames: list<string>} */
     public function activityFilterOptions(): array
     {
+        $activityLogs = KompenResponHubActivityLog::query()
+            ->whereIn('actor_type', ['admin', 'system']);
+
         return [
-            'event_types' => array_values(KompenResponHubActivityLog::query()->distinct()->orderBy('event_type')->pluck('event_type')->map(static fn (mixed $eventType): string => (string) $eventType)->all()),
-            'actor_emails' => array_values(KompenResponHubActivityLog::query()->whereNotNull('actor_email')->distinct()->orderBy('actor_email')->pluck('actor_email')->map(static fn (mixed $email): string => (string) $email)->all()),
+            'event_types' => array_values((clone $activityLogs)->distinct()->orderBy('event_type')->pluck('event_type')->map(static fn (mixed $eventType): string => (string) $eventType)->all()),
+            'actor_usernames' => array_values((clone $activityLogs)->whereNotNull('actor_username')->distinct()->orderBy('actor_username')->pluck('actor_username')->map(static fn (mixed $username): string => (string) $username)->all()),
         ];
     }
 

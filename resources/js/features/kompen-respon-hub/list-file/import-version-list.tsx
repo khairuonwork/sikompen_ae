@@ -176,7 +176,7 @@ export function ImportVersionList({
                                             {version.display_filename}
                                         </p>
                                         <p className="mt-1 text-[11px] text-[#395886]/60">
-                                            {version.uploaded_by_name ?? version.uploaded_by_email ?? "Admin tidak diketahui"}
+                                            {version.uploaded_by_name ?? version.uploaded_by_username ?? "Admin tidak diketahui"}
                                         </p>
                                     </td>
                                     <td className="px-5 py-4 text-xs text-[#395886]">

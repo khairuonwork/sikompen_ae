@@ -20,10 +20,10 @@ class ReleaseKompenResponHubImportVersion
     public function execute(
         KompenResponHubImport $import,
         string $actorName,
-        string $actorEmail,
+        string $actorUsername,
     ): array {
         return DB::connection(config('kompen-respon-hub.database_connection'))
-            ->transaction(function () use ($actorEmail, $actorName, $import): array {
+            ->transaction(function () use ($actorUsername, $actorName, $import): array {
                 $lockedImport = KompenResponHubImport::query()
                     ->lockForUpdate()
                     ->findOrFail($import->id);
@@ -63,7 +63,7 @@ class ReleaseKompenResponHubImportVersion
                     'import_type' => KompenResponHubImportAuditLog::ImportTypeKompenRespon,
                     'source_import_id' => $lockedImport->id,
                     'actor_name' => $actorName,
-                    'actor_email' => $actorEmail,
+                    'actor_username' => $actorUsername,
                     'periode_semester' => $lockedImport->periode_semester,
                     'original_filename' => $displayFilename,
                     'class_count' => $lockedImport->class_count,

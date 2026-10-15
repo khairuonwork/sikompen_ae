@@ -56,9 +56,9 @@ class AppServiceProvider extends ServiceProvider
     protected function configureRateLimiting(): void
     {
         RateLimiter::for('admin-login', function (Request $request): Limit {
-            $email = Str::lower($request->string('email')->toString());
+            $username = Str::lower($request->string('username')->toString());
 
-            return Limit::perMinute(10)->by(Str::transliterate("{$email}|{$request->ip()}"));
+            return Limit::perMinute(10)->by(Str::transliterate("{$username}|{$request->ip()}"));
         });
 
         RateLimiter::for('student-login', function (Request $request): Limit {
@@ -72,15 +72,15 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('admin-password-reset-request', function (Request $request): Limit {
-            $email = Str::lower($request->string('email')->toString());
+            $username = Str::lower($request->string('username')->toString());
 
-            return Limit::perMinute(3)->by(Str::transliterate("admin-reset-request|{$email}|{$request->ip()}"));
+            return Limit::perMinute(3)->by(Str::transliterate("admin-reset-request|{$username}|{$request->ip()}"));
         });
 
         RateLimiter::for('admin-password-reset-confirm', function (Request $request): Limit {
-            $email = Str::lower($request->string('email')->toString());
+            $username = Str::lower($request->string('username')->toString());
 
-            return Limit::perMinute(5)->by(Str::transliterate("admin-reset-confirm|{$email}|{$request->ip()}"));
+            return Limit::perMinute(5)->by(Str::transliterate("admin-reset-confirm|{$username}|{$request->ip()}"));
         });
 
         RateLimiter::for('student-password-reset-request', function (Request $request): Limit {

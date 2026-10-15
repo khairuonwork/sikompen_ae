@@ -4,6 +4,7 @@ import {
     ArrowLeft,
     CheckCircle2,
     FileSpreadsheet,
+    KeyRound,
     ListFilter,
     LogOut,
     Settings,
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { home } from "@/routes";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
+import { index as studentPasswordResets } from "@/routes/admin/student-password-resets";
 import { index as studentIndex } from "@/routes/student/kompen-respon";
 import { StudentOverviewPanel } from "@/features/kompen-respon-hub/dashboard/dashboard-panel";
 import { GlobalStudentSearch } from "@/features/kompen-respon-hub/dashboard/global-student-search";
@@ -259,6 +261,19 @@ export default function KompenResponHubIndex({
                                         >
                                             <Settings className="size-4" />
                                             Pengaturan
+                                        </Link>
+                                    </Button>
+                                    <Button
+                                        asChild
+                                        variant="outline"
+                                        className="rounded-2xl border-[#8AAEE0] bg-white/80 px-4 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white active:scale-95"
+                                    >
+                                        <Link
+                                            href={studentPasswordResets.url()}
+                                            className="flex items-center gap-1.5"
+                                        >
+                                            <KeyRound className="size-4" />
+                                            Reset mahasiswa
                                         </Link>
                                     </Button>
                                     <TemplateDownloadMenu />

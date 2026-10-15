@@ -14,12 +14,12 @@ class StoreAdminPasswordResetRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $this->merge(['email' => Str::lower(trim($this->string('email')->toString()))]);
+        $this->merge(['username' => Str::lower(trim($this->string('username')->toString()))]);
     }
 
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {
-        return ['email' => ['bail', 'required', 'string', 'email:rfc,dns', 'max:255']];
+        return ['username' => ['bail', 'required', 'string', 'regex:/^[a-z0-9][a-z0-9._@-]{2,63}$/', 'max:64']];
     }
 }

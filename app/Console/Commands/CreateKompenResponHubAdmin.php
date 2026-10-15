@@ -10,22 +10,22 @@ use Illuminate\Support\Str;
 class CreateKompenResponHubAdmin extends Command
 {
     protected $signature = 'kompen-respon-hub:create-admin
-                            {email : Email address for the administrator}';
+                            {username : Username untuk administrator}';
 
     protected $description = 'Create one administrator account for Kompen Respon Hub';
 
     public function handle(): int
     {
-        $email = Str::lower(trim((string) $this->argument('email')));
+        $username = Str::lower(trim((string) $this->argument('username')));
 
-        if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
-            $this->error('Email admin tidak valid.');
+        if (preg_match('/^[a-z0-9][a-z0-9._@-]{2,63}$/', $username) !== 1) {
+            $this->error('Username admin tidak valid.');
 
             return self::FAILURE;
         }
 
-        if (KompenResponHubAdmin::query()->where('email', $email)->exists()) {
-            $this->error('Email admin tersebut sudah terdaftar.');
+        if (KompenResponHubAdmin::query()->where('username', $username)->exists()) {
+            $this->error('Username admin tersebut sudah terdaftar.');
 
             return self::FAILURE;
         }
@@ -40,11 +40,11 @@ class CreateKompenResponHubAdmin extends Command
         }
 
         KompenResponHubAdmin::create([
-            'email' => $email,
+            'username' => $username,
             'password' => Hash::make($password),
         ]);
 
-        $this->info("Admin {$email} berhasil dibuat.");
+        $this->info("Admin {$username} berhasil dibuat.");
 
         return self::SUCCESS;
     }

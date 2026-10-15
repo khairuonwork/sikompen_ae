@@ -1,11 +1,13 @@
-import { Form, Head } from "@inertiajs/react";
-import { Eye, EyeOff, KeyRound, ShieldCheck } from "lucide-react";
+import { Form, Head, Link } from "@inertiajs/react";
+import { ArrowLeft, Eye, EyeOff, KeyRound, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { update } from "@/actions/App/Http/Controllers/StudentPasswordController";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { login as studentLogin } from "@/routes/student";
+import { show as studentProfile } from "@/routes/student/profile";
 
 type StudentPasswordProps = {
     nim: string;
@@ -19,6 +21,9 @@ export default function StudentPassword({
     const [isCurrentPasswordVisible, setIsCurrentPasswordVisible] = useState(false);
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [isConfirmationVisible, setIsConfirmationVisible] = useState(false);
+    const backHref = requiresCurrentPassword
+        ? studentProfile.url()
+        : studentLogin.url();
 
     return (
         <>
@@ -80,8 +85,14 @@ export default function StudentPassword({
                                         </div>
                                     </div>
                                 </CardContent>
-                                <CardFooter className="border-t border-[#F0F3FA] bg-[#F0F3FA]/40 px-6 py-6">
-                                    <Button type="submit" disabled={processing} className="w-full rounded-2xl bg-[#395886] py-3 text-sm font-bold text-white shadow-md hover:bg-[#1E293B] hover:text-white">
+                                <CardFooter className="flex flex-col-reverse gap-3 border-t border-[#F0F3FA] bg-[#F0F3FA]/40 px-6 py-6 sm:flex-row sm:justify-between">
+                                    <Button asChild type="button" variant="outline" className="rounded-2xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]">
+                                        <Link href={backHref}>
+                                            <ArrowLeft className="size-4" />
+                                            {requiresCurrentPassword ? "Kembali ke profil" : "Kembali ke login"}
+                                        </Link>
+                                    </Button>
+                                    <Button type="submit" disabled={processing} className="rounded-2xl bg-[#395886] px-5 py-3 text-sm font-bold text-white shadow-md hover:bg-[#1E293B] hover:text-white">
                                         <KeyRound className="mr-2 size-4" />
                                         {processing ? "Menyimpan…" : "Simpan Password Baru"}
                                     </Button>

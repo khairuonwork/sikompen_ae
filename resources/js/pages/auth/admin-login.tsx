@@ -71,27 +71,27 @@ export default function AdminLogin({
                                         </Alert>
                                     )}
 
-                                    {/* Email Field */}
+                                    {/* Username Field */}
                                     <div className="grid gap-2">
                                         <Label
-                                            htmlFor="email"
+                                            htmlFor="username"
                                             className="text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase"
                                         >
-                                            Email Address
+                                            Username
                                         </Label>
                                         <Input
-                                            id="email"
-                                            name="email"
-                                            type="email"
-                                            autoComplete="email"
+                                            id="username"
+                                            name="username"
+                                            type="text"
+                                            autoComplete="username"
                                             required
                                             autoFocus
                                             className="rounded-2xl border-[#8AAEE0]/70 bg-white/90 py-2.5 text-sm text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886]"
-                                            placeholder="nama@email.com"
+                                            placeholder="username-admin"
                                         />
-                                        {errors.email && (
+                                        {errors.username && (
                                             <p className="mt-0.5 text-xs font-bold text-rose-600">
-                                                {errors.email}
+                                                {errors.username}
                                             </p>
                                         )}
                                     </div>

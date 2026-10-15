@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 
 class StoreAdminLoginRequest extends FormRequest
 {
@@ -11,11 +12,16 @@ class StoreAdminLoginRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['username' => Str::lower(trim($this->string('username')->toString()))]);
+    }
+
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email:rfc', 'max:255'],
+            'username' => ['required', 'string', 'regex:/^[a-z0-9][a-z0-9._@-]{2,63}$/', 'max:64'],
             'password' => ['required', 'string', 'max:255'],
         ];
     }

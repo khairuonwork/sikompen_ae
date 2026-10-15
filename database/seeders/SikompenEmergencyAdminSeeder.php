@@ -11,16 +11,16 @@ class SikompenEmergencyAdminSeeder extends Seeder
 {
     public function run(): void
     {
-        /** @var list<array{email: string|null, password: string|null}> $accounts */
+        /** @var list<array{username: string|null, password: string|null}> $accounts */
         $accounts = config('kompen-respon-hub.emergency_admins');
 
-        foreach ($accounts as ['email' => $email, 'password' => $password]) {
-            if (! is_string($email) || ! is_string($password) || $email === '' || $password === '') {
+        foreach ($accounts as ['username' => $username, 'password' => $password]) {
+            if (! is_string($username) || ! is_string($password) || $username === '' || $password === '') {
                 throw new \RuntimeException('Konfigurasi dua akun darurat Sikompen belum lengkap.');
             }
 
             KompenResponHubAdmin::query()->updateOrCreate(
-                ['email' => Str::lower($email)],
+                ['username' => Str::lower($username)],
                 [
                     'password' => Hash::make($password),
                     'is_emergency_admin' => true,

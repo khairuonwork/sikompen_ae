@@ -16,11 +16,11 @@ class ActivateKompenResponHubActiveStudentImport
     public function execute(
         KompenResponHubActiveStudentImport $import,
         string $actorName,
-        string $actorEmail,
+        string $actorUsername,
         ?int $actorAdminId = null,
     ): array {
         return DB::connection(config('kompen-respon-hub.database_connection'))
-            ->transaction(function () use ($actorAdminId, $actorEmail, $actorName, $import): array {
+            ->transaction(function () use ($actorAdminId, $actorUsername, $actorName, $import): array {
                 $lockedImport = KompenResponHubActiveStudentImport::query()
                     ->lockForUpdate()
                     ->findOrFail($import->id);
@@ -72,7 +72,7 @@ class ActivateKompenResponHubActiveStudentImport
                     'import_type' => KompenResponHubImportAuditLog::ImportTypeActiveStudents,
                     'source_active_student_import_id' => $lockedImport->id,
                     'actor_name' => $actorName,
-                    'actor_email' => $actorEmail,
+                    'actor_username' => $actorUsername,
                     'periode_semester' => $period,
                     'original_filename' => $lockedImport->original_filename,
                     'class_count' => count($classes),

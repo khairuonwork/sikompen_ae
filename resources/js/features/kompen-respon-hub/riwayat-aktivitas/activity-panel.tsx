@@ -64,7 +64,7 @@ export function ActivityFilterPanel({
 }: {
     filters: Filters;
     filterOptions: FilterOptions;
-    activityFilterOptions: { event_types: string[]; actor_emails: string[] };
+    activityFilterOptions: { event_types: string[]; actor_usernames: string[] };
 }): React.JSX.Element {
     const [selectedPeriod, setSelectedPeriod] = useState(
         filters.periode_semester ?? "",
@@ -199,13 +199,13 @@ export function ActivityFilterPanel({
                         >
                             Semua admin
                         </SelectItem>
-                        {activityFilterOptions.actor_emails.map((email) => (
+                        {activityFilterOptions.actor_usernames.map((username) => (
                             <SelectItem
-                                key={email}
-                                value={email}
+                                key={username}
+                                value={username}
                                 className="cursor-pointer hover:bg-[#B1C9EF]/20"
                             >
-                                {email}
+                                {username}
                             </SelectItem>
                         ))}
                     </SelectContent>

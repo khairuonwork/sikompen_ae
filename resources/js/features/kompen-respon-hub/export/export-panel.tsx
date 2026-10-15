@@ -38,6 +38,18 @@ export function ExportPanel({
     const [kelas, setKelas] = useState("");
     const [periode, setPeriode] = useState("");
     const [importType, setImportType] = useState("");
+    const availableClasses = tingkat === ""
+        ? filterOptions.kelas
+        : filterOptions.kelas.filter((option) => option.startsWith(tingkat));
+
+    function changeTingkat(value: string): void {
+        const nextTingkat = value === "all" ? "" : value;
+
+        setTingkat(nextTingkat);
+        if (nextTingkat !== "" && !kelas.startsWith(nextTingkat)) {
+            setKelas("");
+        }
+    }
 
     function filters(): Filters {
         return {
@@ -136,9 +148,7 @@ export function ExportPanel({
                     {resource === "import_audits" ? null : (
                         <Select
                             value={tingkat || undefined}
-                            onValueChange={(value) =>
-                                setTingkat(value === "all" ? "" : value)
-                            }
+                            onValueChange={changeTingkat}
                         >
                             <SelectTrigger className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]">
                                 <SelectValue placeholder="Semua tingkat" />
@@ -165,7 +175,7 @@ export function ExportPanel({
                             </SelectTrigger>
                             <ClassSelectContent>
                                 <SelectItem value="all" className="col-span-full">Semua kelas</SelectItem>
-                                {filterOptions.kelas.map((option) => (
+                                {availableClasses.map((option) => (
                                     <SelectItem key={option} value={option}>
                                         {option}
                                     </SelectItem>

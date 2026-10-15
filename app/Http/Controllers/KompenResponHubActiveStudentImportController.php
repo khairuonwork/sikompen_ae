@@ -88,7 +88,7 @@ class KompenResponHubActiveStudentImportController extends Controller
         $task = KompenResponHubActiveStudentImportTask::create([
             'uploaded_by_admin_id' => $actor['id'],
             'uploader_name' => $request->string('uploader_name')->trim()->toString(),
-            'uploader_email' => $actor['email'],
+            'uploader_username' => $actor['username'],
             'original_filename' => $file->getClientOriginalName(),
             'stored_path' => $storedPath,
             'file_hash' => hash_file('sha256', Storage::disk('local')->path($storedPath)),
@@ -143,8 +143,8 @@ class KompenResponHubActiveStudentImportController extends Controller
                     'event_type' => KompenResponHubImportAuditLog::EVENT_DELETE,
                     'import_type' => KompenResponHubImportAuditLog::ImportTypeActiveStudents,
                     'source_active_student_import_id' => $lockedImport->id,
-                    'actor_name' => $admin instanceof KompenResponHubAdmin ? $admin->email : $actor['email'],
-                    'actor_email' => $actor['email'],
+                    'actor_name' => $admin instanceof KompenResponHubAdmin ? $admin->username : $actor['username'],
+                    'actor_username' => $actor['username'],
                     'periode_semester' => $lockedImport->periode_semester,
                     'original_filename' => $lockedImport->original_filename,
                     'class_count' => $lockedImport->class_count,
@@ -207,8 +207,8 @@ class KompenResponHubActiveStudentImportController extends Controller
                     'event_type' => KompenResponHubImportAuditLog::EVENT_RESTORE,
                     'import_type' => KompenResponHubImportAuditLog::ImportTypeActiveStudents,
                     'source_active_student_import_id' => $trashedImport->id,
-                    'actor_name' => $admin instanceof KompenResponHubAdmin ? $admin->email : $actor['email'],
-                    'actor_email' => $actor['email'],
+                    'actor_name' => $admin instanceof KompenResponHubAdmin ? $admin->username : $actor['username'],
+                    'actor_username' => $actor['username'],
                     'periode_semester' => $trashedImport->periode_semester,
                     'original_filename' => $trashedImport->original_filename,
                     'class_count' => $trashedImport->class_count,
@@ -250,8 +250,8 @@ class KompenResponHubActiveStudentImportController extends Controller
         try {
             $result = $activator->execute(
                 $import,
-                $admin instanceof KompenResponHubAdmin ? $admin->email : $actor['email'],
-                $actor['email'],
+                $admin instanceof KompenResponHubAdmin ? $admin->username : $actor['username'],
+                $actor['username'],
                 $admin?->id,
             );
         } catch (\LogicException $exception) {

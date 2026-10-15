@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $source_import_id
  * @property int|null $source_active_student_import_id
  * @property string|null $actor_name
- * @property string|null $actor_email
+ * @property string|null $actor_username
  * @property string|null $periode_semester
  * @property string $original_filename
  * @property int $class_count
@@ -61,7 +61,7 @@ class KompenResponHubImportAuditLog extends Model
         'source_import_id',
         'source_active_student_import_id',
         'actor_name',
-        'actor_email',
+        'actor_username',
         'periode_semester',
         'original_filename',
         'class_count',

@@ -45,7 +45,7 @@ class KompenResponHubTableRequest extends FormRequest
             'mata_kuliah' => ['nullable', 'string', 'max:100', new SafeSearchTerm],
             'nama_dosen' => ['nullable', 'string', 'max:100', new SafeSearchTerm],
             'activity_event' => ['nullable', 'string', 'max:80'],
-            'activity_actor' => ['nullable', 'email:rfc,dns', 'max:255'],
+            'activity_actor' => ['nullable', 'string', 'regex:/^[a-z0-9][a-z0-9._@-]{2,63}$/', 'max:64'],
             'per_page' => ['nullable', 'integer', 'between:1,100'],
             'active_import_page' => ['nullable', 'integer', 'min:1'],
             'active_student_import_page' => ['nullable', 'integer', 'min:1'],

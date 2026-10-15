@@ -4,11 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Http\Requests\StoreKompenResponHubAdminSetupRequest;
-use App\Models\KompenResponHubActiveStudent;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubAdminPasswordResetCode;
 use App\Models\KompenResponHubAdminSetupWindow;
-use App\Models\KompenResponHubStudentPasswordResetRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -50,7 +48,7 @@ class KompenResponHubAdminSetupController extends Controller
             }
 
             KompenResponHubAdmin::query()->create([
-                'email' => Str::lower($request->string('email')->toString()),
+                'username' => Str::lower($request->string('username')->toString()),
                 'password' => $request->string('password')->toString(),
             ]);
 
@@ -67,19 +65,11 @@ class KompenResponHubAdminSetupController extends Controller
     public function settings(Request $request): Response
     {
         $setupWindow = $this->setupWindow();
-        $perPage = in_array($request->integer('per_page'), [5, 15, 25, 50, 100], true)
-            ? $request->integer('per_page')
-            : 15;
-        $studentRequests = KompenResponHubStudentPasswordResetRequest::query()
-            ->whereNull('fulfilled_at')
-            ->latest('requested_at')
-            ->paginate($perPage, ['*'], 'student_reset_page');
-        $students = KompenResponHubActiveStudent::query()
-            ->whereIn('nim', $studentRequests->pluck('nim'))
-            ->get(['nim', 'nama_mahasiswa', 'kelas'])
-            ->keyBy('nim');
 
         return Inertia::render('admin/settings', [
+            'currentAdmin' => [
+                'username' => (string) $request->user('admin')?->username,
+            ],
             'setupWindow' => [
                 'isOpen' => $setupWindow->isOpen(),
                 'expiresAt' => $setupWindow->isOpen()
@@ -88,47 +78,24 @@ class KompenResponHubAdminSetupController extends Controller
             ],
             'emergencyAdmins' => KompenResponHubAdmin::query()
                 ->where('is_emergency_admin', true)
-                ->orderBy('email')
-                ->get(['id', 'email'])
-                ->map(fn (KompenResponHubAdmin $admin): array => ['id' => $admin->id, 'email' => $admin->email]),
+                ->orderBy('username')
+                ->get(['id', 'username'])
+                ->map(fn (KompenResponHubAdmin $admin): array => ['id' => $admin->id, 'username' => $admin->username]),
             'canManageAdminResets' => $request->user('admin')?->is_emergency_admin === true,
             'adminPasswordResetRequests' => $request->user('admin')?->is_emergency_admin === true
                 ? KompenResponHubAdminPasswordResetCode::query()
-                    ->with('admin:id,email')
+                    ->with('admin:id,username')
                     ->whereNull('used_at')
                     ->latest('requested_at')
                     ->get()
                     ->map(fn (KompenResponHubAdminPasswordResetCode $resetCode): array => [
                         'id' => $resetCode->id,
-                        'email' => $resetCode->admin->email,
+                        'username' => $resetCode->admin->username,
                         'requestedAt' => $resetCode->requested_at?->toIso8601String(),
                         'expiresAt' => $resetCode->expires_at?->toIso8601String(),
                         'isIssued' => $resetCode->code_hash !== null && $resetCode->expires_at?->isFuture(),
                     ])->values()
                 : [],
-            'studentPasswordResetRequests' => [
-                'data' => $studentRequests->getCollection()->map(function (KompenResponHubStudentPasswordResetRequest $resetRequest) use ($students): array {
-                    $student = $students->get($resetRequest->nim);
-
-                    return [
-                        'id' => $resetRequest->id,
-                        'nim' => $resetRequest->nim,
-                        'name' => $student->nama_mahasiswa,
-                        'class' => $student->kelas,
-                        'code' => $resetRequest->reset_code,
-                        'requestedAt' => $resetRequest->requested_at->toIso8601String(),
-                        'expiresAt' => $resetRequest->expires_at->toIso8601String(),
-                        'isExpired' => $resetRequest->expires_at->isPast(),
-                    ];
-                })->values(),
-                'meta' => [
-                    'current_page' => $studentRequests->currentPage(),
-                    'last_page' => $studentRequests->lastPage(),
-                    'per_page' => $studentRequests->perPage(),
-                    'total' => $studentRequests->total(),
-                    'page_name' => 'student_reset_page',
-                ],
-            ],
         ]);
     }
 

@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property int $id
  * @property int|null $uploaded_by_admin_id
  * @property string $uploader_name
- * @property string|null $uploader_email
+ * @property string|null $uploader_username
  * @property string $original_filename
  * @property string|null $periode_semester
  * @property string $stored_path
@@ -38,7 +38,7 @@ class KompenResponHubActiveStudentImport extends Model
     protected $fillable = [
         'uploaded_by_admin_id',
         'uploader_name',
-        'uploader_email',
+        'uploader_username',
         'original_filename',
         'periode_semester',
         'stored_path',

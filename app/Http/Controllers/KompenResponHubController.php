@@ -112,6 +112,7 @@ class KompenResponHubController extends Controller
         ], true)->get();
 
         $activities = KompenResponHubActivityLog::query()
+            ->whereIn('actor_type', ['admin', 'system'])
             ->where('nim', $student->nim)
             ->where('periode_semester', $student->periode_semester)
             ->where('kelas', $student->kelas)
@@ -207,7 +208,7 @@ class KompenResponHubController extends Controller
                 : [],
             'activityFilterOptions' => $isAdmin && $activeTab === 'activity'
                 ? $this->dataQuery->activityFilterOptions()
-                : ['event_types' => [], 'actor_emails' => []],
+                : ['event_types' => [], 'actor_usernames' => []],
             'cutoffs' => $isAdmin
                 ? $cutoffs->map(fn (KompenResponHubPeriodCutoff $cutoff): array => [
                     'id' => $cutoff->id,

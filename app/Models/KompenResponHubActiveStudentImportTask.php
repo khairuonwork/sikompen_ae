@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $id
  * @property int|null $uploaded_by_admin_id
  * @property string|null $uploader_name
- * @property string|null $uploader_email
+ * @property string|null $uploader_username
  * @property string $original_filename
  * @property string $stored_path
  * @property string $file_hash
@@ -48,7 +48,7 @@ class KompenResponHubActiveStudentImportTask extends Model
     protected $fillable = [
         'uploaded_by_admin_id',
         'uploader_name',
-        'uploader_email',
+        'uploader_username',
         'original_filename',
         'stored_path',
         'file_hash',

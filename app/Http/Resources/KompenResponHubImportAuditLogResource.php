@@ -38,7 +38,7 @@ class KompenResponHubImportAuditLogResource extends JsonResource
             'version_activated_at' => $this->sourceImport?->activeReference?->activated_at?->toIso8601String(),
             'version_imported_at' => $this->sourceImport?->imported_at?->toIso8601String(),
             'actor_name' => $this->actor_name,
-            'actor_email' => $this->actor_email,
+            'actor_username' => $this->actor_username,
             'periode_semester' => $this->periode_semester,
             'original_filename' => $this->original_filename,
             'class_count' => $this->class_count,

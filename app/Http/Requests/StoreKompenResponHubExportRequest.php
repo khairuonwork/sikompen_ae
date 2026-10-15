@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Rules\SafeSearchTerm;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreKompenResponHubExportRequest extends FormRequest
 {
@@ -34,5 +35,18 @@ class StoreKompenResponHubExportRequest extends FormRequest
             'import_month' => ['nullable', 'date_format:Y-m'],
             'import_year' => ['nullable', 'integer', 'between:2020,2100'],
         ];
+    }
+
+    /** @return list<callable(Validator): void> */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            $tingkat = $this->integer('tingkat');
+            $kelas = $this->string('kelas')->toString();
+
+            if ($tingkat !== 0 && $kelas !== '' && ! str_starts_with($kelas, (string) $tingkat)) {
+                $validator->errors()->add('kelas', 'Kelas harus sesuai dengan tingkat yang dipilih.');
+            }
+        }];
     }
 }

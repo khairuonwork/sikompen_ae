@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 
 class SikompenAdminAccess
 {
-    /** @return array{email: string, id: int} */
+    /** @return array{username: string, id: int} */
     public function actor(Request $request): array
     {
         $admin = $request->user('admin');
@@ -17,7 +17,7 @@ class SikompenAdminAccess
         }
 
         return [
-            'email' => $admin->email,
+            'username' => $admin->username,
             'id' => $admin->id,
         ];
     }

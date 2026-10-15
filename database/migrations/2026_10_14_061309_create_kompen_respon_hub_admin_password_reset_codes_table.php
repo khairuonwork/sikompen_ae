@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::connection(config('kompen-respon-hub.database_connection'))->create('sikompen_admin_password_reset_codes', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('admin_id')->constrained('sikompen_admins')->cascadeOnDelete();
-            $table->foreignId('recipient_id')->constrained('sikompen_admin_password_reset_recipients')->cascadeOnDelete();
+            $table->foreignId('admin_id');
+            $table->foreignId('recipient_id');
             $table->string('code_hash');
             $table->unsignedTinyInteger('attempts')->default(0);
             $table->timestamp('expires_at');
@@ -22,6 +22,14 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['admin_id', 'expires_at'], 'sikompen_admin_reset_codes_admin_expiry_idx');
+            $table->foreign('admin_id', 'skprc_admin_fk')
+                ->references('id')
+                ->on('sikompen_admins')
+                ->cascadeOnDelete();
+            $table->foreign('recipient_id', 'skprc_recipient_fk')
+                ->references('id')
+                ->on('sikompen_admin_password_reset_recipients')
+                ->cascadeOnDelete();
         });
     }
 

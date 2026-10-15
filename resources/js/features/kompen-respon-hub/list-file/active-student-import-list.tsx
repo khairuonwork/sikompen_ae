@@ -145,7 +145,7 @@ export function ActiveStudentImportList({
                                             {version.original_filename}
                                         </p>
                                         <p className="mt-1 text-[11px] text-[#395886]/60">
-                                            {version.uploader_name} · {version.uploader_email ?? "—"}
+                                            {version.uploader_name} · {version.uploader_username ?? "—"}
                                         </p>
                                     </td>
                                     <td className="px-5 py-4 text-xs font-semibold text-[#395886]">

@@ -24,7 +24,7 @@ class ActivateKompenResponHubImportVersion
     public function execute(
         KompenResponHubImport $import,
         string $actorName,
-        string $actorEmail,
+        string $actorUsername,
         ?int $actorAdminId = null,
     ): array {
         if (! str_starts_with($import->stored_path, 'kompen-respon-hub/imports/') || ! Storage::disk('local')->exists($import->stored_path)) {
@@ -48,7 +48,7 @@ class ActivateKompenResponHubImportVersion
         }
 
         return DB::connection(config('kompen-respon-hub.database_connection'))
-            ->transaction(function () use ($actorAdminId, $actorEmail, $actorName, $classes, $import, $payload): array {
+            ->transaction(function () use ($actorAdminId, $actorUsername, $actorName, $classes, $import, $payload): array {
                 $lockedImport = KompenResponHubImport::query()
                     ->lockForUpdate()
                     ->findOrFail($import->id);
@@ -97,7 +97,7 @@ class ActivateKompenResponHubImportVersion
                     'event_type' => KompenResponHubImportAuditLog::EVENT_ACTIVATE,
                     'source_import_id' => $lockedImport->id,
                     'actor_name' => $actorName,
-                    'actor_email' => $actorEmail,
+                    'actor_username' => $actorUsername,
                     'periode_semester' => $lockedImport->periode_semester,
                     'original_filename' => $lockedImport->original_filename,
                     'class_count' => $payload['preview']['class_count'],

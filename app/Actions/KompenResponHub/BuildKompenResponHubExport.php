@@ -423,7 +423,7 @@ class BuildKompenResponHubExport
             ['field' => 'periode_semester', 'heading' => 'Periode', 'type' => 'text', 'width' => 20],
             ['field' => 'original_filename', 'heading' => 'Nama File', 'type' => 'text', 'width' => 36],
             ['field' => 'actor_name', 'heading' => 'Pelaksana', 'type' => 'text', 'width' => 22],
-            ['field' => 'actor_email', 'heading' => 'Email Pelaksana', 'type' => 'text', 'width' => 28],
+            ['field' => 'actor_username', 'heading' => 'Username Pelaksana', 'type' => 'text', 'width' => 28],
             ['field' => 'class_count', 'heading' => 'Kelas', 'type' => 'integer', 'width' => 10],
             ['field' => 'student_count', 'heading' => 'Mahasiswa', 'type' => 'integer', 'width' => 14],
             ['field' => 'detail_count', 'heading' => 'Detail', 'type' => 'integer', 'width' => 12],

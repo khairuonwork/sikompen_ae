@@ -72,7 +72,7 @@ export type ActivityLog = {
     kelas: string | null;
     actor_type: string;
     actor_name: string | null;
-    actor_email?: string | null;
+    actor_username?: string | null;
     reason: string | null;
     before_state: ActivityState;
     after_state: ActivityState;
@@ -105,7 +105,7 @@ export type ImportAuditLog = {
     version_imported_at: string | null;
     version_activated_at: string | null;
     actor_name: string | null;
-    actor_email: string | null;
+    actor_username: string | null;
     periode_semester: string | null;
     original_filename: string;
     class_count: number;
@@ -133,11 +133,11 @@ export type ImportVersion = {
     student_count: number;
     detail_count: number;
     uploaded_by_name: string | null;
-    uploaded_by_email: string | null;
+    uploaded_by_username: string | null;
     imported_at: string | null;
     is_active: boolean;
     activated_at: string | null;
-    activated_by_email: string | null;
+    activated_by_username: string | null;
     quality_report: {
         status: "passed";
         checks: { label: string; status: "passed"; detail: string }[];
@@ -152,7 +152,7 @@ export type ActiveStudentImportVersion = {
     student_count: number;
     class_count: number;
     uploader_name: string;
-    uploader_email: string | null;
+    uploader_username: string | null;
     imported_at: string;
     is_active: boolean;
     activated_at: string | null;
@@ -290,7 +290,7 @@ export type KompenResponHubPageProps = {
     filterOptions: FilterOptions;
     importAuditPeriods: string[];
     importAuditYears: number[];
-    activityFilterOptions: { event_types: string[]; actor_emails: string[] };
+    activityFilterOptions: { event_types: string[]; actor_usernames: string[] };
     warningPeriods: string[];
     flash: { success: string | null; error: string | null };
     students: Pagination<Student> | null;

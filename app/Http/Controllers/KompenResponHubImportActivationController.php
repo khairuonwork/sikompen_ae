@@ -37,8 +37,8 @@ class KompenResponHubImportActivationController extends Controller
         try {
             $activatedVersion = $activateImportVersion->execute(
                 $import,
-                $admin instanceof KompenResponHubAdmin ? $admin->email : $actor['email'],
-                $actor['email'],
+                $admin instanceof KompenResponHubAdmin ? $admin->username : $actor['username'],
+                $actor['username'],
                 $admin?->id,
             );
         } catch (\LogicException $exception) {
@@ -87,8 +87,8 @@ class KompenResponHubImportActivationController extends Controller
         try {
             $releasedVersion = $releaseImportVersion->execute(
                 $import,
-                $admin instanceof KompenResponHubAdmin ? $admin->email : $actor['email'],
-                $actor['email'],
+                $admin instanceof KompenResponHubAdmin ? $admin->username : $actor['username'],
+                $actor['username'],
             );
         } catch (\LogicException $exception) {
             return to_route('admin.kompen-respon.index', ['tab' => 'files'])

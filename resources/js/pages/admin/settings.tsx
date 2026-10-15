@@ -9,8 +9,16 @@ import {
     UserPlus,
     ArrowLeft,
     ShieldCheck,
-    AlertCircle
+    AlertCircle,
+    Eye,
+    EyeOff,
+    KeyRound,
+    UserRound,
 } from 'lucide-react';
+import {
+    updatePassword,
+    updateUsername,
+} from '@/actions/App/Http/Controllers/AdminCredentialsController';
 import {
     disable,
     enable,
@@ -29,9 +37,23 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { index as adminIndex } from '@/routes/admin/kompen-respon';
 
 type AdminSettingsProps = {
+    currentAdmin: {
+        username: string;
+    };
     setupWindow: {
         isOpen: boolean;
         expiresAt: string | null;
@@ -41,31 +63,69 @@ type AdminSettingsProps = {
         adminResetCode: string | null;
         success: string | null;
     };
-    emergencyAdmins: Array<{ id: number; email: string }>;
+    emergencyAdmins: Array<{ id: number; username: string }>;
     canManageAdminResets: boolean;
-    adminPasswordResetRequests: Array<{ id: number; email: string; requestedAt: string | null; expiresAt: string | null; isIssued: boolean }>;
-    studentPasswordResetRequests: {
-        data: Array<{ id: number; nim: string; name: string; class: string; code: string; requestedAt: string; expiresAt: string; isExpired: boolean }>;
-        meta: { current_page: number; last_page: number; total: number };
-    };
+    adminPasswordResetRequests: Array<{ id: number; username: string; requestedAt: string | null; expiresAt: string | null; isIssued: boolean }>;
 };
 
 function formatExpiry(expiresAt: string): string {
     return new Intl.DateTimeFormat('id-ID', {
         dateStyle: 'full',
         timeStyle: 'short',
+        timeZone: 'Asia/Jakarta',
     }).format(new Date(expiresAt));
 }
 
+function PasswordInput({
+    id,
+    name,
+    autoComplete,
+    visible,
+    onToggle,
+}: {
+    id: string;
+    name: string;
+    autoComplete: 'current-password' | 'new-password';
+    visible: boolean;
+    onToggle: () => void;
+}): React.JSX.Element {
+    return (
+        <div className="relative">
+            <Input
+                id={id}
+                name={name}
+                type={visible ? 'text' : 'password'}
+                autoComplete={autoComplete}
+                required
+                className="rounded-xl border-[#8AAEE0] bg-white pr-11 text-[#1E293B]"
+            />
+            <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={visible ? 'Sembunyikan password' : 'Tampilkan password'}
+                onClick={onToggle}
+                className="absolute top-1/2 right-1 size-8 -translate-y-1/2 rounded-lg text-[#395886] hover:bg-[#F0F3FA] hover:text-[#1E293B]"
+            >
+                {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </Button>
+        </div>
+    );
+}
+
 export default function AdminSettings({
+    currentAdmin,
     setupWindow,
     flash,
     emergencyAdmins,
     canManageAdminResets,
     adminPasswordResetRequests,
-    studentPasswordResetRequests,
 }: AdminSettingsProps): React.JSX.Element {
     const [copied, setCopied] = useState(false);
+    const [isUsernamePasswordVisible, setIsUsernamePasswordVisible] = useState(false);
+    const [isCurrentPasswordVisible, setIsCurrentPasswordVisible] = useState(false);
+    const [isNewPasswordVisible, setIsNewPasswordVisible] = useState(false);
+    const [isPasswordConfirmationVisible, setIsPasswordConfirmationVisible] = useState(false);
 
     const handleCopy = (code: string) => {
         navigator.clipboard.writeText(code);
@@ -231,26 +291,99 @@ export default function AdminSettings({
                         </CardFooter>
                     </Card>
 
-                    <Card className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
+                    <Card className="overflow-hidden rounded-3xl border border-white/80 bg-white/90 text-[#395886] shadow-sm">
                         <CardHeader>
-                            <CardTitle className="text-xl font-black text-[#395886]">Akun Darurat Reset Admin</CardTitle>
-                            <CardDescription>Dua akun ini dapat menerbitkan kode reset. Password akun darurat tidak pernah ditampilkan aplikasi.</CardDescription>
+                            <CardTitle className="text-xl font-black text-[#395886]">Keamanan Akun Saya</CardTitle>
+                            <CardDescription className="text-sm font-medium leading-relaxed text-[#395886]/80">Kelola username dan password hanya saat diperlukan. Setiap perubahan mengeluarkan sesi admin lain.</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="overflow-x-auto rounded-xl border border-[#D5DEEF]">
-                                <table className="w-full min-w-[480px] text-left text-sm"><thead className="bg-[#F0F3FA] text-xs uppercase tracking-wider"><tr><th className="p-3">Akun</th><th className="p-3">Status</th></tr></thead><tbody>{emergencyAdmins.length === 0 ? <tr><td className="p-3 text-[#395886]/65" colSpan={2}>Akun darurat belum di-seed.</td></tr> : emergencyAdmins.map((admin) => <tr key={admin.id} className="border-t border-[#F0F3FA]"><td className="p-3 font-medium">{admin.email}</td><td className="p-3 text-emerald-700">Dapat menerbitkan kode</td></tr>)}</tbody></table>
-                            </div>
-                            {canManageAdminResets && <div className="overflow-x-auto rounded-xl border border-[#D5DEEF]"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-[#F0F3FA] text-xs uppercase tracking-wider"><tr><th className="p-3">Admin pemohon</th><th className="p-3">Diminta</th><th className="p-3">Status</th><th className="p-3">Tindakan</th></tr></thead><tbody>{adminPasswordResetRequests.length === 0 ? <tr><td className="p-3 text-[#395886]/65" colSpan={4}>Belum ada permintaan reset admin.</td></tr> : adminPasswordResetRequests.map((item) => <tr key={item.id} className="border-t border-[#F0F3FA]"><td className="p-3 font-medium">{item.email}</td><td className="p-3">{item.requestedAt ? formatExpiry(item.requestedAt) : '-'}</td><td className="p-3">{item.isIssued && item.expiresAt ? `Kode aktif hingga ${formatExpiry(item.expiresAt)}` : 'Menunggu kode'}</td><td className="flex gap-2 p-3"><Form method="post" action={storeCode.url(item.id)}><Button type="submit" className="h-8 rounded-lg bg-[#395886] text-white">{item.isIssued ? 'Buat ulang' : 'Buat kode'}</Button></Form><Form method="delete" action={destroyCode.url(item.id)}><Button type="submit" variant="outline" className="h-8 rounded-lg border-rose-300 text-rose-700">Batalkan</Button></Form></td></tr>)}</tbody></table></div>}
+                        <CardContent className="flex flex-col gap-3 sm:flex-row">
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" className="justify-start rounded-2xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]">
+                                        <UserRound className="size-4" /> Ganti username
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto rounded-3xl border-[#D5DEEF] bg-white p-0 text-[#395886] sm:max-w-md">
+                                    <DialogHeader className="border-b border-[#F0F3FA] px-6 pt-6 pb-5 text-left">
+                                        <DialogTitle className="text-xl font-black text-[#395886]">Ganti username</DialogTitle>
+                                        <DialogDescription className="text-[#395886]/70">Gunakan username unik. Konfirmasi password diperlukan sebelum disimpan.</DialogDescription>
+                                    </DialogHeader>
+                                    <Form {...updateUsername.form()} className="grid gap-4 px-6 py-5">
+                                        {({ errors, processing }) => (
+                                            <>
+                                                <div className="grid gap-1.5">
+                                                    <label htmlFor="username" className="text-xs font-bold">Username baru</label>
+                                                    <Input id="username" name="username" defaultValue={currentAdmin.username} autoComplete="username" required className="rounded-xl border-[#8AAEE0] bg-white" />
+                                                    {errors.username ? <p className="text-xs font-semibold text-rose-600">{errors.username}</p> : null}
+                                                </div>
+                                                <div className="grid gap-1.5">
+                                                    <label htmlFor="username_current_password" className="text-xs font-bold">Password saat ini</label>
+                                                    <PasswordInput id="username_current_password" name="current_password" autoComplete="current-password" visible={isUsernamePasswordVisible} onToggle={() => setIsUsernamePasswordVisible((visible) => !visible)} />
+                                                    {errors.current_password ? <p className="text-xs font-semibold text-rose-600">{errors.current_password}</p> : null}
+                                                </div>
+                                                <DialogFooter className="border-t border-[#F0F3FA] pt-4">
+                                                    <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl border-[#8AAEE0] text-[#395886]">Batal</Button></DialogClose>
+                                                    <Button type="submit" disabled={processing} className="rounded-xl bg-[#395886] text-white hover:bg-[#1E293B]">{processing ? 'Menyimpan…' : 'Simpan username'}</Button>
+                                                </DialogFooter>
+                                            </>
+                                        )}
+                                    </Form>
+                                </DialogContent>
+                            </Dialog>
+
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Button className="justify-start rounded-2xl bg-[#395886] text-white hover:bg-[#1E293B]">
+                                        <KeyRound className="size-4" /> Ganti password
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto rounded-3xl border-[#D5DEEF] bg-white p-0 text-[#395886] sm:max-w-md">
+                                    <DialogHeader className="border-b border-[#F0F3FA] px-6 pt-6 pb-5 text-left">
+                                        <DialogTitle className="text-xl font-black text-[#395886]">Ganti password</DialogTitle>
+                                        <DialogDescription className="text-[#395886]/70">Gunakan password baru yang kuat dan jangan gunakan ulang password lama.</DialogDescription>
+                                    </DialogHeader>
+                                    <Form {...updatePassword.form()} className="grid gap-4 px-6 py-5">
+                                        {({ errors, processing }) => (
+                                            <>
+                                                <div className="grid gap-1.5">
+                                                    <label htmlFor="password_current_password" className="text-xs font-bold">Password saat ini</label>
+                                                    <PasswordInput id="password_current_password" name="current_password" autoComplete="current-password" visible={isCurrentPasswordVisible} onToggle={() => setIsCurrentPasswordVisible((visible) => !visible)} />
+                                                    {errors.current_password ? <p className="text-xs font-semibold text-rose-600">{errors.current_password}</p> : null}
+                                                </div>
+                                                <div className="grid gap-1.5">
+                                                    <label htmlFor="password" className="text-xs font-bold">Password baru</label>
+                                                    <PasswordInput id="password" name="password" autoComplete="new-password" visible={isNewPasswordVisible} onToggle={() => setIsNewPasswordVisible((visible) => !visible)} />
+                                                    {errors.password ? <p className="text-xs font-semibold text-rose-600">{errors.password}</p> : null}
+                                                </div>
+                                                <div className="grid gap-1.5">
+                                                    <label htmlFor="password_confirmation" className="text-xs font-bold">Konfirmasi password baru</label>
+                                                    <PasswordInput id="password_confirmation" name="password_confirmation" autoComplete="new-password" visible={isPasswordConfirmationVisible} onToggle={() => setIsPasswordConfirmationVisible((visible) => !visible)} />
+                                                </div>
+                                                <DialogFooter className="border-t border-[#F0F3FA] pt-4">
+                                                    <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl border-[#8AAEE0] text-[#395886]">Batal</Button></DialogClose>
+                                                    <Button type="submit" disabled={processing} className="rounded-xl bg-[#395886] text-white hover:bg-[#1E293B]">{processing ? 'Menyimpan…' : 'Simpan password'}</Button>
+                                                </DialogFooter>
+                                            </>
+                                        )}
+                                    </Form>
+                                </DialogContent>
+                            </Dialog>
                         </CardContent>
                     </Card>
 
-                    <Card className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
+                    <Card className="overflow-hidden rounded-3xl border border-white/80 bg-white/90 text-[#395886] shadow-sm">
                         <CardHeader>
-                            <CardTitle className="text-xl font-black text-[#395886]">Mahasiswa Reset Password</CardTitle>
-                            <CardDescription>Berikan kode kepada mahasiswa yang meminta reset. Kode berlaku 24 jam dan hilang otomatis setelah digunakan.</CardDescription>
+                            <CardTitle className="text-xl font-black text-[#395886]">Akun Darurat Reset Admin</CardTitle>
+                            <CardDescription className="text-sm font-medium leading-relaxed text-[#395886]/80">Dua akun ini dapat menerbitkan kode reset. Password akun darurat tidak pernah ditampilkan aplikasi.</CardDescription>
                         </CardHeader>
-                        <CardContent><div className="overflow-x-auto rounded-xl border border-[#D5DEEF]"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-[#F0F3FA] text-xs uppercase tracking-wider"><tr><th className="p-3">Mahasiswa</th><th className="p-3">Kelas</th><th className="p-3">Kode</th><th className="p-3">Berlaku hingga</th><th className="p-3">Status</th></tr></thead><tbody>{studentPasswordResetRequests.data.length === 0 ? <tr><td className="p-3 text-[#395886]/65" colSpan={5}>Belum ada permintaan reset mahasiswa.</td></tr> : studentPasswordResetRequests.data.map((item) => <tr key={item.id} className="border-t border-[#F0F3FA]"><td className="p-3"><p className="font-bold">{item.name}</p><p className="font-mono text-xs text-[#395886]/70">{item.nim}</p></td><td className="p-3">{item.class}</td><td className="p-3 font-mono font-bold tracking-wider">{item.code}</td><td className="p-3">{formatExpiry(item.expiresAt)}</td><td className="p-3"><span className={item.isExpired ? 'text-rose-700' : 'text-emerald-700'}>{item.isExpired ? 'Kedaluwarsa — mahasiswa harus meminta ulang' : 'Aktif'}</span></td></tr>)}</tbody></table></div><p className="mt-3 text-xs text-[#395886]/65">Halaman {studentPasswordResetRequests.meta.current_page} dari {studentPasswordResetRequests.meta.last_page} · {studentPasswordResetRequests.meta.total} permintaan.</p></CardContent>
+                        <CardContent className="space-y-4">
+                            <div className="overflow-x-auto rounded-xl border border-[#D5DEEF]">
+                                <table className="w-full min-w-[480px] text-left text-sm"><thead className="bg-[#D5DEEF]/70 text-xs font-black uppercase tracking-wider text-[#395886]"><tr><th className="p-3">Username</th><th className="p-3">Status</th></tr></thead><tbody>{emergencyAdmins.length === 0 ? <tr><td className="p-3 font-medium text-[#395886]" colSpan={2}>Akun darurat belum di-seed.</td></tr> : emergencyAdmins.map((admin) => <tr key={admin.id} className="border-t border-[#D5DEEF] bg-white"><td className="p-3 font-bold text-[#1E293B]">{admin.username}</td><td className="p-3 font-semibold text-emerald-800">Dapat menerbitkan kode</td></tr>)}</tbody></table>
+                            </div>
+                            {canManageAdminResets && <div className="overflow-x-auto rounded-xl border border-[#D5DEEF]"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-[#D5DEEF]/70 text-xs font-black uppercase tracking-wider text-[#395886]"><tr><th className="p-3">Admin pemohon</th><th className="p-3">Diminta</th><th className="p-3">Status</th><th className="p-3">Tindakan</th></tr></thead><tbody>{adminPasswordResetRequests.length === 0 ? <tr><td className="p-3 font-medium text-[#395886]" colSpan={4}>Belum ada permintaan reset admin.</td></tr> : adminPasswordResetRequests.map((item) => <tr key={item.id} className="border-t border-[#D5DEEF] bg-white text-[#395886]"><td className="p-3 font-bold text-[#1E293B]">{item.username}</td><td className="p-3 font-medium">{item.requestedAt ? formatExpiry(item.requestedAt) : '-'}</td><td className="p-3 font-medium">{item.isIssued && item.expiresAt ? `Kode aktif hingga ${formatExpiry(item.expiresAt)}` : 'Menunggu kode'}</td><td className="flex gap-2 p-3"><Form method="post" action={storeCode.url(item.id)}><Button type="submit" className="h-8 rounded-lg bg-[#395886] text-white">{item.isIssued ? 'Buat ulang' : 'Buat kode'}</Button></Form><Form method="delete" action={destroyCode.url(item.id)}><Button type="submit" variant="outline" className="h-8 rounded-lg border-rose-400 bg-white text-rose-800 hover:bg-rose-700 hover:text-white">Batalkan</Button></Form></td></tr>)}</tbody></table></div>}
+                        </CardContent>
                     </Card>
+
                 </section>
             </main>
         </>

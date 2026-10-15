@@ -14,7 +14,11 @@ return new class extends Migration
         Schema::connection(config('kompen-respon-hub.database_connection'))->create('sikompen_admin_password_reset_recipients', function (Blueprint $table): void {
             $table->id();
             $table->string('email', 255)->unique();
-            $table->foreignId('added_by_admin_id')->nullable()->constrained('sikompen_admins')->nullOnDelete();
+            $table->foreignId('added_by_admin_id')->nullable();
+            $table->foreign('added_by_admin_id', 'skprr_added_by_admin_fk')
+                ->references('id')
+                ->on('sikompen_admins')
+                ->nullOnDelete();
             $table->timestamps();
         });
     }

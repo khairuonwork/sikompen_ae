@@ -24,7 +24,7 @@ class ImportKompenResponHubWorkbook
         string $fileHash,
         int $uploadedByAdminId,
         string $uploaderName,
-        string $uploaderEmail,
+        string $uploaderUsername,
     ): array {
         $preview = $payload['preview'];
         $period = $preview['periode_semester'];
@@ -34,11 +34,11 @@ class ImportKompenResponHubWorkbook
         }
 
         $result = DB::connection(config('kompen-respon-hub.database_connection'))
-            ->transaction(function () use ($payload, $preview, $period, $originalFilename, $storedPath, $fileHash, $uploadedByAdminId, $uploaderName, $uploaderEmail): array {
+            ->transaction(function () use ($payload, $preview, $period, $originalFilename, $storedPath, $fileHash, $uploadedByAdminId, $uploaderName, $uploaderUsername): array {
                 $import = KompenResponHubImport::create([
                     'uploaded_by_admin_id' => $uploadedByAdminId,
                     'uploader_name' => $uploaderName,
-                    'uploader_email' => $uploaderEmail,
+                    'uploader_username' => $uploaderUsername,
                     'periode_semester' => $period,
                     'original_filename' => $originalFilename,
                     'display_filename' => $originalFilename,
@@ -56,7 +56,7 @@ class ImportKompenResponHubWorkbook
                     'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
                     'source_import_id' => $import->id,
                     'actor_name' => $uploaderName,
-                    'actor_email' => $uploaderEmail,
+                    'actor_username' => $uploaderUsername,
                     'periode_semester' => $period,
                     'original_filename' => $originalFilename,
                     'class_count' => $preview['class_count'],

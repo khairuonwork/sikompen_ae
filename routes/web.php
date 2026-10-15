@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminAuthenticationController;
+use App\Http\Controllers\AdminCredentialsController;
 use App\Http\Controllers\AdminPasswordResetController;
 use App\Http\Controllers\KompenResponHubActiveStudentImportController;
 use App\Http\Controllers\KompenResponHubActivityRetentionController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\KompenResponHubPasswordResetSettingsController;
 use App\Http\Controllers\StudentAuthenticationController;
 use App\Http\Controllers\StudentPasswordController;
 use App\Http\Controllers\StudentPasswordResetController;
+use App\Http\Controllers\StudentPasswordResetManagementController;
 use App\Http\Controllers\StudentProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -175,6 +177,18 @@ Route::middleware('sikompen.admin')->prefix('admin')->name('admin.')->group(func
         ->middleware('throttle:10,1')
         ->name('kompen-respon.active-students.imports.restore');
     Route::get('settings', [KompenResponHubAdminSetupController::class, 'settings'])->name('settings');
+    Route::get('student-password-resets', [StudentPasswordResetManagementController::class, 'index'])
+        ->name('student-password-resets.index');
+    Route::post('student-password-resets/{studentPasswordReset}/refresh', [StudentPasswordResetManagementController::class, 'refresh'])
+        ->middleware('throttle:20,1')
+        ->name('student-password-resets.refresh');
+    Route::delete('student-password-resets/{studentPasswordReset}', [StudentPasswordResetManagementController::class, 'destroy'])
+        ->middleware('throttle:20,1')
+        ->name('student-password-resets.destroy');
+    Route::put('settings/username', [AdminCredentialsController::class, 'updateUsername'])
+        ->middleware('throttle:10,15')->name('settings.username.update');
+    Route::put('settings/password', [AdminCredentialsController::class, 'updatePassword'])
+        ->middleware('throttle:10,15')->name('settings.password.update');
     Route::post('settings/admin-setup', [KompenResponHubAdminSetupController::class, 'enable'])
         ->name('settings.admin-setup.enable');
     Route::delete('settings/admin-setup', [KompenResponHubAdminSetupController::class, 'disable'])

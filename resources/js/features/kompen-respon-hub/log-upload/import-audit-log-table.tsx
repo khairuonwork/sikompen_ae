@@ -128,7 +128,7 @@ export function ImportAuditLogTable({
                                 </td>
                                 <td className="px-5 py-4">
                                     <p className="break-words text-xs font-bold text-[#395886]">{auditLog.actor_name ?? "—"}</p>
-                                    <p className="break-all text-[11px] text-[#395886]/60">{auditLog.actor_email ?? "—"}</p>
+                                    <p className="break-all text-[11px] text-[#395886]/60">{auditLog.actor_username ?? "—"}</p>
                                 </td>
                                 <td className="px-5 py-4 text-xs whitespace-nowrap text-[#395886]">{formatJakartaDateTime(auditLog.occurred_at)}</td>
                                 <td className="px-5 py-4">

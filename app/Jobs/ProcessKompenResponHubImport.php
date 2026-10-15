@@ -92,7 +92,7 @@ class ProcessKompenResponHubImport implements ShouldQueue
             $importTask->file_hash,
             (int) $importTask->uploaded_by_admin_id,
             $importTask->uploader_name,
-            $importTask->uploader_email,
+            $importTask->uploader_username,
         );
 
         $activity->execute(

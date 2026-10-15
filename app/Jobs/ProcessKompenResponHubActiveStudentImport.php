@@ -91,7 +91,7 @@ class ProcessKompenResponHubActiveStudentImport implements ShouldQueue
             $task->file_hash,
             (int) $task->uploaded_by_admin_id,
             $task->uploader_name,
-            (string) $task->uploader_email,
+            (string) $task->uploader_username,
         );
 
         $activity->execute(

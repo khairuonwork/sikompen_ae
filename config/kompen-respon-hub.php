@@ -27,7 +27,7 @@ return [
     ],
 
     'emergency_admins' => [
-        ['email' => env('SIKOMPEN_EMERGENCY_ADMIN_1_EMAIL'), 'password' => env('SIKOMPEN_EMERGENCY_ADMIN_1_PASSWORD')],
-        ['email' => env('SIKOMPEN_EMERGENCY_ADMIN_2_EMAIL'), 'password' => env('SIKOMPEN_EMERGENCY_ADMIN_2_PASSWORD')],
+        ['username' => env('SIKOMPEN_EMERGENCY_ADMIN_1_USERNAME'), 'password' => env('SIKOMPEN_EMERGENCY_ADMIN_1_PASSWORD')],
+        ['username' => env('SIKOMPEN_EMERGENCY_ADMIN_2_USERNAME'), 'password' => env('SIKOMPEN_EMERGENCY_ADMIN_2_PASSWORD')],
     ],
 ];

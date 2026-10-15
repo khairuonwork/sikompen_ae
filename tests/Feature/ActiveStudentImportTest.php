@@ -263,8 +263,8 @@ test('the file list keeps workbook and active student sources independent', func
     $period = '2027/2028 Gasal';
     $workbookImport = KompenResponHubImport::query()->create([
         'uploaded_by_admin_id' => $admin->id,
-        'uploader_name' => $admin->email,
-        'uploader_email' => $admin->email,
+        'uploader_name' => $admin->username,
+        'uploader_username' => $admin->username,
         'periode_semester' => $period,
         'original_filename' => 'kompen-respon.xlsx',
         'display_filename' => 'kompen-respon.xlsx',
