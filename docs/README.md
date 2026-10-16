@@ -13,6 +13,7 @@ Dokumen di folder ini menjelaskan implementasi Sikompen pada branch saat ini. Gu
 | [File frontend](frontend-files-explained.md) | Peta folder dan file React/TypeScript yang penting. |
 | [ERD](erd.md) | Entitas database dan hubungan utamanya. |
 | [Deployment](deployment-guide.md) | Docker Compose, storage volume, service, dan operasi deployment. |
+| [Menjalankan Docker lokal](docker-local-guide.md) | Panduan clone, konfigurasi lokal, menjalankan container, dan diagnosis untuk pengembang. |
 | [Framework yang dikustomisasi](framework-files.md) | Konfigurasi Laravel yang diubah untuk Sikompen. |
 
 ## Istilah yang dipakai konsisten
