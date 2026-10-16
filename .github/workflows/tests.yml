@@ -50,3 +50,35 @@ jobs:
 
       - name: Validate API Mini App syntax
         run: python3 -m compileall -q api-mini-app
+
+  deploy-staging:
+    name: Deploy staging
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    environment: staging
+    concurrency:
+      group: sikompen-staging-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+
+    steps:
+      - name: Connect to the private deployment network
+        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:sikompen-ci
+          hostname: sikompen-staging-${{ github.run_id }}
+          ping: 100.127.247.109
+
+      - name: Deploy the verified revision
+        env:
+          DEPLOY_HOST: 100.127.247.109
+          DEPLOY_USER: khairuonlab
+          DEPLOY_PATH: /home/khairuonlab/apps/kompen-respon-hub
+          DEPLOY_REF: ${{ github.sha }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "SIKOMPEN_DEPLOY_PATH='${DEPLOY_PATH}' SIKOMPEN_DEPLOY_BRANCH=staging SIKOMPEN_DEPLOY_REF='${DEPLOY_REF}' bash '${DEPLOY_PATH}/deployment/scripts/deploy-staging.sh'"
