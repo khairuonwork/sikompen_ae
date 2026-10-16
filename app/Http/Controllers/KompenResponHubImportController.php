@@ -272,7 +272,8 @@ class KompenResponHubImportController extends Controller
             'queued_at' => now(),
         ]);
 
-        ProcessKompenResponHubImport::dispatch($importTask->id);
+        ProcessKompenResponHubImport::dispatch($importTask->id)
+            ->onQueue(config('kompen-respon-hub.queue.import'));
 
         return to_route('admin.kompen-respon.index', ['tab' => 'upload'])
             ->with(

@@ -20,6 +20,7 @@ return [
     'api_sync' => [
         'queue' => env('SIKOMPEN_API_SYNC_QUEUE', 'api-sync'),
         'artifact_retention_hours' => (int) env('SIKOMPEN_API_SYNC_ARTIFACT_RETENTION_HOURS', 24),
+        'run_retention_days' => (int) env('SIKOMPEN_API_SYNC_RUN_RETENTION_DAYS', 7),
     ],
 
     'retention' => [
@@ -28,6 +29,8 @@ return [
     ],
 
     'queue' => [
+        'import' => env('SIKOMPEN_IMPORT_QUEUE', 'imports'),
+        'export' => env('SIKOMPEN_EXPORT_QUEUE', 'exports'),
         'stalled_task_minutes' => (int) env('SIKOMPEN_STALLED_TASK_MINUTES', 15),
         'queued_task_minutes' => (int) env('SIKOMPEN_QUEUED_TASK_MINUTES', 60),
     ],

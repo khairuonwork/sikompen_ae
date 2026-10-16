@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminAuthenticationController;
 use App\Http\Controllers\AdminCredentialsController;
 use App\Http\Controllers\AdminPasswordResetController;
+use App\Http\Controllers\EmergencyAdminRecoveryController;
 use App\Http\Controllers\KompenResponHubActiveStudentImportController;
 use App\Http\Controllers\KompenResponHubActivityRetentionController;
 use App\Http\Controllers\KompenResponHubAdminSetupController;
@@ -13,7 +14,6 @@ use App\Http\Controllers\KompenResponHubImportController;
 use App\Http\Controllers\KompenResponHubImportTaskController;
 use App\Http\Controllers\KompenResponHubLandingController;
 use App\Http\Controllers\KompenResponHubLifecycleController;
-use App\Http\Controllers\KompenResponHubPasswordResetSettingsController;
 use App\Http\Controllers\StudentAuthenticationController;
 use App\Http\Controllers\StudentPasswordController;
 use App\Http\Controllers\StudentPasswordResetController;
@@ -91,7 +91,20 @@ Route::middleware(['sikompen.student-password-changed', 'sikompen.data-access'])
         ->name('kompen-respon.exports.dismiss');
 });
 
-Route::middleware('sikompen.admin')->prefix('admin')->name('admin.')->group(function (): void {
+Route::middleware(['sikompen.admin', 'sikompen.emergency-admin'])
+    ->prefix('admin/recovery')
+    ->name('admin.recovery.')
+    ->group(function (): void {
+        Route::get('/', [EmergencyAdminRecoveryController::class, 'index'])->name('index');
+        Route::post('password-resets/{resetCode}/code', [EmergencyAdminRecoveryController::class, 'storeCode'])
+            ->middleware('throttle:10,1')
+            ->name('password-resets.code.store');
+        Route::delete('password-resets/{resetCode}', [EmergencyAdminRecoveryController::class, 'destroyCode'])
+            ->middleware('throttle:10,1')
+            ->name('password-resets.destroy');
+    });
+
+Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin')->name('admin.')->group(function (): void {
     Route::get('/', [KompenResponHubController::class, 'adminIndex'])
         ->name('kompen-respon.index');
     Route::get('kompen-respon', fn () => to_route('admin.kompen-respon.index'))
@@ -194,9 +207,8 @@ Route::middleware('sikompen.admin')->prefix('admin')->name('admin.')->group(func
         ->name('settings.admin-setup.enable');
     Route::delete('settings/admin-setup', [KompenResponHubAdminSetupController::class, 'disable'])
         ->name('settings.admin-setup.disable');
-    Route::post('settings/admin-password-resets/{resetCode}/code', [KompenResponHubPasswordResetSettingsController::class, 'storeCode'])
-        ->middleware('throttle:10,1')->name('settings.admin-password-resets.code.store');
-    Route::delete('settings/admin-password-resets/{resetCode}', [KompenResponHubPasswordResetSettingsController::class, 'destroyCode'])
-        ->middleware('throttle:10,1')->name('settings.admin-password-resets.destroy');
+});
+
+Route::middleware('sikompen.admin')->prefix('admin')->name('admin.')->group(function (): void {
     Route::post('logout', [AdminAuthenticationController::class, 'destroy'])->name('logout');
 });

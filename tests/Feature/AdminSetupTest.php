@@ -39,6 +39,35 @@ test('the first admin can be created from the initial setup page', function () {
     $this->get('/admin')->assertOk();
 });
 
+test('emergency fallback accounts do not close initial regular admin setup', function (): void {
+    KompenResponHubAdmin::factory()->count(2)->create([
+        'is_emergency_admin' => true,
+    ]);
+
+    $this->get('/')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('isInitialAdminSetupAvailable', true)
+            ->where('isAdminSetupOpen', false),
+        );
+
+    $this->get('/admin/setup')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('setupOpen', true)
+            ->where('requiresActivationCode', false),
+        );
+
+    $this->post('/admin/setup', [
+        'username' => 'admin-reguler',
+        'password' => 'Password!YangAman123',
+        'password_confirmation' => 'Password!YangAman123',
+    ])->assertRedirect('/admin/login');
+
+    expect(KompenResponHubAdmin::query()->where('is_emergency_admin', false)->count())->toBe(1)
+        ->and(KompenResponHubAdmin::query()->where('is_emergency_admin', true)->count())->toBe(2);
+});
+
 test('a guest cannot create an admin after the initial setup has closed', function () {
     KompenResponHubAdmin::factory()->create();
 

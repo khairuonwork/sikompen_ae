@@ -27,3 +27,5 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+/api-mini-app/**/__pycache__/
+*.py[cod]

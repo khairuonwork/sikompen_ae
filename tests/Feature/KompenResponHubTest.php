@@ -345,7 +345,8 @@ test('an export without filters is queued and produces a landscape XLSX', functi
 
     Queue::assertPushed(
         GenerateKompenResponHubExport::class,
-        fn (GenerateKompenResponHubExport $job): bool => $job->exportTaskId === $task->id,
+        fn (GenerateKompenResponHubExport $job): bool => $job->exportTaskId === $task->id
+            && $job->queue === 'exports',
     );
 
     (new GenerateKompenResponHubExport($task->id))->handle(
@@ -1195,7 +1196,8 @@ test('an uploaded workbook is queued and its progress remains available outside 
 
     Queue::assertPushed(
         ProcessKompenResponHubImport::class,
-        fn (ProcessKompenResponHubImport $job): bool => $job->importTaskId === $importTask->id,
+        fn (ProcessKompenResponHubImport $job): bool => $job->importTaskId === $importTask->id
+            && $job->queue === 'imports',
     );
 
     $this->actingAs($admin, 'admin')->get('/admin?tab=details')

@@ -11,7 +11,9 @@ class UpdateAdminUsernameRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user('admin') instanceof KompenResponHubAdmin;
+        $admin = $this->user('admin');
+
+        return $admin instanceof KompenResponHubAdmin && ! $admin->is_emergency_admin;
     }
 
     protected function prepareForValidation(): void

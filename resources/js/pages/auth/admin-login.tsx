@@ -87,7 +87,6 @@ export default function AdminLogin({
                                             required
                                             autoFocus
                                             className="rounded-2xl border-[#8AAEE0]/70 bg-white/90 py-2.5 text-sm text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886]"
-                                            placeholder="username-admin"
                                         />
                                         {errors.username && (
                                             <p className="mt-0.5 text-xs font-bold text-rose-600">

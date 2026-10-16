@@ -30,7 +30,7 @@ class StoreKompenResponHubApiSyncRunRequest extends FormRequest
             'selector' => ['required', 'array:type,periode,kelas'],
             'selector.type' => ['required', 'string', Rule::in(['kelas', 'periode'])],
             'selector.periode' => ['required', 'string', 'regex:/^\d{4}\/\d{4} (Gasal|Genap)$/'],
-            'selector.kelas' => ['nullable', 'required_if:selector.jenis,kelas', 'string', 'regex:/^[1-4][A-Z]{2,8}[1-9][0-9]*$/'],
+            'selector.kelas' => ['nullable', 'required_if:selector.type,kelas', 'string', 'regex:/^[1-4][A-Z]{2,8}[1-9][0-9]*$/'],
             'format' => ['required', 'string', Rule::in(['ndjson'])],
             'compression' => ['required', 'string', Rule::in(['gzip'])],
         ];

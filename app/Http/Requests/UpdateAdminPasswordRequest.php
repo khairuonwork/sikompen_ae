@@ -10,7 +10,9 @@ class UpdateAdminPasswordRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user('admin') instanceof KompenResponHubAdmin;
+        $admin = $this->user('admin');
+
+        return $admin instanceof KompenResponHubAdmin && ! $admin->is_emergency_admin;
     }
 
     /** @return array<string, list<mixed>> */

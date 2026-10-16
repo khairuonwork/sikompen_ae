@@ -30,7 +30,7 @@ class AdminPasswordResetController extends Controller
         DB::connection(config('kompen-respon-hub.database_connection'))->transaction(function () use ($username): void {
             $admin = KompenResponHubAdmin::query()->where('username', $username)->lockForUpdate()->first();
 
-            if ($admin === null) {
+            if ($admin === null || $admin->is_emergency_admin) {
                 return;
             }
 
@@ -63,6 +63,13 @@ class AdminPasswordResetController extends Controller
         });
 
         if ($authenticatedAdmin instanceof KompenResponHubAdmin) {
+            if ($authenticatedAdmin->is_emergency_admin) {
+                return to_route('admin.recovery.index')->with(
+                    'success',
+                    'Akun darurat tidak dapat meminta kode reset password.',
+                );
+            }
+
             return to_route('admin.settings')->with(
                 'success',
                 'Permintaan reset dicatat. Hubungi pemegang akun darurat untuk memperoleh kode reset.',
@@ -86,10 +93,10 @@ class AdminPasswordResetController extends Controller
 
         $resetError = DB::connection(config('kompen-respon-hub.database_connection'))->transaction(function () use ($request, $username): ?string {
             $admin = KompenResponHubAdmin::query()->where('username', $username)->lockForUpdate()->first();
-            $code = $admin === null ? null : KompenResponHubAdminPasswordResetCode::query()
+            $code = $admin === null || $admin->is_emergency_admin ? null : KompenResponHubAdminPasswordResetCode::query()
                 ->where('admin_id', $admin->id)->whereNull('used_at')->latest('id')->lockForUpdate()->first();
 
-            if ($admin === null || $code === null || $code->code_hash === null || $code->expires_at === null || $code->expires_at->isPast() || $code->attempts >= 5) {
+            if ($admin === null || $admin->is_emergency_admin || $code === null || $code->code_hash === null || $code->expires_at === null || $code->expires_at->isPast() || $code->attempts >= 5) {
                 return 'Kode reset tidak valid atau sudah kedaluwarsa.';
             }
 

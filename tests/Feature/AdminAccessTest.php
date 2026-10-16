@@ -61,6 +61,54 @@ test('an admin can log in and receives an authenticated session', function () {
     $this->get('/admin')->assertOk();
 });
 
+test('an emergency admin is directed to the restricted recovery page after login', function (): void {
+    $emergencyAdmin = KompenResponHubAdmin::factory()->create([
+        'is_emergency_admin' => true,
+        'username' => 'admin-darurat',
+        'password' => 'Password-Darurat#2026',
+    ]);
+
+    $this->post('/admin/login', [
+        'username' => $emergencyAdmin->username,
+        'password' => 'Password-Darurat#2026',
+    ])->assertRedirect('/admin/recovery');
+
+    $this->assertAuthenticatedAs($emergencyAdmin, 'admin');
+});
+
+test('an emergency admin can only access the recovery area', function (): void {
+    $emergencyAdmin = KompenResponHubAdmin::factory()->create(['is_emergency_admin' => true]);
+
+    $this->actingAs($emergencyAdmin, 'admin')
+        ->get('/admin/recovery')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('admin/emergency-recovery'));
+
+    $this->actingAs($emergencyAdmin, 'admin')
+        ->get('/admin')
+        ->assertRedirect('/admin/recovery');
+
+    $this->actingAs($emergencyAdmin, 'admin')
+        ->get('/admin/settings')
+        ->assertRedirect('/admin/recovery');
+
+    $this->actingAs($emergencyAdmin, 'admin')
+        ->get('/admin/student-password-resets')
+        ->assertRedirect('/admin/recovery');
+
+    $this->actingAs($emergencyAdmin, 'admin')
+        ->post('/exports')
+        ->assertForbidden();
+});
+
+test('a regular admin cannot access the recovery area', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin/recovery')
+        ->assertForbidden();
+});
+
 test('failed admin logins are rate limited after five attempts', function () {
     $admin = KompenResponHubAdmin::factory()->create([
         'username' => 'admin-sikompen',
@@ -114,4 +162,30 @@ test('an authenticated admin can update their password with the current password
 
     expect(Hash::check('Password-Baru#2026', $admin->fresh()->password))->toBeTrue()
         ->and($admin->fresh()->session_version)->toBe($previousSessionVersion + 1);
+});
+
+test('an emergency admin cannot change their fallback credentials in the application', function () {
+    $emergencyAdmin = KompenResponHubAdmin::factory()->create([
+        'is_emergency_admin' => true,
+        'username' => 'admin-darurat',
+        'password' => 'Password-Lama#2026',
+    ]);
+
+    $this->actingAs($emergencyAdmin, 'admin')
+        ->put('/admin/settings/username', [
+            'username' => 'admin-berubah',
+            'current_password' => 'Password-Lama#2026',
+        ])
+        ->assertRedirect('/admin/recovery');
+
+    $this->actingAs($emergencyAdmin, 'admin')
+        ->put('/admin/settings/password', [
+            'current_password' => 'Password-Lama#2026',
+            'password' => 'Password-Baru#2026',
+            'password_confirmation' => 'Password-Baru#2026',
+        ])
+        ->assertRedirect('/admin/recovery');
+
+    expect($emergencyAdmin->fresh()->username)->toBe('admin-darurat')
+        ->and(Hash::check('Password-Lama#2026', $emergencyAdmin->fresh()->password))->toBeTrue();
 });

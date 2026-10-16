@@ -45,7 +45,9 @@ class AdminAuthenticationController extends Controller
         $admin = Auth::guard('admin')->user();
         $request->session()->put('admin_session_version', $admin->session_version);
 
-        return to_route('admin.kompen-respon.index');
+        return $admin->is_emergency_admin
+            ? to_route('admin.recovery.index')
+            : to_route('admin.kompen-respon.index');
     }
 
     public function destroy(Request $request): RedirectResponse

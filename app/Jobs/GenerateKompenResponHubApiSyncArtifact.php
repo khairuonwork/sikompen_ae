@@ -44,10 +44,10 @@ class GenerateKompenResponHubApiSyncArtifact implements ShouldBeUnique, ShouldQu
             'failure_code' => null,
         ])->save();
 
-        $artifactPath = sprintf('private/kompen-respon-hub/api-sync/%s.ndjson.gz', $run->run_id);
+        $artifactPath = sprintf('kompen-respon-hub/api-sync/%s.ndjson.gz', $run->run_id);
 
         try {
-            Storage::disk('local')->makeDirectory('private/kompen-respon-hub/api-sync');
+            Storage::disk('local')->makeDirectory('kompen-respon-hub/api-sync');
             $absolutePath = Storage::disk('local')->path($artifactPath);
             $handle = gzopen($absolutePath, 'wb9');
 

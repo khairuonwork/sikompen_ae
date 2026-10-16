@@ -98,7 +98,8 @@ class KompenResponHubActiveStudentImportController extends Controller
             'queued_at' => now(),
         ]);
 
-        ProcessKompenResponHubActiveStudentImport::dispatch($task->id);
+        ProcessKompenResponHubActiveStudentImport::dispatch($task->id)
+            ->onQueue(config('kompen-respon-hub.queue.import'));
 
         return to_route('admin.kompen-respon.index', ['tab' => 'upload'])
             ->with('success', 'Daftar mahasiswa aktif diterima. Proses impor berjalan di latar belakang.');

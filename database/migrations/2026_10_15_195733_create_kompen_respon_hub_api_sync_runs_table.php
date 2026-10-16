@@ -30,9 +30,9 @@ return new class extends Migration
             $table->timestamp('expires_at')->nullable();
             $table->timestamps();
 
-            $table->unique(['api_client_id', 'idempotency_key']);
-            $table->index(['status', 'expires_at']);
-            $table->index(['periode_semester', 'kelas']);
+            $table->unique(['api_client_id', 'idempotency_key'], 'krh_api_runs_client_key_unq');
+            $table->index(['status', 'expires_at'], 'krh_api_runs_status_exp_idx');
+            $table->index(['periode_semester', 'kelas'], 'krh_api_runs_period_class_idx');
         });
     }
 

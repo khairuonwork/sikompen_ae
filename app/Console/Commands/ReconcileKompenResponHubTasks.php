@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Models\KompenResponHubActiveStudentImportTask;
+use App\Models\KompenResponHubApiSyncRun;
 use App\Models\KompenResponHubExportTask;
 use App\Models\KompenResponHubImportTask;
 use Illuminate\Console\Attributes\Description;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Storage;
 
 #[Signature('sikompen:reconcile-tasks')]
-#[Description('Mark stalled Sikompen import and export tasks as failed.')]
+#[Description('Mark stalled Sikompen import, export, and API sync tasks as failed.')]
 class ReconcileKompenResponHubTasks extends Command
 {
     public function handle(RecordKompenResponHubActivity $activity): int
@@ -25,8 +26,9 @@ class ReconcileKompenResponHubTasks extends Command
         $importCount = $this->reconcileImports($processingThreshold, $queuedThreshold, $processingAfterMinutes, $queuedAfterMinutes, $activity);
         $activeStudentImportCount = $this->reconcileActiveStudentImports($processingThreshold, $queuedThreshold, $processingAfterMinutes, $queuedAfterMinutes, $activity);
         $exportCount = $this->reconcileExports($processingThreshold, $queuedThreshold, $processingAfterMinutes, $queuedAfterMinutes, $activity);
+        $apiSyncCount = $this->reconcileApiSyncRuns($processingThreshold, $queuedThreshold);
 
-        $this->components->info("{$importCount} task workbook, {$activeStudentImportCount} task roster, dan {$exportCount} task ekspor macet ditandai gagal.");
+        $this->components->info("{$importCount} task workbook, {$activeStudentImportCount} task roster, {$exportCount} task ekspor, dan {$apiSyncCount} run API macet ditandai gagal.");
 
         return self::SUCCESS;
     }
@@ -157,6 +159,34 @@ class ReconcileKompenResponHubTasks extends Command
         return $count;
     }
 
+    private function reconcileApiSyncRuns(
+        \DateTimeInterface $processingThreshold,
+        \DateTimeInterface $queuedThreshold,
+    ): int {
+        $count = 0;
+
+        $this->stalledApiSyncRuns($processingThreshold, $queuedThreshold)
+            ->chunkById(200, function ($runs) use (&$count): void {
+                foreach ($runs as $run) {
+                    $updated = KompenResponHubApiSyncRun::query()
+                        ->whereKey($run->id)
+                        ->where('status', $run->status)
+                        ->update([
+                            'status' => 'failed',
+                            'failure_code' => 'processing_timeout',
+                            'completed_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+
+                    if ($updated === 1) {
+                        $count++;
+                    }
+                }
+            });
+
+        return $count;
+    }
+
     /** @return Builder<KompenResponHubImportTask> */
     private function stalledImportTasks(\DateTimeInterface $processingThreshold, \DateTimeInterface $queuedThreshold): Builder
     {
@@ -222,6 +252,26 @@ class ReconcileKompenResponHubTasks extends Command
                         $queuedQuery
                             ->where('status', KompenResponHubActiveStudentImportTask::StatusQueued)
                             ->where('queued_at', '<=', $queuedThreshold);
+                    });
+            });
+    }
+
+    /** @return Builder<KompenResponHubApiSyncRun> */
+    private function stalledApiSyncRuns(\DateTimeInterface $processingThreshold, \DateTimeInterface $queuedThreshold): Builder
+    {
+        return KompenResponHubApiSyncRun::query()
+            ->whereIn('status', ['queued', 'processing'])
+            ->where(function (Builder $query) use ($processingThreshold, $queuedThreshold): void {
+                $query
+                    ->where(function (Builder $processingQuery) use ($processingThreshold): void {
+                        $processingQuery
+                            ->where('status', 'processing')
+                            ->where('started_at', '<=', $processingThreshold);
+                    })
+                    ->orWhere(function (Builder $queuedQuery) use ($queuedThreshold): void {
+                        $queuedQuery
+                            ->where('status', 'queued')
+                            ->where('created_at', '<=', $queuedThreshold);
                     });
             });
     }

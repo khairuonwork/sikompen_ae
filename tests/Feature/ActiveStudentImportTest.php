@@ -52,7 +52,8 @@ test('an administrator can queue an active student list import and select it as 
     $task = KompenResponHubActiveStudentImportTask::query()->sole();
     Queue::assertPushed(
         ProcessKompenResponHubActiveStudentImport::class,
-        fn (ProcessKompenResponHubActiveStudentImport $job): bool => $job->importTaskId === $task->id,
+        fn (ProcessKompenResponHubActiveStudentImport $job): bool => $job->importTaskId === $task->id
+            && $job->queue === 'imports',
     );
     expect($task->stored_path)
         ->toStartWith('kompen-respon-hub/imports/active-students/')

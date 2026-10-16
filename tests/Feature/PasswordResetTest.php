@@ -27,6 +27,18 @@ test('an unknown admin reset request does not disclose account availability', fu
     expect(KompenResponHubAdminPasswordResetCode::query()->count())->toBe(0);
 });
 
+test('an emergency admin cannot request a password reset code', function (): void {
+    $emergencyAdmin = KompenResponHubAdmin::factory()->create([
+        'is_emergency_admin' => true,
+        'username' => 'admin-darurat',
+    ]);
+
+    $this->post('/admin/lupa-password', ['username' => $emergencyAdmin->username])
+        ->assertRedirect('/admin/reset-password');
+
+    expect(KompenResponHubAdminPasswordResetCode::query()->count())->toBe(0);
+});
+
 test('an authenticated administrator can request a reset only for their own account', function (): void {
     $admin = KompenResponHubAdmin::factory()->create(['username' => 'admin-saya']);
     $otherAdmin = KompenResponHubAdmin::factory()->create(['username' => 'admin-lain']);
@@ -46,11 +58,26 @@ test('an emergency admin can issue a one-time code for an administrator reset', 
     $reset = KompenResponHubAdminPasswordResetCode::query()->create(['admin_id' => $admin->id, 'requested_at' => now()]);
 
     $this->actingAs($emergencyAdmin, 'admin')
-        ->post("/admin/settings/admin-password-resets/{$reset->id}/code")
-        ->assertRedirect('/admin/settings')
+        ->post("/admin/recovery/password-resets/{$reset->id}/code")
+        ->assertRedirect('/admin/recovery')
         ->assertSessionHas('admin_reset_code');
 
     expect($reset->fresh()->code_hash)->not->toBeNull();
+});
+
+test('an emergency admin can cancel a pending administrator reset request', function (): void {
+    $emergencyAdmin = KompenResponHubAdmin::factory()->create(['is_emergency_admin' => true]);
+    $admin = KompenResponHubAdmin::factory()->create(['username' => 'admin-reset']);
+    $reset = KompenResponHubAdminPasswordResetCode::query()->create([
+        'admin_id' => $admin->id,
+        'requested_at' => now(),
+    ]);
+
+    $this->actingAs($emergencyAdmin, 'admin')
+        ->delete("/admin/recovery/password-resets/{$reset->id}")
+        ->assertRedirect('/admin/recovery');
+
+    $this->assertModelMissing($reset);
 });
 
 test('a new admin reset request preserves the previously used reset code for audit', function (): void {
@@ -82,7 +109,7 @@ test('an emergency admin cannot reissue a code that was already used', function 
     ]);
 
     $this->actingAs($emergencyAdmin, 'admin')
-        ->post("/admin/settings/admin-password-resets/{$usedReset->id}/code")
+        ->post("/admin/recovery/password-resets/{$usedReset->id}/code")
         ->assertNotFound();
 
     expect($usedReset->fresh()->code_hash)->toBeNull();
@@ -97,11 +124,11 @@ test('a non-emergency admin cannot issue or cancel administrator reset codes', f
     ]);
 
     $this->actingAs($admin, 'admin')
-        ->post("/admin/settings/admin-password-resets/{$reset->id}/code")
+        ->post("/admin/recovery/password-resets/{$reset->id}/code")
         ->assertForbidden();
 
     $this->actingAs($admin, 'admin')
-        ->delete("/admin/settings/admin-password-resets/{$reset->id}")
+        ->delete("/admin/recovery/password-resets/{$reset->id}")
         ->assertForbidden();
 
     $this->assertModelExists($reset);
@@ -120,6 +147,33 @@ test('an administrator can reset their password with a valid one-time code', fun
 
     expect(Hash::check('Password-Baru#2026', $admin->fresh()->password))->toBeTrue();
     expect(KompenResponHubAdminPasswordResetCode::query()->sole()->used_at)->not->toBeNull();
+});
+
+test('an emergency admin cannot use a password reset code', function (): void {
+    $emergencyAdmin = KompenResponHubAdmin::factory()->create([
+        'is_emergency_admin' => true,
+        'username' => 'admin-darurat',
+        'password' => 'Password-Lama#2026',
+    ]);
+    $resetCode = KompenResponHubAdminPasswordResetCode::query()->create([
+        'admin_id' => $emergencyAdmin->id,
+        'code_hash' => Hash::make('123456'),
+        'requested_at' => now(),
+        'expires_at' => now()->addMinutes(15),
+    ]);
+
+    $this->from('/admin/reset-password')
+        ->put('/admin/reset-password', [
+            'username' => $emergencyAdmin->username,
+            'otp' => '123456',
+            'password' => 'Password-Baru#2026',
+            'password_confirmation' => 'Password-Baru#2026',
+        ])
+        ->assertRedirect('/admin/reset-password')
+        ->assertSessionHasErrors('otp');
+
+    expect(Hash::check('Password-Lama#2026', $emergencyAdmin->fresh()->password))->toBeTrue()
+        ->and($resetCode->fresh()->used_at)->toBeNull();
 });
 
 test('an invalid administrator reset submission records the failed code attempt', function (): void {

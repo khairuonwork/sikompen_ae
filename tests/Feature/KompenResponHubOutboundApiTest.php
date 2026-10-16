@@ -76,6 +76,8 @@ test('a bulk sync creates a single idempotent NDJSON job and artifact', function
         ->and($run->artifact_checksum)->not->toBeNull()
         ->and($run->expires_at)->not->toBeNull();
 
+    Storage::disk('local')->assertExists("kompen-respon-hub/api-sync/{$run->run_id}.ndjson.gz");
+
     $this->withHeaders(outboundHeaders($client, $token))
         ->getJson("/api/v1/sync-runs/{$run->run_id}")
         ->assertOk()
@@ -86,6 +88,64 @@ test('a bulk sync creates a single idempotent NDJSON job and artifact', function
         ->get("/api/v1/sync-runs/{$run->run_id}/download")
         ->assertOk()
         ->assertHeader('content-type', 'application/gzip');
+});
+
+test('a class sync requires a valid class selector', function (): void {
+    outboundStudent();
+    [$client, $token] = outboundClient();
+    Queue::fake();
+
+    $this->withHeaders([
+        ...outboundHeaders($client, $token),
+        'Idempotency-Key' => 'sync-2026-gasal-class',
+    ])->postJson('/api/v1/sync-runs', [
+        'selector' => ['type' => 'kelas', 'periode' => '2026/2027 Gasal'],
+        'format' => 'ndjson',
+        'compression' => 'gzip',
+    ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_error')
+        ->assertJsonFragment(['selector.kelas']);
+
+    expect(KompenResponHubApiSyncRun::query()->count())->toBe(0);
+    Queue::assertNothingPushed();
+});
+
+test('stalled API sync runs are failed and terminal records are purged on schedule', function (): void {
+    config([
+        'kompen-respon-hub.queue.stalled_task_minutes' => 15,
+        'kompen-respon-hub.queue.queued_task_minutes' => 60,
+        'kompen-respon-hub.api_sync.run_retention_days' => 7,
+    ]);
+    Storage::fake('local');
+    $stalledRun = KompenResponHubApiSyncRun::factory()->create([
+        'status' => 'processing',
+        'started_at' => now()->subMinutes(16),
+    ]);
+    $expiredArtifactRun = KompenResponHubApiSyncRun::factory()->create([
+        'status' => 'ready',
+        'artifact_path' => 'kompen-respon-hub/api-sync/expired.ndjson.gz',
+        'completed_at' => now()->subHour(),
+        'expires_at' => now()->subMinute(),
+    ]);
+    $expiredTerminalRun = KompenResponHubApiSyncRun::factory()->create([
+        'status' => 'failed',
+        'artifact_path' => 'kompen-respon-hub/api-sync/failed.ndjson.gz',
+        'completed_at' => now()->subDays(8),
+    ]);
+    Storage::disk('local')->put($expiredArtifactRun->artifact_path, 'artifact');
+    Storage::disk('local')->put($expiredTerminalRun->artifact_path, 'artifact');
+
+    $this->artisan('sikompen:reconcile-tasks')->assertSuccessful();
+    $this->artisan('sikompen:purge-api-sync-artifacts')->assertSuccessful();
+
+    expect($stalledRun->refresh()->status)->toBe('failed')
+        ->and($stalledRun->failure_code)->toBe('processing_timeout')
+        ->and($expiredArtifactRun->refresh()->status)->toBe('expired')
+        ->and($expiredArtifactRun->artifact_path)->toBeNull()
+        ->and(KompenResponHubApiSyncRun::query()->find($expiredTerminalRun->id))->toBeNull()
+        ->and(Storage::disk('local')->exists('kompen-respon-hub/api-sync/expired.ndjson.gz'))->toBeFalse()
+        ->and(Storage::disk('local')->exists('kompen-respon-hub/api-sync/failed.ndjson.gz'))->toBeFalse();
 });
 
 /** @param array<string, mixed> $attributes */

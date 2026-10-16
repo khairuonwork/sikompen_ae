@@ -12,7 +12,9 @@ class KompenResponHubLandingController extends Controller
 {
     public function __invoke(Request $request): Response
     {
-        $isInitialAdminSetupAvailable = ! KompenResponHubAdmin::query()->exists();
+        $isInitialAdminSetupAvailable = ! KompenResponHubAdmin::query()
+            ->where('is_emergency_admin', false)
+            ->exists();
         $isAdminSetupOpen = ! $isInitialAdminSetupAvailable
             && KompenResponHubAdminSetupWindow::query()->find(1)?->isOpen();
 

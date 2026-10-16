@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Http\Requests\StoreKompenResponHubAdminSetupRequest;
 use App\Models\KompenResponHubAdmin;
-use App\Models\KompenResponHubAdminPasswordResetCode;
 use App\Models\KompenResponHubAdminSetupWindow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +19,7 @@ class KompenResponHubAdminSetupController extends Controller
 {
     public function create(): Response
     {
-        $hasRegisteredAdmin = KompenResponHubAdmin::query()->exists();
+        $hasRegisteredAdmin = $this->hasRegisteredStandardAdmin();
         $setupWindow = $this->setupWindow();
 
         return Inertia::render('auth/admin-setup', [
@@ -35,7 +34,7 @@ class KompenResponHubAdminSetupController extends Controller
             $setupWindow = KompenResponHubAdminSetupWindow::query()
                 ->lockForUpdate()
                 ->findOrFail(1);
-            $hasRegisteredAdmin = KompenResponHubAdmin::query()->lockForUpdate()->exists();
+            $hasRegisteredAdmin = $this->hasRegisteredStandardAdmin(lockForUpdate: true);
 
             if (! $this->isRegistrationOpen($hasRegisteredAdmin, $setupWindow)) {
                 abort(403, 'Pendaftaran admin sedang tidak dibuka.');
@@ -81,21 +80,6 @@ class KompenResponHubAdminSetupController extends Controller
                 ->orderBy('username')
                 ->get(['id', 'username'])
                 ->map(fn (KompenResponHubAdmin $admin): array => ['id' => $admin->id, 'username' => $admin->username]),
-            'canManageAdminResets' => $request->user('admin')?->is_emergency_admin === true,
-            'adminPasswordResetRequests' => $request->user('admin')?->is_emergency_admin === true
-                ? KompenResponHubAdminPasswordResetCode::query()
-                    ->with('admin:id,username')
-                    ->whereNull('used_at')
-                    ->latest('requested_at')
-                    ->get()
-                    ->map(fn (KompenResponHubAdminPasswordResetCode $resetCode): array => [
-                        'id' => $resetCode->id,
-                        'username' => $resetCode->admin->username,
-                        'requestedAt' => $resetCode->requested_at?->toIso8601String(),
-                        'expiresAt' => $resetCode->expires_at?->toIso8601String(),
-                        'isIssued' => $resetCode->code_hash !== null && $resetCode->expires_at?->isFuture(),
-                    ])->values()
-                : [],
         ]);
     }
 
@@ -129,6 +113,17 @@ class KompenResponHubAdminSetupController extends Controller
     private function setupWindow(): KompenResponHubAdminSetupWindow
     {
         return KompenResponHubAdminSetupWindow::query()->findOrFail(1);
+    }
+
+    private function hasRegisteredStandardAdmin(bool $lockForUpdate = false): bool
+    {
+        $query = KompenResponHubAdmin::query()->where('is_emergency_admin', false);
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+
+        return $query->exists();
     }
 
     private function isRegistrationOpen(

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Form, Head, Link } from '@inertiajs/react';
+import { toast } from 'sonner';
 import {
     Clock3,
     Copy,
@@ -25,10 +26,7 @@ import {
     disable,
     enable,
 } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
-import {
-    destroyCode,
-    storeCode,
-} from '@/actions/App/Http/Controllers/KompenResponHubPasswordResetSettingsController';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -66,8 +64,6 @@ type AdminSettingsProps = {
         success: string | null;
     };
     emergencyAdmins: Array<{ id: number; username: string }>;
-    canManageAdminResets: boolean;
-    adminPasswordResetRequests: Array<{ id: number; username: string; requestedAt: string | null; expiresAt: string | null; isIssued: boolean }>;
 };
 
 function formatExpiry(expiresAt: string): string {
@@ -120,19 +116,25 @@ export default function AdminSettings({
     setupWindow,
     flash,
     emergencyAdmins,
-    canManageAdminResets,
-    adminPasswordResetRequests,
 }: AdminSettingsProps): React.JSX.Element {
-    const [copied, setCopied] = useState(false);
+    const [copiedCode, copy] = useClipboard();
     const [isUsernamePasswordVisible, setIsUsernamePasswordVisible] = useState(false);
     const [isCurrentPasswordVisible, setIsCurrentPasswordVisible] = useState(false);
     const [isNewPasswordVisible, setIsNewPasswordVisible] = useState(false);
     const [isPasswordConfirmationVisible, setIsPasswordConfirmationVisible] = useState(false);
 
-    const handleCopy = (code: string) => {
-        navigator.clipboard.writeText(code);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+    const handleCopy = async (code: string): Promise<void> => {
+        if (await copy(code)) {
+            toast.success('Kode reset disalin', {
+                description: 'Simpan kode ini dengan aman. Kode hanya berlaku 15 menit.',
+            });
+
+            return;
+        }
+
+        toast.error('Kode belum dapat disalin', {
+            description: 'Salin kode secara manual lalu coba lagi.',
+        });
     };
 
     return (
@@ -202,21 +204,14 @@ export default function AdminSettings({
                                     <Button
                                         type="button"
                                         size="icon"
-                                        onClick={() => handleCopy(flash.adminSetupCode!)}
+                                        onClick={() => void handleCopy(flash.adminSetupCode!)}
                                         className="bg-[#395886] hover:bg-[#1E293B] text-white rounded-2xl size-12 shadow-md hover:shadow-xl active:scale-90 transition-all duration-300"
                                         title="Salin Kode"
                                     >
-                                        {copied ? <Check className="size-5 text-emerald-400" /> : <Copy className="size-5" />}
+                                        {copiedCode === flash.adminSetupCode ? <Check className="size-5 text-emerald-400" /> : <Copy className="size-5" />}
                                     </Button>
                                 </div>
                             </AlertDescription>
-                        </Alert>
-                    )}
-
-                    {flash.adminResetCode && (
-                        <Alert className="border-[#8AAEE0] bg-white text-[#395886]">
-                            <AlertTitle>Kode reset admin — tampilkan sekali</AlertTitle>
-                            <AlertDescription className="flex flex-wrap items-center gap-3"><code className="rounded-lg bg-[#F0F3FA] px-3 py-2 font-mono text-lg font-black tracking-widest">{flash.adminResetCode}</code><Button type="button" variant="outline" className="h-9" onClick={() => handleCopy(flash.adminResetCode!)}>Salin kode</Button><span className="text-xs">Berlaku 15 menit.</span></AlertDescription>
                         </Alert>
                     )}
 
@@ -300,7 +295,7 @@ export default function AdminSettings({
                         </CardHeader>
                         <CardContent className="flex flex-col gap-3 sm:flex-row">
                             <Dialog>
-                                <DialogTrigger asChild>
+                                        <DialogTrigger asChild>
                                     <Button variant="outline" className="justify-start rounded-2xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]">
                                         <UserRound className="size-4" /> Ganti username
                                     </Button>
@@ -330,7 +325,7 @@ export default function AdminSettings({
                                             </>
                                         )}
                                     </Form>
-                                </DialogContent>
+                                        </DialogContent>
                             </Dialog>
 
                             <Dialog>
@@ -391,12 +386,12 @@ export default function AdminSettings({
                                                 </div>
                                                 <DialogFooter className="border-t border-[#F0F3FA] pt-4">
                                                     <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl border-[#8AAEE0] text-[#395886]">Batal</Button></DialogClose>
-                                                    <Button type="submit" disabled={processing} className="rounded-xl bg-[#395886] text-white hover:bg-[#1E293B]">{processing ? 'Mengirim…' : 'Minta kode reset'}</Button>
+                                                    <Button type="submit" disabled={processing} className="rounded-xl bg-[#395886] text-white hover:bg-[#1E293B] hover:text-white">{processing ? 'Mengirim…' : 'Minta kode reset'}</Button>
                                                 </DialogFooter>
                                             </>
                                         )}
                                     </Form>
-                                </DialogContent>
+                                        </DialogContent>
                             </Dialog>
                         </CardContent>
                     </Card>
@@ -404,13 +399,12 @@ export default function AdminSettings({
                     <Card className="overflow-hidden rounded-3xl border border-white/80 bg-white/90 text-[#395886] shadow-sm">
                         <CardHeader>
                             <CardTitle className="text-xl font-black text-[#395886]">Akun Darurat Reset Admin</CardTitle>
-                            <CardDescription className="text-sm font-medium leading-relaxed text-[#395886]/80">Dua akun ini dapat menerbitkan kode reset. Password akun darurat tidak pernah ditampilkan aplikasi.</CardDescription>
+                            <CardDescription className="text-sm font-medium leading-relaxed text-[#395886]/80">Akun fallback hanya mengelola permintaan reset admin dan tidak dapat membuka data operasional. Password tidak pernah ditampilkan aplikasi.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="overflow-x-auto rounded-xl border border-[#D5DEEF]">
                                 <table className="w-full min-w-[480px] text-left text-sm"><thead className="bg-[#D5DEEF]/70 text-xs font-black uppercase tracking-wider text-[#395886]"><tr><th className="p-3">Username</th><th className="p-3">Status</th></tr></thead><tbody>{emergencyAdmins.length === 0 ? <tr><td className="p-3 font-medium text-[#395886]" colSpan={2}>Akun darurat belum di-seed.</td></tr> : emergencyAdmins.map((admin) => <tr key={admin.id} className="border-t border-[#D5DEEF] bg-white"><td className="p-3 font-bold text-[#1E293B]">{admin.username}</td><td className="p-3 font-semibold text-emerald-800">Dapat menerbitkan kode</td></tr>)}</tbody></table>
                             </div>
-                            {canManageAdminResets && <div className="overflow-x-auto rounded-xl border border-[#D5DEEF]"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-[#D5DEEF]/70 text-xs font-black uppercase tracking-wider text-[#395886]"><tr><th className="p-3">Admin pemohon</th><th className="p-3">Diminta</th><th className="p-3">Status</th><th className="p-3">Tindakan</th></tr></thead><tbody>{adminPasswordResetRequests.length === 0 ? <tr><td className="p-3 font-medium text-[#395886]" colSpan={4}>Belum ada permintaan reset admin.</td></tr> : adminPasswordResetRequests.map((item) => <tr key={item.id} className="border-t border-[#D5DEEF] bg-white text-[#395886]"><td className="p-3 font-bold text-[#1E293B]">{item.username}</td><td className="p-3 font-medium">{item.requestedAt ? formatExpiry(item.requestedAt) : '-'}</td><td className="p-3 font-medium">{item.isIssued && item.expiresAt ? `Kode aktif hingga ${formatExpiry(item.expiresAt)}` : 'Menunggu kode'}</td><td className="flex gap-2 p-3"><Form method="post" action={storeCode.url(item.id)}><Button type="submit" className="h-8 rounded-lg bg-[#395886] text-white">{item.isIssued ? 'Buat ulang' : 'Buat kode'}</Button></Form><Form method="delete" action={destroyCode.url(item.id)}><Button type="submit" variant="outline" className="h-8 rounded-lg border-rose-400 bg-white text-rose-800 hover:bg-rose-700 hover:text-white">Batalkan</Button></Form></td></tr>)}</tbody></table></div>}
                         </CardContent>
                     </Card>
 

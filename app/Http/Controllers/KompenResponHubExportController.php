@@ -53,7 +53,8 @@ class KompenResponHubExportController extends Controller
             'expires_at' => now()->addHours(max(1, (int) config('kompen-respon-hub.retention.export_hours', 24))),
         ]);
 
-        GenerateKompenResponHubExport::dispatch($task->id);
+        GenerateKompenResponHubExport::dispatch($task->id)
+            ->onQueue(config('kompen-respon-hub.queue.export'));
 
         $admin = is_int($actor['id'])
             ? KompenResponHubAdmin::query()->find($actor['id'])
