@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreAdminLoginRequest;
+use App\Models\KompenResponHubAdmin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -21,12 +22,12 @@ class AdminAuthenticationController extends Controller
 
     public function store(StoreAdminLoginRequest $request): RedirectResponse
     {
-        $credentials = $request->safe()->only(['email', 'password']);
+        $credentials = $request->safe()->only(['username', 'password']);
         $throttleKey = $this->throttleKey($request);
 
         if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
             throw ValidationException::withMessages([
-                'email' => 'Terlalu banyak percobaan masuk. Coba lagi dalam '.RateLimiter::availableIn($throttleKey).' detik.',
+                'username' => 'Terlalu banyak percobaan masuk. Coba lagi dalam '.RateLimiter::availableIn($throttleKey).' detik.',
             ]);
         }
 
@@ -34,14 +35,19 @@ class AdminAuthenticationController extends Controller
             RateLimiter::hit($throttleKey, 60);
 
             throw ValidationException::withMessages([
-                'email' => 'Email atau password admin tidak tepat.',
+                'username' => 'Username atau password admin tidak tepat.',
             ]);
         }
 
         RateLimiter::clear($throttleKey);
         $request->session()->regenerate();
+        /** @var KompenResponHubAdmin $admin */
+        $admin = Auth::guard('admin')->user();
+        $request->session()->put('admin_session_version', $admin->session_version);
 
-        return to_route('admin.kompen-respon.index');
+        return $admin->is_emergency_admin
+            ? to_route('admin.recovery.index')
+            : to_route('admin.kompen-respon.index');
     }
 
     public function destroy(Request $request): RedirectResponse
@@ -55,8 +61,8 @@ class AdminAuthenticationController extends Controller
 
     private function throttleKey(Request $request): string
     {
-        $email = Str::lower($request->string('email')->toString());
+        $username = Str::lower($request->string('username')->toString());
 
-        return Str::transliterate("admin-login|{$email}|{$request->ip()}");
+        return Str::transliterate("admin-login|{$username}|{$request->ip()}");
     }
 }

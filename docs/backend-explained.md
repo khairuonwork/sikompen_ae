@@ -23,26 +23,24 @@ flowchart LR
 - Login memakai `StoreAdminLoginRequest`, throttle `admin-login`, hashing Laravel, dan regenerasi session setelah berhasil.
 - Setup akun pertama tersedia ketika belum ada admin. Admin aktif dapat membuka setup tambahan dengan kode acak yang hanya disimpan sebagai hash dan memiliki masa berlaku.
 
-### Gateway Si-Admin
+### Mahasiswa
 
-- `ValidateSiAdminProxyRequest` memverifikasi canonical HMAC request, TTL, nonce/replay, dan role sebelum `SiAdminProxyAccessController` membuat session Sikompen.
-- `EnsureSiAdminProxySession` menjaga context session; `EnsureSikompenAdminAccess` melindungi semua route admin.
-- Session proxy dapat membatasi mahasiswa ke NIM miliknya pada query/API, bukan hanya pada UI.
-- `EnsureSikompenStandalone` memisahkan login/setup lokal dari deployment gateway.
+- Guard `student` menggunakan akun mahasiswa yang bersumber dari roster aktif dan hanya dapat membaca NIM miliknya sendiri.
+- Login memakai NIM dan password; password awal wajib diganti sebelum data dapat dilihat.
 
 ## HTTP layer
 
 | Surface | Akses | Hasil |
 | --- | --- | --- |
 | `/` | Context akses | Landing/pemilih akses. |
-| `/mahasiswa`, `/kompen-respon` | Mahasiswa/proxy session | Tabel read-only. |
-| `/admin` | Admin lokal atau proxy admin/superuser | Panel operasional admin. |
-| `/admin/login`, `/admin/setup` | Standalone | Login dan setup akun. |
-| `/api/kompen-respon/*` | Context akses + limiter | Filter, mahasiswa, mahasiswa tunggal, dan detail sebagai JSON Resource. |
+| `/mahasiswa`, `/kompen-respon` | Mahasiswa terautentikasi | Tabel read-only milik NIM sendiri. |
+| `/admin` | Admin terautentikasi | Panel operasional admin. |
+| `/admin/login`, `/admin/setup` | Admin lokal | Login dan setup akun. |
+| `/api/kompen-respon/*` | Session admin/mahasiswa + limiter | Filter, mahasiswa, mahasiswa tunggal, dan detail sebagai JSON Resource. |
 
 `KompenResponHubTableRequest` menormalisasi filter, memvalidasi input, dan membatasi `per_page` ke 15/25/50/100. `KompenResponHubController` memuat hanya prop yang diperlukan tab aktif untuk menjaga response Inertia tetap ringan.
 
-API memiliki endpoint `filter-options`, `students`, `students/{student}`, dan `details`. API memakai middleware `web`, `sikompen.proxy-session`, serta limiter `sikompen-data`. Input diproses Eloquent/builder dengan parameter binding; bukan SQL yang dibangun dari input pengguna.
+API memiliki endpoint `filter-options`, `students`, `students/{student}`, dan `details`. API memakai middleware `web`, akses session lokal, serta limiter `sikompen-data`. Input diproses Eloquent/builder dengan parameter binding; bukan SQL yang dibangun dari input pengguna.
 
 ## Domain action
 

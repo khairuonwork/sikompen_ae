@@ -21,6 +21,7 @@ import {
     updateWarning,
 } from "@/actions/App/Http/Controllers/KompenResponHubLifecycleController";
 import { Button } from "@/components/ui/button";
+import { ClassSelectContent } from "../shared/components/class-select-content";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -90,15 +91,20 @@ export function WarningTable({
 }): React.JSX.Element {
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
-            <div className="overflow-x-auto">
-                <table className="w-full min-w-[850px] text-sm">
+            <div className="data-table-scroll">
+                <table className="data-table min-w-[1040px]">
+                    <colgroup>
+                        {["18rem", "10rem", "13rem", "8rem", "22rem"].map((width, index) => (
+                            <col key={`${width}-${index}`} style={{ width }} />
+                        ))}
+                    </colgroup>
                     <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
-                            <th className="px-4 py-3">Mahasiswa</th>
-                            <th className="px-4 py-3">Kelas</th>
-                            <th className="px-4 py-3">Status</th>
-                            <th className="px-4 py-3">Sisa[j]</th>
-                            <th className="px-4 py-3">Catatan</th>
+                            <th className="px-5 py-4">Mahasiswa</th>
+                            <th className="px-5 py-4">Kelas</th>
+                            <th className="px-5 py-4">Status</th>
+                            <th className="px-5 py-4">Sisa[j]</th>
+                            <th className="px-5 py-4">Catatan</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F0F3FA]">
@@ -111,28 +117,28 @@ export function WarningTable({
                                     onSelect && "cursor-pointer",
                                 )}
                             >
-                                <td className="px-4 py-3">
-                                    <p className="font-bold text-[#395886]">
+                                <td className="px-5 py-4">
+                                    <p className="break-words font-bold text-[#395886]">
                                         {warning.nama_mahasiswa}
                                     </p>
                                     <p className="font-mono text-xs text-[#628ECB]">
                                         {warning.nim}
                                     </p>
                                 </td>
-                                <td className="px-4 py-3 text-xs font-semibold">
+                                <td className="px-5 py-4 text-xs font-semibold">
                                     {warning.kelas}
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-5 py-4">
                                     <WarningStatusBadge warning={warning} />
                                 </td>
-                                <td className="px-4 py-3 text-right font-mono text-xs">
+                                <td className="px-5 py-4 text-right font-mono text-xs">
                                     {number(
                                         String(
                                             warning.snapshot.sisa_hutang_jam,
                                         ),
                                     )}
                                 </td>
-                                <td className="max-w-xs px-4 py-3 text-xs text-[#395886]/70">
+                                <td className="px-5 py-4 text-xs text-[#395886]/70">
                                     {warning.reason ?? "—"}
                                 </td>
                             </tr>
@@ -158,28 +164,33 @@ function WarningCandidateTable({
                     Belum diterbitkan dan belum dikirim melalui API. Finalisasi SP periode untuk menetapkan seluruh kandidat ini sebagai SP aktif.
                 </p>
             </div>
-            <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
+            <div className="data-table-scroll">
+                <table className="data-table min-w-[900px]">
+                    <colgroup>
+                        {["18rem", "10rem", "12rem", "10rem", "14rem"].map((width, index) => (
+                            <col key={`${width}-${index}`} style={{ width }} />
+                        ))}
+                    </colgroup>
                     <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
-                            <th className="px-4 py-3">Mahasiswa</th>
-                            <th className="px-4 py-3">Kelas</th>
-                            <th className="px-4 py-3">Periode</th>
-                            <th className="px-4 py-3 text-right">Sisa jam</th>
-                            <th className="px-4 py-3">Status</th>
+                            <th className="px-5 py-4">Mahasiswa</th>
+                            <th className="px-5 py-4">Kelas</th>
+                            <th className="px-5 py-4">Periode</th>
+                            <th className="px-5 py-4 text-right">Sisa jam</th>
+                            <th className="px-5 py-4">Status</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F0F3FA]">
                         {data.data.map((student) => (
                             <tr key={student.id} className="hover:bg-amber-50/50">
-                                <td className="px-4 py-3">
-                                    <p className="font-bold text-[#395886]">{student.nama_mahasiswa}</p>
+                                <td className="px-5 py-4">
+                                    <p className="break-words font-bold text-[#395886]">{student.nama_mahasiswa}</p>
                                     <p className="font-mono text-xs text-[#628ECB]">{student.nim}</p>
                                 </td>
-                                <td className="px-4 py-3 text-xs font-semibold text-[#395886]">{student.kelas}</td>
-                                <td className="px-4 py-3 text-xs font-semibold text-[#395886]">{student.periode_semester}</td>
-                                <td className="px-4 py-3 text-right font-mono text-xs font-bold text-[#395886]">{number(student.effective_sisa_hutang_jam)}</td>
-                                <td className="px-4 py-3">
+                                <td className="px-5 py-4 text-xs font-semibold text-[#395886]">{student.kelas}</td>
+                                <td className="px-5 py-4 text-xs font-semibold text-[#395886]">{student.periode_semester}</td>
+                                <td className="px-5 py-4 text-right font-mono text-xs font-bold text-[#395886]">{number(student.effective_sisa_hutang_jam)}</td>
+                                <td className="px-5 py-4">
                                     <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-extrabold text-amber-800">Kandidat SP</span>
                                 </td>
                             </tr>
@@ -230,6 +241,9 @@ export function WarningPanel({
     const [selectedFilterClass, setSelectedFilterClass] = useState(
         filters.kelas ?? "",
     );
+    const [selectedFilterLevel, setSelectedFilterLevel] = useState(
+        filters.tingkat?.toString() ?? "",
+    );
     const [isOtherPeriodPickerOpen, setIsOtherPeriodPickerOpen] = useState(
         isInspectionMode,
     );
@@ -251,9 +265,10 @@ export function WarningPanel({
 
     useEffect(() => {
         setSelectedFilterClass(filters.kelas ?? "");
+        setSelectedFilterLevel(filters.tingkat?.toString() ?? "");
         setIsOtherPeriodPickerOpen(isInspectionMode);
         setSelectedInspectionPeriod(selectedListPeriod);
-    }, [filters.kelas, isInspectionMode, selectedListPeriod]);
+    }, [filters.kelas, filters.tingkat, isInspectionMode, selectedListPeriod]);
 
     function openCutoffEditor(period: string): void {
         setEditingCutoffPeriod(period);
@@ -266,6 +281,7 @@ export function WarningPanel({
                 query: {
                     tab: "warnings",
                     warning_period: period,
+                    tingkat: filters.tingkat,
                     kelas: filters.kelas,
                     search: filters.search,
                     per_page: filters.per_page,
@@ -329,8 +345,8 @@ export function WarningPanel({
                     className={cn(
                         "mt-4 grid gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 p-3 md:items-end",
                         isOtherPeriodPickerOpen
-                            ? "md:grid-cols-[minmax(190px,1fr)_minmax(150px,0.7fr)_minmax(180px,0.85fr)_auto]"
-                            : "md:grid-cols-[minmax(190px,1fr)_minmax(150px,0.7fr)_auto]",
+                            ? "md:grid-cols-2 xl:grid-cols-[minmax(190px,1fr)_minmax(130px,0.55fr)_minmax(150px,0.7fr)_minmax(180px,0.85fr)_auto]"
+                            : "md:grid-cols-2 xl:grid-cols-[minmax(190px,1fr)_minmax(130px,0.55fr)_minmax(150px,0.7fr)_auto]",
                     )}
                 >
                     <input name="tab" type="hidden" value="warnings" />
@@ -338,6 +354,11 @@ export function WarningPanel({
                         name="warning_period"
                         type="hidden"
                         value={selectedWarningPeriod}
+                    />
+                    <input
+                        name="tingkat"
+                        type="hidden"
+                        value={selectedFilterLevel}
                     />
                     <input
                         name="kelas"
@@ -361,6 +382,33 @@ export function WarningPanel({
                         className="h-10 rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886]"
                     />
                     <Select
+                        value={selectedFilterLevel || "all"}
+                        onValueChange={(value) =>
+                            setSelectedFilterLevel(value === "all" ? "" : value)
+                        }
+                    >
+                        <SelectTrigger className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
+                            <SelectValue placeholder="Semua tingkat" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl text-xs font-semibold">
+                            <SelectItem
+                                value="all"
+                                className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                            >
+                                Semua tingkat
+                            </SelectItem>
+                            {filterOptions.tingkat.map((tingkat) => (
+                                <SelectItem
+                                    key={tingkat}
+                                    value={tingkat.toString()}
+                                    className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                                >
+                                    Tingkat {tingkat}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select
                         value={selectedFilterClass || "all"}
                         onValueChange={(value) =>
                             setSelectedFilterClass(value === "all" ? "" : value)
@@ -369,10 +417,10 @@ export function WarningPanel({
                         <SelectTrigger className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
                             <SelectValue placeholder="Semua kelas" />
                         </SelectTrigger>
-                        <SelectContent className="rounded-2xl text-xs font-semibold">
+                        <ClassSelectContent>
                             <SelectItem
                                 value="all"
-                                className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                                className="col-span-full cursor-pointer hover:bg-[#B1C9EF]/20"
                             >
                                 Semua kelas
                             </SelectItem>
@@ -385,7 +433,7 @@ export function WarningPanel({
                                     {kelas}
                                 </SelectItem>
                             ))}
-                        </SelectContent>
+                        </ClassSelectContent>
                     </Select>
                     {isOtherPeriodPickerOpen ? (
                         <Select
@@ -526,6 +574,8 @@ export function WarningPanel({
                             type="button"
                             onClick={() => {
                                 setEditingCutoffPeriod(selectedWarningPeriod);
+
+
                                 setIsCutoffEditorOpen(true);
                             }}
                             className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"

@@ -1,11 +1,14 @@
 <?php
 
-use App\Http\Middleware\EnsureSiAdminProxySession;
 use App\Http\Middleware\EnsureSikompenAdminAccess;
-use App\Http\Middleware\EnsureSikompenStandalone;
+use App\Http\Middleware\EnsureSikompenApiClient;
+use App\Http\Middleware\EnsureSikompenDataAccess;
+use App\Http\Middleware\EnsureSikompenEmergencyAdminAccess;
+use App\Http\Middleware\EnsureSikompenStandardAdminAccess;
+use App\Http\Middleware\EnsureSikompenStudentAccess;
+use App\Http\Middleware\EnsureSikompenStudentPasswordChanged;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
-use App\Http\Middleware\ValidateSiAdminProxyRequest;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -29,14 +32,27 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->alias([
-            'si-admin.proxy' => ValidateSiAdminProxyRequest::class,
-            'sikompen.proxy-session' => EnsureSiAdminProxySession::class,
             'sikompen.admin' => EnsureSikompenAdminAccess::class,
-            'sikompen.standalone' => EnsureSikompenStandalone::class,
+            'sikompen.api-client' => EnsureSikompenApiClient::class,
+            'sikompen.data-access' => EnsureSikompenDataAccess::class,
+            'sikompen.emergency-admin' => EnsureSikompenEmergencyAdminAccess::class,
+            'sikompen.student' => EnsureSikompenStudentAccess::class,
+            'sikompen.student-password-changed' => EnsureSikompenStudentPasswordChanged::class,
+            'sikompen.standard-admin' => EnsureSikompenStandardAdminAccess::class,
         ]);
 
         $middleware->redirectGuestsTo(fn (): string => route('login'));
-        $middleware->redirectUsersTo(fn (): string => route('admin.kompen-respon.index'));
+        $middleware->redirectUsersTo(function (Request $request): string {
+            if ($request->user('student') !== null) {
+                return route('student.kompen-respon.index');
+            }
+
+            if ($request->user('admin')?->is_emergency_admin === true) {
+                return route('admin.recovery.index');
+            }
+
+            return route('admin.kompen-respon.index');
+        });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

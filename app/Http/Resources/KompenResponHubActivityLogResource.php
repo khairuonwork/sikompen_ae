@@ -29,7 +29,7 @@ class KompenResponHubActivityLogResource extends JsonResource
             'kelas' => $this->kelas,
             'actor_type' => $this->actor_type,
             'actor_name' => $this->actor_name,
-            'actor_email' => $this->actor_email,
+            'actor_username' => $this->actor_username,
             'reason' => $this->reason,
             'before_state' => $this->before_state,
             'after_state' => $this->after_state,
@@ -48,6 +48,10 @@ class KompenResponHubActivityLogResource extends JsonResource
 
         if (in_array($this->subject_type, ['import', 'import_task'], true)) {
             return 'Workbook: '.($this->subject_name ?? $this->metadataFilename() ?? 'Tidak diketahui');
+        }
+
+        if (in_array($this->subject_type, ['active_student_import', 'active_student_import_task'], true)) {
+            return 'Daftar mahasiswa aktif: '.($this->subject_name ?? $this->metadataFilename() ?? 'Tidak diketahui');
         }
 
         if ($this->subject_type === 'export') {

@@ -1,6 +1,7 @@
 import { FileSpreadsheet, FileText, Filter, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ClassSelectContent } from "../shared/components/class-select-content";
 import { Input } from "@/components/ui/input";
 import {
     Select,
@@ -18,6 +19,7 @@ const resourceLabels: Record<ExportResource, string> = {
     students: "Kompen dan Respon",
     details: "Detail Kompen",
     warnings: "Surat Peringatan",
+    import_audits: "Log Upload",
 };
 
 export function ExportPanel({
@@ -35,6 +37,19 @@ export function ExportPanel({
     const [tingkat, setTingkat] = useState("");
     const [kelas, setKelas] = useState("");
     const [periode, setPeriode] = useState("");
+    const [importType, setImportType] = useState("");
+    const availableClasses = tingkat === ""
+        ? filterOptions.kelas
+        : filterOptions.kelas.filter((option) => option.startsWith(tingkat));
+
+    function changeTingkat(value: string): void {
+        const nextTingkat = value === "all" ? "" : value;
+
+        setTingkat(nextTingkat);
+        if (nextTingkat !== "" && !kelas.startsWith(nextTingkat)) {
+            setKelas("");
+        }
+    }
 
     function filters(): Filters {
         return {
@@ -42,6 +57,7 @@ export function ExportPanel({
             tingkat: tingkat === "" ? undefined : Number(tingkat),
             kelas: kelas || undefined,
             periode_semester: periode || undefined,
+            import_type: importType === "" ? undefined : importType as Filters["import_type"],
         };
     }
 
@@ -50,6 +66,7 @@ export function ExportPanel({
         setTingkat("");
         setKelas("");
         setPeriode("");
+        setImportType("");
     }
 
     return (
@@ -98,51 +115,74 @@ export function ExportPanel({
                                     Surat Peringatan
                                 </SelectItem>
                             ) : null}
-                        </SelectContent>
-                    </Select>
-                    <Input
-                        value={search}
-                        onChange={(event) => setSearch(event.target.value)}
-                        maxLength={100}
-                        placeholder="Cari nama atau NIM untuk ekspor"
-                        className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] placeholder:text-[#395886]/40"
-                    />
-                    <Select
-                        value={tingkat || undefined}
-                        onValueChange={(value) =>
-                            setTingkat(value === "all" ? "" : value)
-                        }
-                    >
-                        <SelectTrigger className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]">
-                            <SelectValue placeholder="Semua tingkat" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-2xl text-xs font-semibold">
-                            <SelectItem value="all">Semua tingkat</SelectItem>
-                            {filterOptions.tingkat.map((option) => (
-                                <SelectItem key={option} value={String(option)}>
-                                    Tingkat {option}
+                            {isAdmin ? (
+                                <SelectItem value="import_audits">
+                                    Log Upload
                                 </SelectItem>
-                            ))}
+                            ) : null}
                         </SelectContent>
                     </Select>
-                    <Select
-                        value={kelas || undefined}
-                        onValueChange={(value) =>
-                            setKelas(value === "all" ? "" : value)
-                        }
-                    >
-                        <SelectTrigger className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]">
-                            <SelectValue placeholder="Semua kelas" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-2xl text-xs font-semibold">
-                            <SelectItem value="all">Semua kelas</SelectItem>
-                            {filterOptions.kelas.map((option) => (
-                                <SelectItem key={option} value={option}>
-                                    {option}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    {resource === "import_audits" ? (
+                        <Select
+                            value={importType || "all"}
+                            onValueChange={(value) => setImportType(value === "all" ? "" : value)}
+                        >
+                            <SelectTrigger className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]">
+                                <SelectValue placeholder="Semua jenis data" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl text-xs font-semibold">
+                                <SelectItem value="all">Semua jenis data</SelectItem>
+                                <SelectItem value="kompen_respon">Kompen dan Respon</SelectItem>
+                                <SelectItem value="active_students">Mahasiswa Aktif</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    ) : (
+                        <Input
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            maxLength={100}
+                            placeholder="Cari nama atau NIM untuk ekspor"
+                            className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] placeholder:text-[#395886]/40"
+                        />
+                    )}
+                    {resource === "import_audits" ? null : (
+                        <Select
+                            value={tingkat || undefined}
+                            onValueChange={changeTingkat}
+                        >
+                            <SelectTrigger className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]">
+                                <SelectValue placeholder="Semua tingkat" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl text-xs font-semibold">
+                                <SelectItem value="all">Semua tingkat</SelectItem>
+                                {filterOptions.tingkat.map((option) => (
+                                    <SelectItem key={option} value={String(option)}>
+                                        Tingkat {option}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+                    {resource === "import_audits" ? null : (
+                        <Select
+                            value={kelas || undefined}
+                            onValueChange={(value) =>
+                                setKelas(value === "all" ? "" : value)
+                            }
+                        >
+                            <SelectTrigger className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]">
+                                <SelectValue placeholder="Semua kelas" />
+                            </SelectTrigger>
+                            <ClassSelectContent>
+                                <SelectItem value="all" className="col-span-full">Semua kelas</SelectItem>
+                                {availableClasses.map((option) => (
+                                    <SelectItem key={option} value={option}>
+                                        {option}
+                                    </SelectItem>
+                                ))}
+                            </ClassSelectContent>
+                        </Select>
+                    )}
                     <Select
                         value={periode || undefined}
                         onValueChange={(value) =>
@@ -192,7 +232,7 @@ export function ExportPanel({
                         </div>
                     </div>
                     <p className="text-xs font-medium text-[#395886]/70 lg:col-span-2">
-                        {search || tingkat || kelas || periode
+                        {search || tingkat || kelas || periode || importType
                             ? `Ekspor ${resourceLabels[resource]} hanya memakai filter di panel ini.`
                             : `Ekspor ${resourceLabels[resource]} akan memuat seluruh data yang diizinkan.`}
                     </p>

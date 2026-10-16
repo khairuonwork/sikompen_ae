@@ -2,13 +2,14 @@
 
 namespace App\Providers;
 
+use App\Models\KompenResponHubAdmin;
+use App\Models\KompenResponHubApiClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
@@ -29,7 +30,6 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
-        $this->configureSiAdminProxyUrl();
         $this->configureRateLimiting();
     }
 
@@ -58,17 +58,42 @@ class AppServiceProvider extends ServiceProvider
     protected function configureRateLimiting(): void
     {
         RateLimiter::for('admin-login', function (Request $request): Limit {
-            $email = Str::lower($request->string('email')->toString());
+            $username = Str::lower($request->string('username')->toString());
 
-            return Limit::perMinute(10)->by(Str::transliterate("{$email}|{$request->ip()}"));
+            return Limit::perMinute(10)->by(Str::transliterate("{$username}|{$request->ip()}"));
+        });
+
+        RateLimiter::for('student-login', function (Request $request): Limit {
+            $nim = $request->string('nim')->toString();
+
+            return Limit::perMinute(10)->by(Str::transliterate("{$nim}|{$request->ip()}"));
         });
 
         RateLimiter::for('admin-setup', function (Request $request): Limit {
             return Limit::perMinute(5)->by(Str::transliterate("admin-setup|{$request->ip()}"));
         });
 
-        RateLimiter::for('si-admin-proxy', function (Request $request): Limit {
-            return Limit::perMinute(120)->by($request->ip());
+        RateLimiter::for('admin-password-reset-request', function (Request $request): Limit {
+            $admin = $request->user('admin');
+            $username = $admin instanceof KompenResponHubAdmin
+                ? $admin->username
+                : Str::lower($request->string('username')->toString());
+
+            return Limit::perMinute(3)->by(Str::transliterate("admin-reset-request|{$username}|{$request->ip()}"));
+        });
+
+        RateLimiter::for('admin-password-reset-confirm', function (Request $request): Limit {
+            $username = Str::lower($request->string('username')->toString());
+
+            return Limit::perMinute(5)->by(Str::transliterate("admin-reset-confirm|{$username}|{$request->ip()}"));
+        });
+
+        RateLimiter::for('student-password-reset-request', function (Request $request): Limit {
+            return Limit::perMinute(3)->by(Str::transliterate("student-reset-request|{$request->string('nim')->toString()}|{$request->ip()}"));
+        });
+
+        RateLimiter::for('student-password-reset-confirm', function (Request $request): Limit {
+            return Limit::perMinute(5)->by(Str::transliterate("student-reset-confirm|{$request->string('nim')->toString()}|{$request->ip()}"));
         });
 
         RateLimiter::for('sikompen-data', function (Request $request): Limit {
@@ -76,32 +101,17 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(30)->by(Str::transliterate("{$sessionId}|{$request->ip()}"));
         });
-    }
 
-    /**
-     * Force Laravel-generated redirects, pagination links, and asset URLs to
-     * use the public Si-Admin prefix instead of the internal Docker hostname.
-     */
-    protected function configureSiAdminProxyUrl(): void
-    {
-        if (! config('si-admin-proxy.enabled')) {
-            return;
-        }
+        RateLimiter::for('sikompen-api', function (Request $request): Limit {
+            $client = $request->attributes->get('sikompen_api_client');
+            $limit = $client instanceof KompenResponHubApiClient ? $client->rate_limit_per_minute : 10;
+            $key = $client instanceof KompenResponHubApiClient ? $client->client_id : 'unknown';
 
-        $publicUrl = config('app.url');
+            return Limit::perMinute($limit)->by(Str::transliterate("sikompen-api|{$key}|{$request->ip()}"));
+        });
 
-        if (! is_string($publicUrl) || ! filter_var($publicUrl, FILTER_VALIDATE_URL)) {
-            throw new \LogicException('APP_URL harus berupa URL publik saat SI_ADMIN_PROXY_ENABLED aktif.');
-        }
-
-        $scheme = parse_url($publicUrl, PHP_URL_SCHEME);
-
-        if (! is_string($scheme)) {
-            throw new \LogicException('APP_URL harus menyertakan skema HTTP atau HTTPS saat SI_ADMIN_PROXY_ENABLED aktif.');
-        }
-
-        URL::useOrigin($publicUrl);
-        URL::useAssetOrigin($publicUrl);
-        URL::forceScheme($scheme);
+        RateLimiter::for('sikompen-api-auth', function (Request $request): Limit {
+            return Limit::perMinute(60)->by(Str::transliterate("sikompen-api-auth|{$request->ip()}"));
+        });
     }
 }

@@ -14,13 +14,13 @@ test('the first admin can be created from the initial setup page', function () {
         );
 
     $this->post('/admin/setup', [
-        'email' => 'first-admin@example.test',
+        'username' => 'admin-pertama',
         'password' => 'Password!YangAman123',
         'password_confirmation' => 'Password!YangAman123',
     ])->assertRedirect('/admin/login');
 
     $this->assertDatabaseHas('sikompen_admins', [
-        'email' => 'first-admin@example.test',
+        'username' => 'admin-pertama',
     ]);
 
     $this->get('/admin/setup')
@@ -31,7 +31,7 @@ test('the first admin can be created from the initial setup page', function () {
         );
 
     $this->post('/admin/login', [
-        'email' => 'first-admin@example.test',
+        'username' => 'admin-pertama',
         'password' => 'Password!YangAman123',
     ])
         ->assertRedirect('/admin');
@@ -39,11 +39,40 @@ test('the first admin can be created from the initial setup page', function () {
     $this->get('/admin')->assertOk();
 });
 
+test('emergency fallback accounts do not close initial regular admin setup', function (): void {
+    KompenResponHubAdmin::factory()->count(2)->create([
+        'is_emergency_admin' => true,
+    ]);
+
+    $this->get('/')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('isInitialAdminSetupAvailable', true)
+            ->where('isAdminSetupOpen', false),
+        );
+
+    $this->get('/admin/setup')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('setupOpen', true)
+            ->where('requiresActivationCode', false),
+        );
+
+    $this->post('/admin/setup', [
+        'username' => 'admin-reguler',
+        'password' => 'Password!YangAman123',
+        'password_confirmation' => 'Password!YangAman123',
+    ])->assertRedirect('/admin/login');
+
+    expect(KompenResponHubAdmin::query()->where('is_emergency_admin', false)->count())->toBe(1)
+        ->and(KompenResponHubAdmin::query()->where('is_emergency_admin', true)->count())->toBe(2);
+});
+
 test('a guest cannot create an admin after the initial setup has closed', function () {
     KompenResponHubAdmin::factory()->create();
 
     $this->post('/admin/setup', [
-        'email' => 'unexpected@example.test',
+        'username' => 'admin-tak-terduga',
         'password' => 'Password!YangAman123',
         'password_confirmation' => 'Password!YangAman123',
     ])->assertForbidden();
@@ -66,7 +95,7 @@ test('an authenticated admin can open a one-account registration window', functi
         ->and(Hash::check($activationCode, $setupWindow->activation_code_hash))->toBeTrue();
 
     $this->post('/admin/setup', [
-        'email' => 'new-admin@example.test',
+        'username' => 'admin-baru',
         'password' => 'Password!YangAman123',
         'password_confirmation' => 'Password!YangAman123',
         'activation_code' => $activationCode,
@@ -89,7 +118,7 @@ test('an invalid or expired activation code cannot create an admin', function ()
     ])->save();
 
     $this->post('/admin/setup', [
-        'email' => 'new-admin@example.test',
+        'username' => 'admin-baru',
         'password' => 'Password!YangAman123',
         'password_confirmation' => 'Password!YangAman123',
         'activation_code' => 'KODE-YANG-SALAH',
@@ -100,7 +129,7 @@ test('an invalid or expired activation code cannot create an admin', function ()
     ])->save();
 
     $this->post('/admin/setup', [
-        'email' => 'new-admin@example.test',
+        'username' => 'admin-baru',
         'password' => 'Password!YangAman123',
         'password_confirmation' => 'Password!YangAman123',
         'activation_code' => 'KODE-AKTIVASI-YANG-BENAR',

@@ -1,7 +1,10 @@
 import { Form } from "@inertiajs/react";
-import { FilePenLine, CheckCircle2, Download, FileSpreadsheet, Pencil, Trash2, UploadCloud } from "lucide-react";
+import { FilePenLine, CheckCircle2, Download, FileSpreadsheet, Pencil, Trash2, Unlink, UploadCloud } from "lucide-react";
 import { useState } from "react";
-import { store as activate } from "@/actions/App/Http/Controllers/KompenResponHubImportActivationController";
+import {
+    destroy as release,
+    store as activate,
+} from "@/actions/App/Http/Controllers/KompenResponHubImportActivationController";
 import { destroy as destroyImport, downloadUploadedWorkbook, update as updateImport } from "@/actions/App/Http/Controllers/KompenResponHubImportController";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Pager } from "../shared/components/pagination";
 import type { ImportVersion, Pagination } from "../shared/types";
 
-type FileManagementAction = "rename" | "delete" | null;
+type FileManagementAction = "rename" | "delete" | "release" | null;
 
 function formatJakartaDateTime(value: string | null): string {
     if (value === null) {
@@ -35,7 +38,7 @@ export function ImportVersionList({
     activeVersions,
     data,
 }: {
-    activeVersions: ImportVersion[];
+    activeVersions: Pagination<ImportVersion>;
     data: Pagination<ImportVersion>;
 }): React.JSX.Element {
     const [isEditMode, setIsEditMode] = useState(false);
@@ -63,12 +66,12 @@ export function ImportVersionList({
                         Sumber data yang digunakan
                     </h3>
                     <p className="text-xs font-medium text-[#395886]/70">
-                        Satu workbook aktif untuk setiap periode.
+                        Satu workbook Kompen dan Respon aktif untuk setiap periode.
                     </p>
                 </div>
-                {activeVersions.length > 0 ? (
+                {activeVersions.data.length > 0 ? (
                     <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                        {activeVersions.map((version) => (
+                        {activeVersions.data.map((version) => (
                             <article
                                 key={version.id}
                                 className="rounded-2xl border border-white bg-white/90 p-4 shadow-2xs"
@@ -87,18 +90,32 @@ export function ImportVersionList({
                                 <p className="mt-1 text-[11px] text-[#395886]/60">
                                     Dipilih {formatJakartaDateTime(version.activated_at)}
                                 </p>
-                                <div className="mt-4 flex items-center justify-between gap-3">
+                                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                                     <p className="text-[11px] font-medium text-[#395886]/70">
                                         {version.student_count} mahasiswa
                                     </p>
-                                    <Button asChild size="sm" variant="outline" className="h-8 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
-                                        <a href={downloadUploadedWorkbook.url(version.id)}>
-                                            <Download className="mr-1.5 size-3.5" /> Unduh
-                                        </a>
-                                    </Button>
+                                    <div className="flex flex-wrap justify-end gap-2">
+                                        <Button asChild size="sm" variant="outline" className="h-8 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                            <a href={downloadUploadedWorkbook.url(version.id)}>
+                                                <Download className="mr-1.5 size-3.5" /> Unduh
+                                            </a>
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => openManagementDialog(version, "release")}
+                                            className="h-8 rounded-xl border-amber-300 bg-white text-xs font-bold text-amber-800 hover:bg-amber-100 hover:text-amber-900"
+                                        >
+                                            <Unlink className="mr-1.5 size-3.5" /> Lepaskan
+                                        </Button>
+                                    </div>
                                 </div>
                             </article>
                         ))}
+                        <div className="md:col-span-2 xl:col-span-3">
+                            <Pager data={activeVersions} />
+                        </div>
                     </div>
                 ) : (
                     <p className="mt-4 rounded-2xl border border-dashed border-[#8AAEE0] bg-white/70 px-4 py-3 text-xs font-semibold text-[#395886]/70">
@@ -121,45 +138,54 @@ export function ImportVersionList({
                         type="button"
                         variant="outline"
                         onClick={() => setIsEditMode((enabled) => !enabled)}
-                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                        className={
+                            isEditMode
+                                ? "rounded-xl border-[#395886] bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
+                                : "rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                        }
                     >
                         <FilePenLine className="size-3.5" />
                         {isEditMode ? "Selesai mengelola" : "Kelola file"}
                     </Button>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1080px] text-sm">
+                <div className="data-table-scroll">
+                    <table className="data-table min-w-[1380px]">
+                        <colgroup>
+                            {["10rem", "26rem", "12rem", "18rem", "15rem", "28rem"].map((width, index) => (
+                                <col key={`${width}-${index}`} style={{ width }} />
+                            ))}
+                        </colgroup>
                         <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                             <tr>
-                                <th className="px-4 py-3.5">Periode</th>
-                                <th className="px-4 py-3.5">Workbook</th>
-                                <th className="px-4 py-3.5">Diunggah</th>
-                                <th className="px-4 py-3.5">Isi</th>
-                                <th className="px-4 py-3.5">Status sumber</th>
-                                <th className="px-4 py-3.5 text-right">Tindakan</th>
+                                <th className="px-5 py-4">Periode</th>
+                                <th className="px-5 py-4">Workbook</th>
+                                <th className="px-5 py-4">Diunggah</th>
+                                <th className="px-5 py-4">Isi</th>
+                                <th className="px-5 py-4">Status sumber</th>
+                                <th className="px-5 py-4 text-right">Tindakan</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[#F0F3FA]">
                             {data.data.map((version) => (
                                 <tr key={version.id} className="hover:bg-[#B1C9EF]/10">
-                                    <td className="px-4 py-3.5 text-xs font-bold text-[#395886]">
+                                    <td className="px-5 py-4 text-xs font-bold text-[#395886]">
                                         {version.periode_semester}
                                     </td>
-                                    <td className="max-w-72 px-4 py-3.5">
-                                        <p className="truncate font-mono text-xs font-bold text-[#395886]" title={version.display_filename}>
+                                    <td className="px-5 py-4">
+                                        <p className="break-words font-mono text-xs font-bold text-[#395886]" title={version.display_filename}>
                                             {version.display_filename}
                                         </p>
                                         <p className="mt-1 text-[11px] text-[#395886]/60">
-                                            {version.uploaded_by_name ?? version.uploaded_by_email ?? "Admin tidak diketahui"}
+                                            {version.uploaded_by_name ?? version.uploaded_by_username ?? "Admin tidak diketahui"}
                                         </p>
                                     </td>
-                                    <td className="px-4 py-3.5 text-xs text-[#395886]">
+                                    <td className="px-5 py-4 text-xs text-[#395886]">
                                         {formatJakartaDateTime(version.imported_at)}
                                     </td>
-                                    <td className="px-4 py-3.5 text-xs font-semibold text-[#395886] tabular-nums">
+                                    <td className="px-5 py-4 text-xs font-semibold text-[#395886] tabular-nums">
                                         {version.class_count} kelas · {version.student_count} mahasiswa · {version.detail_count} detail
                                     </td>
-                                    <td className="px-4 py-3.5">
+                                    <td className="px-5 py-4">
                                         {version.is_active ? (
                                             <div>
                                                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-black tracking-wider text-emerald-800 uppercase">
@@ -171,28 +197,28 @@ export function ImportVersionList({
                                             </div>
                                         ) : (
                                             <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black tracking-wider text-slate-700 uppercase">
-                                                Tersimpan
+                                                Versi tersimpan
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3.5">
-                                        <div className="flex justify-end gap-2">
-                                            <Button asChild size="sm" variant="outline" className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                    <td className="px-5 py-4 whitespace-nowrap">
+                                        <div className="flex min-w-max justify-end gap-2">
+                                            <Button asChild size="sm" variant="outline" className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
                                                 <a href={downloadUploadedWorkbook.url(version.id)}>
                                                     <Download className="mr-1.5 size-3.5" /> Unduh
                                                 </a>
                                             </Button>
                                             {isEditMode ? (
                                                 <>
-                                                    <Button type="button" size="sm" variant="outline" onClick={() => openManagementDialog(version, "rename")} className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                                    <Button type="button" size="sm" variant="outline" onClick={() => openManagementDialog(version, "rename")} className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
                                                         <Pencil className="mr-1.5 size-3.5" /> Ubah nama
                                                     </Button>
-                                                    <Button type="button" size="sm" variant="outline" disabled={version.is_active} onClick={() => openManagementDialog(version, "delete")} className="rounded-xl border-rose-200 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white">
+                                                    <Button type="button" size="sm" variant="outline" disabled={version.is_active} onClick={() => openManagementDialog(version, "delete")} className="shrink-0 rounded-xl border-rose-200 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white">
                                                         <Trash2 className="mr-1.5 size-3.5" /> Hapus
                                                     </Button>
                                                 </>
                                             ) : version.is_active ? (
-                                                <Button size="sm" disabled className="rounded-xl bg-emerald-600 text-xs font-bold text-white disabled:opacity-100">
+                                                <Button size="sm" disabled className="shrink-0 rounded-xl bg-emerald-600 text-xs font-bold text-white disabled:opacity-100">
                                                     Digunakan
                                                 </Button>
                                             ) : (
@@ -201,9 +227,9 @@ export function ImportVersionList({
                                                     onBefore={() => window.confirm(`Gunakan ${version.display_filename} sebagai sumber data aktif untuk periode ${version.periode_semester}? Data sumber periode tersebut akan diganti, sedangkan koreksi manual dan riwayat tetap dipertahankan.`)}
                                                 >
                                                     {({ processing }) => (
-                                                        <Button type="submit" size="sm" disabled={processing} className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
+                                                        <Button type="submit" size="sm" disabled={processing} className="shrink-0 rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
                                                             <UploadCloud className="mr-1.5 size-3.5" />
-                                                            {processing ? "Memilih…" : "Jadikan aktif"}
+                                                        {processing ? "Memilih…" : "Gunakan untuk periode ini"}
                                                         </Button>
                                                     )}
                                                 </Form>
@@ -234,7 +260,7 @@ export function ImportVersionList({
                             onSuccess={closeManagementDialog}
                         >
                             {({ errors, processing }) => (
-                                <>
+                                <div className="grid gap-5">
                                     <DialogHeader>
                                         <DialogTitle className="text-[#395886]">Ubah nama file</DialogTitle>
                                         <DialogDescription className="text-[#395886]/70">
@@ -249,24 +275,30 @@ export function ImportVersionList({
                                             id="display_filename"
                                             name="display_filename"
                                             defaultValue={selectedVersion.display_filename}
+                                            placeholder="Mis. rekap kompen 2026"
                                             aria-invalid={Boolean(errors.display_filename)}
                                             className="border-[#8AAEE0] bg-white text-[#395886]"
                                         />
                                         {errors.display_filename ? (
                                             <p className="text-xs font-semibold text-rose-700">{errors.display_filename}</p>
                                         ) : (
-                                            <p className="text-[11px] text-[#395886]/60">Gunakan huruf, angka, spasi, titik, garis bawah, tanda kurung, atau tanda hubung. Nama harus berakhiran .xlsx.</p>
+                                            <p className="text-[11px] text-[#395886]/60">Akhiran .xlsx dibuat otomatis. Spasi menjadi _, tanda - dipertahankan, dan karakter tidak aman dibuang.</p>
                                         )}
                                     </div>
-                                    <DialogFooter>
-                                        <Button type="button" variant="outline" onClick={closeManagementDialog} className="border-[#8AAEE0] text-[#395886]">
+                                    <DialogFooter className="gap-3 sm:gap-3">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={closeManagementDialog}
+                                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#F0F3FA] hover:text-[#395886]"
+                                        >
                                             Batal
                                         </Button>
                                         <Button type="submit" disabled={processing} className="bg-[#395886] text-white hover:bg-[#1E293B] hover:text-white">
                                             {processing ? "Menyimpan…" : "Simpan nama"}
                                         </Button>
                                     </DialogFooter>
-                                </>
+                                </div>
                             )}
                         </Form>
                     ) : null}
@@ -278,15 +310,20 @@ export function ImportVersionList({
                             onSuccess={closeManagementDialog}
                         >
                             {({ processing }) => (
-                                <>
+                                <div className="grid gap-5">
                                     <DialogHeader>
                                         <DialogTitle className="text-[#395886]">Hapus versi file?</DialogTitle>
                                         <DialogDescription className="text-[#395886]/70">
                                             {selectedVersion.display_filename} akan dihapus dari penyimpanan. Riwayat audit tetap ada, tetapi workbook tidak dapat dipulihkan dari aplikasi.
                                         </DialogDescription>
                                     </DialogHeader>
-                                    <DialogFooter>
-                                        <Button type="button" variant="outline" onClick={closeManagementDialog} className="border-[#8AAEE0] text-[#395886]">
+                                    <DialogFooter className="gap-3 sm:gap-3">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={closeManagementDialog}
+                                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#F0F3FA] hover:text-[#395886]"
+                                        >
                                             Batal
                                         </Button>
                                         <Button type="submit" disabled={processing} className="bg-rose-600 text-white hover:bg-rose-700 hover:text-white">
@@ -294,7 +331,44 @@ export function ImportVersionList({
                                             {processing ? "Menghapus…" : "Hapus file"}
                                         </Button>
                                     </DialogFooter>
-                                </>
+                                </div>
+                            )}
+                        </Form>
+                    ) : null}
+
+                    {selectedVersion !== null && managementAction === "release" ? (
+                        <Form
+                            key={`release-${selectedVersion.id}`}
+                            {...release.form(selectedVersion.id)}
+                            onSuccess={closeManagementDialog}
+                        >
+                            {({ processing }) => (
+                                <div className="grid gap-5">
+                                    <DialogHeader>
+                                        <DialogTitle className="text-[#395886]">Lepaskan dari penggunaan?</DialogTitle>
+                                        <DialogDescription className="text-[#395886]/70">
+                                            {selectedVersion.display_filename} tidak lagi menjadi sumber workbook aktif untuk periode {selectedVersion.periode_semester}. File, data operasional, dan riwayat SP final tidak dihapus.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <DialogFooter className="gap-3 sm:gap-3">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={closeManagementDialog}
+                                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#F0F3FA] hover:text-[#395886]"
+                                        >
+                                            Batal
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                            className="bg-amber-600 text-white hover:bg-amber-700 hover:text-white"
+                                        >
+                                            <Unlink className="size-4" />
+                                            {processing ? "Melepaskan…" : "Lepaskan workbook"}
+                                        </Button>
+                                    </DialogFooter>
+                                </div>
                             )}
                         </Form>
                     ) : null}

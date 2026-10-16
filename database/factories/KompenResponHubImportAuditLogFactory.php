@@ -21,7 +21,7 @@ class KompenResponHubImportAuditLogFactory extends Factory
             'event_type' => KompenResponHubImportAuditLog::EVENT_UPLOAD,
             'source_import_id' => fake()->numberBetween(1, 10_000),
             'actor_name' => fake()->name(),
-            'actor_email' => fake()->unique()->safeEmail(),
+            'actor_username' => fake()->unique()->userName(),
             'periode_semester' => '2026/2027 Gasal',
             'original_filename' => 'kompen-respon.xlsx',
             'class_count' => 1,

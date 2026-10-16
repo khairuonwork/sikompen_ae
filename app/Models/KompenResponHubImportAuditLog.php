@@ -11,10 +11,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * @property int $id
  * @property string $event_type
+ * @property string $import_type
  * @property int|null $source_import_id
+ * @property int|null $source_active_student_import_id
  * @property string|null $actor_name
- * @property string|null $actor_email
- * @property string $periode_semester
+ * @property string|null $actor_username
+ * @property string|null $periode_semester
  * @property string $original_filename
  * @property int $class_count
  * @property int $student_count
@@ -24,6 +26,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonInterface|null $created_at
  * @property CarbonInterface|null $updated_at
  * @property-read KompenResponHubImport|null $sourceImport
+ * @property-read KompenResponHubActiveStudentImport|null $sourceActiveStudentImport
  */
 class KompenResponHubImportAuditLog extends Model
 {
@@ -40,15 +43,25 @@ class KompenResponHubImportAuditLog extends Model
 
     public const EVENT_ACTIVATE = 'activate';
 
+    public const EVENT_RELEASE = 'release';
+
     public const EVENT_RENAME = 'rename';
 
     public const EVENT_DELETE = 'delete';
 
+    public const EVENT_PURGE = 'purge';
+
+    public const ImportTypeKompenRespon = 'kompen_respon';
+
+    public const ImportTypeActiveStudents = 'active_students';
+
     protected $fillable = [
         'event_type',
+        'import_type',
         'source_import_id',
+        'source_active_student_import_id',
         'actor_name',
-        'actor_email',
+        'actor_username',
         'periode_semester',
         'original_filename',
         'class_count',
@@ -62,6 +75,7 @@ class KompenResponHubImportAuditLog extends Model
     {
         return [
             'source_import_id' => 'integer',
+            'source_active_student_import_id' => 'integer',
             'class_count' => 'integer',
             'student_count' => 'integer',
             'detail_count' => 'integer',
@@ -79,5 +93,11 @@ class KompenResponHubImportAuditLog extends Model
     public function sourceImport(): BelongsTo
     {
         return $this->belongsTo(KompenResponHubImport::class, 'source_import_id');
+    }
+
+    /** @return BelongsTo<KompenResponHubActiveStudentImport, $this> */
+    public function sourceActiveStudentImport(): BelongsTo
+    {
+        return $this->belongsTo(KompenResponHubActiveStudentImport::class, 'source_active_student_import_id');
     }
 }

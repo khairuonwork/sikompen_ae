@@ -202,24 +202,6 @@ Jangan gunakan `docker compose down -v` di production, karena opsi `-v` menghapu
 - Pantau disk volume; file upload dan audit log akan bertambah seiring waktu.
 - Update base image dan dependensi secara berkala, rebuild, lalu jalankan test sebelum deploy.
 
-## Integrasi gateway Si-Admin
+## Integrasi layanan lain
 
-Arsitektur yang telah dibahas untuk fase berikutnya adalah **satu Docker Compose internal**:
-
-```mermaid
-flowchart LR
-    Browser -->|HTTPS| SiAdminWeb[Si-Admin Nginx/public]
-    SiAdminWeb -->|/sikompen/ internal network| SiKompenWeb[Si-Kompen Nginx]
-    SiKompenWeb --> SiKompenApp[Si-Kompen PHP-FPM]
-```
-
-Dalam rancangan ini:
-
-- Si-Admin menjadi satu-satunya gateway publik dan memeriksa session/role miliknya sendiri.
-- Si-Kompen tidak mempunyai `ports:` publik pada Compose gabungan; hanya dapat dicapai lewat Docker network internal dari Si-Admin.
-- Si-Admin meneruskan identitas/role yang telah diverifikasi lewat header internal dan Si-Kompen wajib menolak request yang tidak datang dari gateway tepercaya.
-- Jangan berbagi `APP_KEY`, session database, atau cookie antara dua aplikasi.
-
-Handler Sikompen untuk verifikasi HMAC, anti-replay, session proxy, dan mapping role sudah tersedia. Compose repository ini tetap menjalankan Sikompen mandiri; Compose gabungan serta prefix proxy harus dikerjakan bersama tim Si-Admin agar network, header tepercaya, path prefix, URL asset, TLS, dan error handling memiliki kontrak yang sama. Gunakan `nginx.si-admin-gateway.conf` sebagai konfigurasi Nginx publik awal; ia meneruskan `/sikompen/*` ke gateway Si-Admin, bukan langsung ke service Sikompen.
-
-Kontrak header HMAC, role, pengujian `superuser`, dan tanggung jawab gateway Si-Admin tersedia di [si-admin-proxy-contract.md](si-admin-proxy-contract.md).
+Sikompen memakai session Laravel lokal untuk antarmuka admin dan mahasiswa. Integrasi dengan aplikasi lain dilakukan melalui modul API terautentikasi yang akan ditambahkan terpisah; aplikasi lain tidak pernah berbagi `APP_KEY`, database session, atau cookie Sikompen.

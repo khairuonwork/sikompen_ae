@@ -9,8 +9,10 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 
 /**
  * @property int $id
- * @property string $email
+ * @property string $username
  * @property string $password
+ * @property int $session_version
+ * @property bool $is_emergency_admin
  * @property string|null $remember_token
  * @property CarbonInterface|null $created_at
  * @property CarbonInterface|null $updated_at
@@ -23,8 +25,10 @@ class KompenResponHubAdmin extends Authenticatable
     protected $table = 'sikompen_admins';
 
     protected $fillable = [
-        'email',
+        'username',
         'password',
+        'session_version',
+        'is_emergency_admin',
     ];
 
     protected $hidden = [
@@ -36,6 +40,7 @@ class KompenResponHubAdmin extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'is_emergency_admin' => 'boolean',
         ];
     }
 

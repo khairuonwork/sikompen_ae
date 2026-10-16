@@ -21,7 +21,7 @@ class KompenResponHubImportTaskFactory extends Factory
         return [
             'uploaded_by_admin_id' => KompenResponHubAdmin::factory(),
             'uploader_name' => fake()->name(),
-            'uploader_email' => fake()->unique()->safeEmail(),
+            'uploader_username' => fake()->unique()->userName(),
             'original_filename' => 'kompen-respon.xlsx',
             'stored_path' => 'kompen-respon-hub/import-tasks/source.xlsx',
             'file_hash' => fake()->sha256(),

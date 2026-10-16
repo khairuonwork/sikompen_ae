@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Models\KompenResponHubActiveStudentImportTask;
+use App\Models\KompenResponHubApiSyncRun;
 use App\Models\KompenResponHubExportTask;
 use App\Models\KompenResponHubImportTask;
 use Illuminate\Console\Attributes\Description;
@@ -12,32 +14,39 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Storage;
 
 #[Signature('sikompen:reconcile-tasks')]
-#[Description('Mark stalled Sikompen import and export tasks as failed.')]
+#[Description('Mark stalled Sikompen import, export, and API sync tasks as failed.')]
 class ReconcileKompenResponHubTasks extends Command
 {
     public function handle(RecordKompenResponHubActivity $activity): int
     {
-        $stalledAfterMinutes = max(15, (int) config('kompen-respon-hub.queue.stalled_task_minutes', 15));
-        $threshold = now()->subMinutes($stalledAfterMinutes);
-        $importCount = $this->reconcileImports($threshold, $stalledAfterMinutes, $activity);
-        $exportCount = $this->reconcileExports($threshold, $stalledAfterMinutes, $activity);
+        $processingAfterMinutes = max(15, (int) config('kompen-respon-hub.queue.stalled_task_minutes', 15));
+        $queuedAfterMinutes = max($processingAfterMinutes, (int) config('kompen-respon-hub.queue.queued_task_minutes', 60));
+        $processingThreshold = now()->subMinutes($processingAfterMinutes);
+        $queuedThreshold = now()->subMinutes($queuedAfterMinutes);
+        $importCount = $this->reconcileImports($processingThreshold, $queuedThreshold, $processingAfterMinutes, $queuedAfterMinutes, $activity);
+        $activeStudentImportCount = $this->reconcileActiveStudentImports($processingThreshold, $queuedThreshold, $processingAfterMinutes, $queuedAfterMinutes, $activity);
+        $exportCount = $this->reconcileExports($processingThreshold, $queuedThreshold, $processingAfterMinutes, $queuedAfterMinutes, $activity);
+        $apiSyncCount = $this->reconcileApiSyncRuns($processingThreshold, $queuedThreshold);
 
-        $this->components->info("{$importCount} task impor dan {$exportCount} task ekspor macet ditandai gagal.");
+        $this->components->info("{$importCount} task workbook, {$activeStudentImportCount} task roster, {$exportCount} task ekspor, dan {$apiSyncCount} run API macet ditandai gagal.");
 
         return self::SUCCESS;
     }
 
     private function reconcileImports(
-        \DateTimeInterface $threshold,
-        int $stalledAfterMinutes,
+        \DateTimeInterface $processingThreshold,
+        \DateTimeInterface $queuedThreshold,
+        int $processingAfterMinutes,
+        int $queuedAfterMinutes,
         RecordKompenResponHubActivity $activity,
     ): int {
         $count = 0;
 
-        $this->stalledImportTasks($threshold)
-            ->chunkById(200, function ($tasks) use (&$count, $activity, $stalledAfterMinutes): void {
+        $this->stalledImportTasks($processingThreshold, $queuedThreshold)
+            ->chunkById(200, function ($tasks) use (&$count, $activity, $processingAfterMinutes, $queuedAfterMinutes): void {
                 foreach ($tasks as $task) {
-                    $message = 'Proses impor melewati batas waktu pemrosesan dan ditandai gagal. Unggah ulang workbook bila masih diperlukan.';
+                    $sourceWorkbookRemoved = $this->deleteSourceWorkbook($task->stored_path, 'kompen-respon-hub/imports/');
+                    $message = 'Proses impor melewati batas waktu pemrosesan dan ditandai gagal. File unggahan dibersihkan demi konsistensi data. Unggah ulang workbook bila masih diperlukan.';
                     $task->update([
                         'status' => KompenResponHubImportTask::STATUS_FAILED,
                         'progress' => 100,
@@ -45,10 +54,6 @@ class ReconcileKompenResponHubTasks extends Command
                         'error_message' => $message,
                         'failed_at' => now(),
                     ]);
-
-                    if (str_starts_with($task->stored_path, 'kompen-respon-hub/imports/')) {
-                        Storage::disk('local')->delete($task->stored_path);
-                    }
 
                     $activity->execute(
                         'import.timed_out',
@@ -58,7 +63,52 @@ class ReconcileKompenResponHubTasks extends Command
                         reason: $message,
                         metadata: [
                             'original_filename' => $task->original_filename,
-                            'stalled_after_minutes' => $stalledAfterMinutes,
+                            'processing_after_minutes' => $processingAfterMinutes,
+                            'queued_after_minutes' => $queuedAfterMinutes,
+                            'source_workbook_removed' => $sourceWorkbookRemoved,
+                        ],
+                        subjectName: $task->original_filename,
+                    );
+                    $count++;
+                }
+            });
+
+        return $count;
+    }
+
+    private function reconcileActiveStudentImports(
+        \DateTimeInterface $processingThreshold,
+        \DateTimeInterface $queuedThreshold,
+        int $processingAfterMinutes,
+        int $queuedAfterMinutes,
+        RecordKompenResponHubActivity $activity,
+    ): int {
+        $count = 0;
+
+        $this->stalledActiveStudentImportTasks($processingThreshold, $queuedThreshold)
+            ->chunkById(200, function ($tasks) use (&$count, $activity, $processingAfterMinutes, $queuedAfterMinutes): void {
+                foreach ($tasks as $task) {
+                    $sourceWorkbookRemoved = $this->deleteSourceWorkbook($task->stored_path, 'kompen-respon-hub/imports/active-students/');
+                    $message = 'Proses impor daftar mahasiswa aktif melewati batas waktu pemrosesan dan ditandai gagal. File unggahan dibersihkan demi konsistensi data. Unggah ulang file bila masih diperlukan.';
+                    $task->update([
+                        'status' => KompenResponHubActiveStudentImportTask::StatusFailed,
+                        'progress' => 100,
+                        'progress_message' => 'Impor roster berhenti karena waktu pemrosesan terlewati.',
+                        'error_message' => $message,
+                        'failed_at' => now(),
+                    ]);
+
+                    $activity->execute(
+                        'active_students.timed_out',
+                        'active_student_import_task',
+                        (string) $task->id,
+                        null,
+                        reason: $message,
+                        metadata: [
+                            'original_filename' => $task->original_filename,
+                            'processing_after_minutes' => $processingAfterMinutes,
+                            'queued_after_minutes' => $queuedAfterMinutes,
+                            'source_workbook_removed' => $sourceWorkbookRemoved,
                         ],
                         subjectName: $task->original_filename,
                     );
@@ -70,14 +120,16 @@ class ReconcileKompenResponHubTasks extends Command
     }
 
     private function reconcileExports(
-        \DateTimeInterface $threshold,
-        int $stalledAfterMinutes,
+        \DateTimeInterface $processingThreshold,
+        \DateTimeInterface $queuedThreshold,
+        int $processingAfterMinutes,
+        int $queuedAfterMinutes,
         RecordKompenResponHubActivity $activity,
     ): int {
         $count = 0;
 
-        $this->stalledExportTasks($threshold)
-            ->chunkById(200, function ($tasks) use (&$count, $activity, $stalledAfterMinutes): void {
+        $this->stalledExportTasks($processingThreshold, $queuedThreshold)
+            ->chunkById(200, function ($tasks) use (&$count, $activity, $processingAfterMinutes, $queuedAfterMinutes): void {
                 foreach ($tasks as $task) {
                     $message = 'Proses ekspor melewati batas waktu pemrosesan dan ditandai gagal. Buat permintaan ekspor baru bila masih diperlukan.';
                     $task->update([
@@ -88,10 +140,6 @@ class ReconcileKompenResponHubTasks extends Command
                         'failed_at' => now(),
                     ]);
 
-                    if ($task->output_path !== null && str_starts_with($task->output_path, 'kompen-respon-hub/exports/')) {
-                        Storage::disk('local')->delete($task->output_path);
-                    }
-
                     $activity->execute(
                         'export.timed_out',
                         'export',
@@ -100,7 +148,8 @@ class ReconcileKompenResponHubTasks extends Command
                         reason: $message,
                         metadata: [
                             ...$task->activityMetadata(),
-                            'stalled_after_minutes' => $stalledAfterMinutes,
+                            'processing_after_minutes' => $processingAfterMinutes,
+                            'queued_after_minutes' => $queuedAfterMinutes,
                         ],
                     );
                     $count++;
@@ -110,41 +159,133 @@ class ReconcileKompenResponHubTasks extends Command
         return $count;
     }
 
+    private function reconcileApiSyncRuns(
+        \DateTimeInterface $processingThreshold,
+        \DateTimeInterface $queuedThreshold,
+    ): int {
+        $count = 0;
+
+        $this->stalledApiSyncRuns($processingThreshold, $queuedThreshold)
+            ->chunkById(200, function ($runs) use (&$count): void {
+                foreach ($runs as $run) {
+                    $updated = KompenResponHubApiSyncRun::query()
+                        ->whereKey($run->id)
+                        ->where('status', $run->status)
+                        ->update([
+                            'status' => 'failed',
+                            'failure_code' => 'processing_timeout',
+                            'completed_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+
+                    if ($updated === 1) {
+                        $count++;
+                    }
+                }
+            });
+
+        return $count;
+    }
+
     /** @return Builder<KompenResponHubImportTask> */
-    private function stalledImportTasks(\DateTimeInterface $threshold): Builder
+    private function stalledImportTasks(\DateTimeInterface $processingThreshold, \DateTimeInterface $queuedThreshold): Builder
     {
         return KompenResponHubImportTask::query()
             ->whereIn('status', [
                 KompenResponHubImportTask::STATUS_QUEUED,
                 KompenResponHubImportTask::STATUS_PROCESSING,
             ])
-            ->where(function (Builder $query) use ($threshold): void {
+            ->where(function (Builder $query) use ($processingThreshold, $queuedThreshold): void {
                 $query
-                    ->where('started_at', '<=', $threshold)
-                    ->orWhere(function (Builder $queuedQuery) use ($threshold): void {
+                    ->where(function (Builder $processingQuery) use ($processingThreshold): void {
+                        $processingQuery
+                            ->where('status', KompenResponHubImportTask::STATUS_PROCESSING)
+                            ->where('started_at', '<=', $processingThreshold);
+                    })
+                    ->orWhere(function (Builder $queuedQuery) use ($queuedThreshold): void {
                         $queuedQuery
-                            ->whereNull('started_at')
-                            ->where('queued_at', '<=', $threshold);
+                            ->where('status', KompenResponHubImportTask::STATUS_QUEUED)
+                            ->where('queued_at', '<=', $queuedThreshold);
                     });
             });
     }
 
     /** @return Builder<KompenResponHubExportTask> */
-    private function stalledExportTasks(\DateTimeInterface $threshold): Builder
+    private function stalledExportTasks(\DateTimeInterface $processingThreshold, \DateTimeInterface $queuedThreshold): Builder
     {
         return KompenResponHubExportTask::query()
             ->whereIn('status', [
                 KompenResponHubExportTask::StatusQueued,
                 KompenResponHubExportTask::StatusProcessing,
             ])
-            ->where(function (Builder $query) use ($threshold): void {
+            ->where(function (Builder $query) use ($processingThreshold, $queuedThreshold): void {
                 $query
-                    ->where('started_at', '<=', $threshold)
-                    ->orWhere(function (Builder $queuedQuery) use ($threshold): void {
+                    ->where(function (Builder $processingQuery) use ($processingThreshold): void {
+                        $processingQuery
+                            ->where('status', KompenResponHubExportTask::StatusProcessing)
+                            ->where('started_at', '<=', $processingThreshold);
+                    })
+                    ->orWhere(function (Builder $queuedQuery) use ($queuedThreshold): void {
                         $queuedQuery
-                            ->whereNull('started_at')
-                            ->where('queued_at', '<=', $threshold);
+                            ->where('status', KompenResponHubExportTask::StatusQueued)
+                            ->where('queued_at', '<=', $queuedThreshold);
                     });
             });
+    }
+
+    /** @return Builder<KompenResponHubActiveStudentImportTask> */
+    private function stalledActiveStudentImportTasks(\DateTimeInterface $processingThreshold, \DateTimeInterface $queuedThreshold): Builder
+    {
+        return KompenResponHubActiveStudentImportTask::query()
+            ->whereIn('status', [
+                KompenResponHubActiveStudentImportTask::StatusQueued,
+                KompenResponHubActiveStudentImportTask::StatusProcessing,
+            ])
+            ->where(function (Builder $query) use ($processingThreshold, $queuedThreshold): void {
+                $query
+                    ->where(function (Builder $processingQuery) use ($processingThreshold): void {
+                        $processingQuery
+                            ->where('status', KompenResponHubActiveStudentImportTask::StatusProcessing)
+                            ->where('started_at', '<=', $processingThreshold);
+                    })
+                    ->orWhere(function (Builder $queuedQuery) use ($queuedThreshold): void {
+                        $queuedQuery
+                            ->where('status', KompenResponHubActiveStudentImportTask::StatusQueued)
+                            ->where('queued_at', '<=', $queuedThreshold);
+                    });
+            });
+    }
+
+    /** @return Builder<KompenResponHubApiSyncRun> */
+    private function stalledApiSyncRuns(\DateTimeInterface $processingThreshold, \DateTimeInterface $queuedThreshold): Builder
+    {
+        return KompenResponHubApiSyncRun::query()
+            ->whereIn('status', ['queued', 'processing'])
+            ->where(function (Builder $query) use ($processingThreshold, $queuedThreshold): void {
+                $query
+                    ->where(function (Builder $processingQuery) use ($processingThreshold): void {
+                        $processingQuery
+                            ->where('status', 'processing')
+                            ->where('started_at', '<=', $processingThreshold);
+                    })
+                    ->orWhere(function (Builder $queuedQuery) use ($queuedThreshold): void {
+                        $queuedQuery
+                            ->where('status', 'queued')
+                            ->where('created_at', '<=', $queuedThreshold);
+                    });
+            });
+    }
+
+    private function deleteSourceWorkbook(string $storedPath, string $trustedDirectory): bool
+    {
+        if (! str_starts_with($storedPath, $trustedDirectory)) {
+            return false;
+        }
+
+        try {
+            return Storage::disk('local')->delete($storedPath);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

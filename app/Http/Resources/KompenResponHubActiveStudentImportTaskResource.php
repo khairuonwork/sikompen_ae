@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Http\Resources;
+
+use App\Models\KompenResponHubActiveStudentImportTask;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+/** @mixin KompenResponHubActiveStudentImportTask */
+class KompenResponHubActiveStudentImportTaskResource extends JsonResource
+{
+    /**
+     * Transform the resource into an array.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'import_type' => 'active_students',
+            'original_filename' => $this->original_filename,
+            'status' => $this->status,
+            'progress' => $this->progress,
+            'progress_message' => $this->progress_message,
+            'error_message' => $this->error_message,
+            'queued_at' => $this->queued_at?->toIso8601String(),
+            'completed_at' => $this->completed_at?->toIso8601String(),
+        ];
+    }
+}

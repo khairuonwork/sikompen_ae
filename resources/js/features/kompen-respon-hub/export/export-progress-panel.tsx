@@ -29,6 +29,9 @@ export function queueExport(
             kelas: filters.kelas,
             tingkat: filters.tingkat,
             periode_semester: filters.periode_semester,
+            import_type: filters.import_type,
+            import_month: filters.import_month,
+            import_year: filters.import_year,
         },
         {
             preserveScroll: true,
@@ -53,7 +56,9 @@ function resourceLabel(resource: ExportTask["resource"]): string {
         ? "Kompen dan Respon"
         : resource === "details"
           ? "Detail Kompen"
-          : "Surat Peringatan";
+          : resource === "warnings"
+            ? "Surat Peringatan"
+            : "Log Upload";
 }
 
 function isActive(task: ExportTask): boolean {

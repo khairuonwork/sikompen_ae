@@ -47,6 +47,9 @@ export function ImportAuditFilterPanel({
     const [selectedPeriod, setSelectedPeriod] = useState(
         filters.periode_semester ?? "",
     );
+    const [selectedImportType, setSelectedImportType] = useState(
+        filters.import_type ?? "",
+    );
     const [selectedYear, setSelectedYear] = useState(
         initialDate.year || String(filters.import_year ?? ""),
     );
@@ -56,11 +59,17 @@ export function ImportAuditFilterPanel({
         const selectedDate = parseImportMonth(filters.import_month);
 
         setSelectedPeriod(filters.periode_semester ?? "");
+        setSelectedImportType(filters.import_type ?? "");
         setSelectedYear(
             selectedDate.year || String(filters.import_year ?? ""),
         );
         setSelectedMonth(selectedDate.month);
-    }, [filters.import_month, filters.import_year, filters.periode_semester]);
+    }, [
+        filters.import_month,
+        filters.import_type,
+        filters.import_year,
+        filters.periode_semester,
+    ]);
 
     const importMonth =
         selectedYear !== "" && selectedMonth !== ""
@@ -70,7 +79,7 @@ export function ImportAuditFilterPanel({
     return (
         <Form
             {...adminIndex.form()}
-            className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(180px,1fr)_minmax(140px,0.65fr)_minmax(160px,0.75fr)_auto_auto] md:items-end"
+            className="grid gap-3 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm md:grid-cols-[minmax(150px,0.7fr)_minmax(180px,1fr)_minmax(140px,0.65fr)_minmax(160px,0.75fr)_auto_auto] md:items-end"
         >
             <input name="tab" type="hidden" value="imports" />
             <input
@@ -78,8 +87,43 @@ export function ImportAuditFilterPanel({
                 type="hidden"
                 value={selectedPeriod}
             />
+            <input
+                name="import_type"
+                type="hidden"
+                value={selectedImportType}
+            />
             <input name="import_month" type="hidden" value={importMonth} />
             <input name="import_year" type="hidden" value={selectedYear} />
+            <div className="grid gap-1.5">
+                <Label
+                    htmlFor="import-audit-type"
+                    className="text-xs font-bold text-[#395886]"
+                >
+                    Jenis data
+                </Label>
+                <Select
+                    value={selectedImportType || "all"}
+                    onValueChange={(value) =>
+                        setSelectedImportType(value === "all" ? "" : value)
+                    }
+                >
+                    <SelectTrigger
+                        id="import-audit-type"
+                        className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white"
+                    >
+                        <SelectValue placeholder="Semua data" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl text-xs font-semibold">
+                        <SelectItem value="all">Semua data</SelectItem>
+                        <SelectItem value="kompen_respon">
+                            Kompen dan Respon
+                        </SelectItem>
+                        <SelectItem value="active_students">
+                            Mahasiswa Aktif
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
             <div className="grid gap-1.5">
                 <Label
                     htmlFor="import-audit-period"

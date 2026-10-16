@@ -72,7 +72,7 @@ export type ActivityLog = {
     kelas: string | null;
     actor_type: string;
     actor_name: string | null;
-    actor_email?: string | null;
+    actor_username?: string | null;
     reason: string | null;
     before_state: ActivityState;
     after_state: ActivityState;
@@ -96,15 +96,17 @@ export type Cutoff = {
 
 export type ImportAuditLog = {
     id: number;
-    event_type: "upload" | "rollback" | "restore" | "activate" | "rename" | "delete";
+    event_type: "upload" | "rollback" | "restore" | "activate" | "release" | "rename" | "delete";
+    import_type: "kompen_respon" | "active_students";
     source_import_id: number | null;
+    source_active_student_import_id: number | null;
     can_download_file: boolean;
     version_status: "active" | "stored" | "unavailable";
     version_imported_at: string | null;
     version_activated_at: string | null;
     actor_name: string | null;
-    actor_email: string | null;
-    periode_semester: string;
+    actor_username: string | null;
+    periode_semester: string | null;
     original_filename: string;
     class_count: number;
     student_count: number;
@@ -131,19 +133,48 @@ export type ImportVersion = {
     student_count: number;
     detail_count: number;
     uploaded_by_name: string | null;
-    uploaded_by_email: string | null;
+    uploaded_by_username: string | null;
     imported_at: string | null;
     is_active: boolean;
     activated_at: string | null;
-    activated_by_email: string | null;
+    activated_by_username: string | null;
     quality_report: {
         status: "passed";
         checks: { label: string; status: "passed"; detail: string }[];
     } | null;
+    deleted_at: string | null;
+};
+
+export type ActiveStudentImportVersion = {
+    id: number;
+    original_filename: string;
+    periode_semester: string | null;
+    student_count: number;
+    class_count: number;
+    uploader_name: string;
+    uploader_username: string | null;
+    imported_at: string;
+    is_active: boolean;
+    activated_at: string | null;
+    deleted_at: string | null;
+};
+
+export type ActiveStudentImportReference = {
+    id: number;
+    periode_semester: string | null;
+    activated_at: string;
+    import: {
+        id: number;
+        original_filename: string;
+        student_count: number;
+        class_count: number;
+        imported_at: string;
+    };
 };
 
 export type ImportTask = {
     id: number;
+    import_type: "kompen_respon" | "active_students";
     original_filename: string;
     status: "queued" | "processing" | "completed" | "failed";
     progress: number;
@@ -156,7 +187,7 @@ export type ImportTask = {
 export type ExportTask = {
     id: number;
     access_token: string;
-    resource: "students" | "details" | "warnings";
+    resource: "students" | "details" | "warnings" | "import_audits";
     format: "xlsx" | "pdf";
     status: "queued" | "processing" | "completed" | "failed" | "cancelled";
     progress: number;
@@ -192,6 +223,7 @@ export type Filters = {
     list_period?: string;
     import_month?: string;
     import_year?: number;
+    import_type?: "kompen_respon" | "active_students";
     activity_event?: string;
     activity_actor?: string;
     per_page?: number;
@@ -253,26 +285,43 @@ export type KompenResponHubPageProps = {
         | "warnings"
         | "activity";
     isAdmin: boolean;
+    hasStudentSession: boolean;
     filters: Filters;
     filterOptions: FilterOptions;
     importAuditPeriods: string[];
     importAuditYears: number[];
-    activityFilterOptions: { event_types: string[]; actor_emails: string[] };
+    activityFilterOptions: { event_types: string[]; actor_usernames: string[] };
     warningPeriods: string[];
     flash: { success: string | null; error: string | null };
     students: Pagination<Student> | null;
     details: Pagination<Detail> | null;
     imports: Pagination<ImportAuditLog> | null;
     importVersions: Pagination<ImportVersion> | null;
-    activeImportVersions: ImportVersion[];
+    activeImportVersions: Pagination<ImportVersion> | null;
+    activeStudentImportVersions: Pagination<ActiveStudentImportVersion> | null;
+    activeStudentImportReferences: Pagination<ActiveStudentImportReference> | null;
+    recycledImportVersions: Pagination<ImportVersion> | null;
+    recycledActiveStudentImportVersions: Pagination<ActiveStudentImportVersion> | null;
+    dataConsistencyReport: DataConsistencyRecord[];
     warnings: Pagination<Warning> | null;
     warningCandidates: Pagination<Student> | null;
     rolledBackWarnings: Pagination<Warning> | null;
     activityLogs: Pagination<ActivityLog> | null;
     activityRetentionDays: number | null;
+    importAuditRetentionDays: number | null;
+    workbookRecycleBinRetentionDays: number | null;
     cutoffs: Cutoff[];
     activeImportTasks: ImportTask[];
     exportTasks: ExportTask[];
     exportStalledAfterMinutes: number;
     managedPeriodHasActiveWarnings: boolean;
+};
+
+export type DataConsistencyRecord = {
+    periode_semester: string;
+    status: "ready" | "roster_missing" | "mismatch";
+    kompen_respon_students: number;
+    roster_students: number;
+    missing_from_roster: string[];
+    missing_from_kompen_respon: string[];
 };

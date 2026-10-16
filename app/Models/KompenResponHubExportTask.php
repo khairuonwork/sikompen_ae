@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $request_session_id
  * @property string $access_token
  * @property int|null $requested_by_admin_id
- * @property 'students'|'details'|'warnings' $resource
+ * @property 'students'|'details'|'warnings'|'import_audits' $resource
  * @property 'xlsx'|'pdf' $format
  * @property array<string, mixed> $filters
  * @property 'queued'|'processing'|'completed'|'failed'|'cancelled' $status

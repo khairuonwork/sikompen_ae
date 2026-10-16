@@ -6,7 +6,7 @@ Panduan ini untuk perubahan UI tanpa melanggar kontrak backend. Sebelum mengubah
 
 | Kebutuhan | Lokasi utama | Catatan |
 | --- | --- | --- |
-| Landing/pemilih akses | `resources/js/pages/welcome.tsx` | Pertahankan navigasi Wayfinder serta context proxy/standalone. |
+| Landing/pemilih akses | `resources/js/pages/welcome.tsx` | Pertahankan navigasi Wayfinder ke login admin atau mahasiswa. |
 | Header, navigasi tab, state lintas panel | `pages/kompen-respon-hub/index.tsx` | Jangan memindahkan tabel/form domain besar kembali ke sini. |
 | Ringkasan mahasiswa | `features/.../kompen-respon/student-table.tsx` | Gunakan type `Student` dan formatter jam yang ada. |
 | Detail Kompen | `features/.../detail-kompen/` | Pisahkan tabel dan correction panel. |

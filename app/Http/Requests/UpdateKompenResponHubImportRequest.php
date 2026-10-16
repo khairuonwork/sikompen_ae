@@ -13,11 +13,21 @@ class UpdateKompenResponHubImportRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if (is_string($this->input('display_filename'))) {
-            $this->merge([
-                'display_filename' => trim((string) $this->input('display_filename')),
-            ]);
+        $displayFilename = $this->input('display_filename');
+
+        if (! is_string($displayFilename)) {
+            return;
         }
+
+        $baseFilename = preg_replace('/(?:\.xlsx)+$/iu', '', trim($displayFilename)) ?? '';
+        $baseFilename = preg_replace('/\s+/u', '_', $baseFilename) ?? '';
+        $baseFilename = preg_replace('/[^\pL\pN._()\-]+/u', '_', $baseFilename) ?? '';
+        $baseFilename = preg_replace('/_+/u', '_', $baseFilename) ?? '';
+        $baseFilename = trim($baseFilename, '._');
+
+        $this->merge([
+            'display_filename' => $baseFilename === '' ? '' : $baseFilename.'.xlsx',
+        ]);
     }
 
     /** @return array<string, array<int, mixed>> */

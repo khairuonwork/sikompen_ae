@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Actions\KompenResponHub\ActivateKompenResponHubImportVersion;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
-use App\Actions\SiAdminProxy\SiAdminProxyAccess;
+use App\Actions\KompenResponHub\ReleaseKompenResponHubImportVersion;
+use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Http\Requests\ActivateKompenResponHubImportVersionRequest;
+use App\Http\Requests\ReleaseKompenResponHubImportVersionRequest;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportTask;
@@ -17,7 +19,7 @@ class KompenResponHubImportActivationController extends Controller
 {
     public function store(
         ActivateKompenResponHubImportVersionRequest $request,
-        SiAdminProxyAccess $access,
+        SikompenAdminAccess $access,
         RecordKompenResponHubActivity $activity,
         ActivateKompenResponHubImportVersion $activateImportVersion,
         KompenResponHubImport $import,
@@ -28,15 +30,13 @@ class KompenResponHubImportActivationController extends Controller
         }
 
         $actor = $access->actor($request);
-        $admin = is_int($actor['id'])
-            ? KompenResponHubAdmin::query()->find($actor['id'])
-            : null;
+        $admin = KompenResponHubAdmin::query()->find($actor['id']);
 
         try {
             $activatedVersion = $activateImportVersion->execute(
                 $import,
-                $admin instanceof KompenResponHubAdmin ? $admin->email : $actor['email'],
-                $actor['email'],
+                $admin instanceof KompenResponHubAdmin ? $admin->username : $actor['username'],
+                $actor['username'],
                 $admin?->id,
             );
         } catch (\LogicException $exception) {
@@ -68,6 +68,47 @@ class KompenResponHubImportActivationController extends Controller
 
         return to_route('admin.kompen-respon.index', ['tab' => 'files'])
             ->with('success', "Versi {$activatedVersion['original_filename']} kini menjadi sumber data aktif untuk periode {$activatedVersion['periode_semester']}.");
+    }
+
+    public function destroy(
+        ReleaseKompenResponHubImportVersionRequest $request,
+        SikompenAdminAccess $access,
+        RecordKompenResponHubActivity $activity,
+        ReleaseKompenResponHubImportVersion $releaseImportVersion,
+        KompenResponHubImport $import,
+    ): RedirectResponse {
+        $actor = $access->actor($request);
+        $admin = KompenResponHubAdmin::query()->find($actor['id']);
+
+        try {
+            $releasedVersion = $releaseImportVersion->execute(
+                $import,
+                $admin instanceof KompenResponHubAdmin ? $admin->username : $actor['username'],
+                $actor['username'],
+            );
+        } catch (\LogicException $exception) {
+            return to_route('admin.kompen-respon.index', ['tab' => 'files'])
+                ->with('error', $exception->getMessage());
+        }
+
+        Cache::forever(
+            KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_VERSION_KEY,
+            (int) Cache::get(KompenResponHubDataQuery::FILTER_OPTIONS_CACHE_VERSION_KEY, 1) + 1,
+        );
+
+        $activity->execute(
+            'import.version_released',
+            'import',
+            (string) $releasedVersion['import_id'],
+            $admin,
+            $request,
+            period: $releasedVersion['periode_semester'],
+            reason: 'Workbook dilepas dari sumber data aktif. Data SP final tidak diubah.',
+            afterState: ['active_reference_removed' => true],
+        );
+
+        return to_route('admin.kompen-respon.index', ['tab' => 'files'])
+            ->with('success', "Versi {$releasedVersion['display_filename']} tidak lagi digunakan. Workbook dan data SP final tetap tersimpan.");
     }
 
     private function hasActiveImportTask(): bool

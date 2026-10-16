@@ -6,8 +6,8 @@ Dokumen ini mencakup file aplikasi yang langsung membentuk fitur Sikompen. File 
 
 | Lokasi | Tanggung jawab |
 | --- | --- |
-| `routes/web.php` | Halaman, aksi admin, import/version, lifecycle SP, export task, setup, dan gateway. |
-| `routes/api.php` | API filter/mahasiswa/detail dengan limiter dan proxy session. |
+| `routes/web.php` | Halaman, aksi admin, import/version, lifecycle SP, export task, dan setup. |
+| `routes/api.php` | API filter/mahasiswa/detail dengan limiter dan session lokal. |
 | `app/Http/Controllers/KompenResponHubController.php` | Props halaman admin/mahasiswa, endpoint data, global search, profil mahasiswa, filter periode SP. |
 | `KompenResponHubImportController.php` | Template, upload, download workbook, rename tampilan, dan delete versi. |
 | `KompenResponHubImportActivationController.php` | Memilih satu versi data aktif per periode. |
@@ -17,8 +17,7 @@ Dokumen ini mencakup file aplikasi yang langsung membentuk fitur Sikompen. File 
 | `KompenResponHubActivityRetentionController.php` | Menyimpan kebijakan retensi aktivitas. |
 | `AdminAuthenticationController.php` | Login/logout admin standalone. |
 | `KompenResponHubAdminSetupController.php` | Setup admin pertama, setup tambahan, dan pengaturan jendela setup. |
-| `KompenResponHubLandingController.php` | Landing akses standalone/proxy. |
-| `SiAdminProxyAccessController.php` | Membentuk session Sikompen setelah HMAC gateway lolos. |
+| `KompenResponHubLandingController.php` | Landing pemilih akses admin atau mahasiswa. |
 | `app/Http/Requests/*.php` | Validasi khusus untuk tiap operasi. `KompenResponHubTableRequest` adalah filter utama; request lain mengamankan mutasi import, lifecycle, export, dan autentikasi. |
 
 ## Actions domain
@@ -33,20 +32,19 @@ Dokumen ini mencakup file aplikasi yang langsung membentuk fitur Sikompen. File 
 | `…/FinalizeKompenResponHubCutoff.php` | Menerbitkan/menyelaraskan SP saat finalisasi periode. |
 | `…/BuildKompenResponHubExport.php` | Data query dan rendering XLSX/PDF landscape. |
 | `…/RecordKompenResponHubActivity.php` | Satu pintu pencatatan activity log. |
-| `Actions/SiAdminProxy/SiAdminProxySignature.php` | Canonical payload + HMAC SHA-256. |
-| `Actions/SiAdminProxy/SiAdminProxyAccess.php` | Actor, role, dan scope NIM session proxy. |
-| `Actions/SiAdminProxy/RecordSiAdminProxyAccess.php` | Audit akses gateway/proxy. |
+| `…/BuildKompenResponHubDataConsistencyReport.php` | Membandingkan NIM workbook aktif dan roster aktif per periode. |
 
 ## Jobs, command, dan scheduler
 
 | File | Tanggung jawab |
 | --- | --- |
-| `Jobs/ProcessKompenResponHubImport.php` | Worker impor, state/progres task, validasi, storage, audit, dan kegagalan aman. |
+| `Jobs/ProcessKompenResponHubImport.php` | Worker impor, state/progres task, validasi, storage, audit, dan pembersihan sumber file saat gagal. |
 | `Jobs/GenerateKompenResponHubExport.php` | Worker ekspor serial dengan `WithoutOverlapping`, progress, cancel-safe cleanup, dan error logging. |
 | `Console/Commands/ReconcileKompenResponHubTasks.php` | Menandai task import/export macet sebagai gagal setiap lima menit. |
 | `…/PurgeKompenResponHubExports.php` | Menghapus hasil ekspor kedaluwarsa tiap jam. |
 | `…/PurgeKompenResponHubImportTasks.php` | Menghapus record task impor terminal yang kedaluwarsa tiap hari. |
 | `…/PurgeKompenResponHubActivityLogs.php` | Menjalankan retensi Riwayat Aktivitas tiap hari. |
+| `…/PurgeKompenResponHubRecycledWorkbooks.php` | Membersihkan workbook recycle bin yang melewati masa retensi secara aman. |
 | `routes/console.php` | Sumber definisi schedule dan `withoutOverlapping`. |
 
 ## Model dan resource
@@ -65,10 +63,8 @@ Dokumen ini mencakup file aplikasi yang langsung membentuk fitur Sikompen. File 
 
 | Lokasi | Fungsi |
 | --- | --- |
-| `Middleware/EnsureSikompenAdminAccess.php` | Otorisasi admin lokal/proxy. |
-| `Middleware/EnsureSiAdminProxySession.php` | Memastikan proxy session tersedia bila mode proxy aktif. |
-| `Middleware/ValidateSiAdminProxyRequest.php` | HMAC, timestamp, nonce, role gateway. |
-| `Middleware/EnsureSikompenStandalone.php` | Mengizinkan route lokal hanya di standalone mode. |
+| `Middleware/EnsureSikompenAdminAccess.php` | Otorisasi admin lokal. |
+| `Middleware/EnsureSikompenStudentAccess.php` | Memastikan mahasiswa memiliki session lokal yang valid. |
 | `Rules/SafeSearchTerm.php` | Validasi search/text input yang aman. |
 | `config/kompen-respon-hub.php` | Koneksi domain, limit import/archive, limit XLSX export, retensi, dan ambang task macet. |
 | `config/auth.php`, `database.php`, `session.php`, `queue.php`, `filesystems.php` | Integrasi guard admin, koneksi `kompen_db`, session, queue, dan private storage. |
@@ -76,7 +72,6 @@ Dokumen ini mencakup file aplikasi yang langsung membentuk fitur Sikompen. File 
 ## Test yang paling relevan
 
 - `tests/Feature/KompenResponHubTest.php`: alur aplikasi utama dari auth, import, aktivasi, lifecycle, audit, export, dan keamanan.
-- `tests/Feature/SiAdminProxyAccessTest.php`: kontrak access gateway/HMAC.
 - Factory domain dalam `database/factories/` mendukung fixture yang eksplisit dan tidak bergantung pada database lokal.
 
 Untuk hubungan antarkomponen, baca [system-logic.md](system-logic.md). Untuk daftar fitur pengguna, baca [functionality-guide.md](functionality-guide.md).

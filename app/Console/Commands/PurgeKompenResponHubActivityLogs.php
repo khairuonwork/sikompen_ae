@@ -12,12 +12,22 @@ use Illuminate\Console\Command;
 #[Description('Remove Sikompen activity logs older than the configured retention period.')]
 class PurgeKompenResponHubActivityLogs extends Command
 {
+    private const DeleteBatchSize = 500;
+
     public function handle(): int
     {
         $retentionDays = KompenResponHubSystemSetting::current()->activity_log_retention_days;
-        $deletedCount = KompenResponHubActivityLog::query()
-            ->where('occurred_at', '<', now()->subDays($retentionDays))
-            ->delete();
+        $deletedCount = 0;
+        $threshold = now('Asia/Jakarta')->subDays($retentionDays);
+
+        KompenResponHubActivityLog::query()
+            ->where('occurred_at', '<', $threshold)
+            ->select('id')
+            ->chunkById(self::DeleteBatchSize, function ($logs) use (&$deletedCount): void {
+                $deletedCount += KompenResponHubActivityLog::query()
+                    ->whereKey($logs->modelKeys())
+                    ->delete();
+            });
 
         $this->components->info("{$deletedCount} riwayat aktivitas yang melewati retensi dihapus.");
 

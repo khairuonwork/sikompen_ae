@@ -58,7 +58,7 @@ class ProcessKompenResponHubImport implements ShouldQueue
         } catch (Throwable) {
             $this->markAsFailed(
                 $importTask,
-                'Workbook tidak dapat dibaca. Simpan ulang sebagai XLSX dari template lalu unggah kembali.',
+                'Workbook tidak dapat dibaca.',
                 $activity,
             );
 
@@ -92,7 +92,18 @@ class ProcessKompenResponHubImport implements ShouldQueue
             $importTask->file_hash,
             (int) $importTask->uploaded_by_admin_id,
             $importTask->uploader_name,
-            $importTask->uploader_email,
+            $importTask->uploader_username,
+        );
+
+        $this->updateProgress(
+            $importTask,
+            KompenResponHubImportTask::STATUS_COMPLETED,
+            100,
+            "Selesai: versi file siap diaktifkan untuk periode {$result['periode_semester']}.",
+            [
+                'kompen_respon_hub_import_id' => $result['import_id'],
+                'completed_at' => now(),
+            ],
         );
 
         $activity->execute(
@@ -112,17 +123,6 @@ class ProcessKompenResponHubImport implements ShouldQueue
                 'original_filename' => $importTask->original_filename,
             ],
         );
-
-        $this->updateProgress(
-            $importTask,
-            KompenResponHubImportTask::STATUS_COMPLETED,
-            100,
-            "Selesai: versi file siap diaktifkan untuk periode {$result['periode_semester']}.",
-            [
-                'kompen_respon_hub_import_id' => $result['import_id'],
-                'completed_at' => now(),
-            ],
-        );
     }
 
     public function failed(?Throwable $exception): void
@@ -135,7 +135,7 @@ class ProcessKompenResponHubImport implements ShouldQueue
 
         $this->markAsFailed(
             $importTask,
-            'Proses impor berhenti karena terjadi kendala pada server. Silakan unggah kembali atau hubungi administrator.',
+            'Proses impor berhenti karena terjadi kendala pada server.',
             app(RecordKompenResponHubActivity::class),
         );
     }
@@ -178,18 +178,19 @@ class ProcessKompenResponHubImport implements ShouldQueue
             return;
         }
 
+        $sourceWorkbookRemoved = $this->deleteSourceWorkbook($importTask->stored_path);
+        $failureMessage = $this->failureMessage($message);
+
         $this->updateProgress(
             $importTask,
             KompenResponHubImportTask::STATUS_FAILED,
             100,
-            'Impor gagal. Periksa keterangan di bawah.',
+            'Impor gagal. Perbaiki file lalu unggah ulang.',
             [
-                'error_message' => $message,
+                'error_message' => $failureMessage,
                 'failed_at' => now(),
             ],
         );
-
-        Storage::disk('local')->delete($importTask->stored_path);
 
         $activity->execute(
             'import.failed',
@@ -197,9 +198,30 @@ class ProcessKompenResponHubImport implements ShouldQueue
             (string) $importTask->id,
             KompenResponHubAdmin::query()->find($importTask->uploaded_by_admin_id),
             period: null,
-            reason: $message,
-            metadata: ['original_filename' => $importTask->original_filename],
+            reason: $failureMessage,
+            metadata: [
+                'original_filename' => $importTask->original_filename,
+                'source_workbook_removed' => $sourceWorkbookRemoved,
+            ],
             subjectName: $importTask->original_filename,
         );
+    }
+
+    private function failureMessage(string $message): string
+    {
+        return "{$message} File unggahan dibersihkan demi konsistensi data. Perbaiki workbook lalu unggah ulang.";
+    }
+
+    private function deleteSourceWorkbook(string $storedPath): bool
+    {
+        if (! str_starts_with($storedPath, 'kompen-respon-hub/imports/')) {
+            return false;
+        }
+
+        try {
+            return Storage::disk('local')->delete($storedPath);
+        } catch (Throwable) {
+            return false;
+        }
     }
 }

@@ -21,7 +21,7 @@ flowchart LR
     C --> S
 ```
 
-Dalam deployment gateway, Si-Admin membuat sesi akses Sikompen melalui request HMAC internal. Dalam mode standalone, admin memakai guard session Laravel. Detail kontrak proxy tetap berada di [si-admin-proxy-contract.md](si-admin-proxy-contract.md).
+Admin dan mahasiswa menggunakan guard session Laravel yang terpisah. Modul API dapat dikembangkan di aplikasi ini tanpa membagikan cookie atau kunci aplikasi kepada sistem lain.
 
 ## Data aktif dan versi workbook
 

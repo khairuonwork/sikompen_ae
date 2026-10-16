@@ -8,12 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * @property int $id
  * @property int|null $uploaded_by_admin_id
  * @property string|null $uploader_name
- * @property string|null $uploader_email
+ * @property string|null $uploader_username
  * @property string $periode_semester
  * @property string $original_filename
  * @property string $display_filename
@@ -27,18 +28,21 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property CarbonInterface $imported_at
  * @property CarbonInterface|null $created_at
  * @property CarbonInterface|null $updated_at
+ * @property CarbonInterface|null $deleted_at
  * @property-read Collection<int, KompenResponHubStudent> $students
  * @property-read KompenResponHubAdmin|null $uploadedByAdmin
  * @property-read KompenResponHubActiveImport|null $activeReference
  */
 class KompenResponHubImport extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'sikompen_imports';
 
     protected $fillable = [
         'uploaded_by_admin_id',
         'uploader_name',
-        'uploader_email',
+        'uploader_username',
         'periode_semester',
         'original_filename',
         'display_filename',

@@ -16,7 +16,7 @@ class KompenResponHubTableRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge(
-            collect(['nim', 'nama', 'search', 'kelas', 'periode_semester', 'warning_period', 'list_period', 'import_month', 'import_year', 'mata_kuliah', 'nama_dosen', 'tab', 'activity_event', 'activity_actor'])
+            collect(['nim', 'nama', 'search', 'kelas', 'periode_semester', 'warning_period', 'list_period', 'import_month', 'import_year', 'import_type', 'mata_kuliah', 'nama_dosen', 'tab', 'activity_event', 'activity_actor'])
                 ->mapWithKeys(fn (string $key): array => [
                     $key => is_string($this->query($key))
                         ? trim((string) $this->query($key))
@@ -41,11 +41,17 @@ class KompenResponHubTableRequest extends FormRequest
             'list_period' => ['nullable', 'string', 'max:50'],
             'import_month' => ['nullable', 'string', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
             'import_year' => ['nullable', 'integer', 'between:2000,2100'],
+            'import_type' => ['nullable', 'in:kompen_respon,active_students'],
             'mata_kuliah' => ['nullable', 'string', 'max:100', new SafeSearchTerm],
             'nama_dosen' => ['nullable', 'string', 'max:100', new SafeSearchTerm],
             'activity_event' => ['nullable', 'string', 'max:80'],
-            'activity_actor' => ['nullable', 'email:rfc,dns', 'max:255'],
+            'activity_actor' => ['nullable', 'string', 'regex:/^[a-z0-9][a-z0-9._@-]{2,63}$/', 'max:64'],
             'per_page' => ['nullable', 'integer', 'between:1,100'],
+            'active_import_page' => ['nullable', 'integer', 'min:1'],
+            'active_student_import_page' => ['nullable', 'integer', 'min:1'],
+            'active_student_import_reference_page' => ['nullable', 'integer', 'min:1'],
+            'recycled_import_page' => ['nullable', 'integer', 'min:1'],
+            'recycled_active_student_import_page' => ['nullable', 'integer', 'min:1'],
         ];
     }
 

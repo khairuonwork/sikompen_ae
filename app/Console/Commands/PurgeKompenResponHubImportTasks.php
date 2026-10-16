@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubImportTask;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -16,6 +17,32 @@ class PurgeKompenResponHubImportTasks extends Command
     {
         $retentionDays = max(1, (int) config('kompen-respon-hub.retention.import_task_days', 30));
         $threshold = now()->subDays($retentionDays);
+        $deletedWorkbookTaskCount = $this->purgeWorkbookTasks($threshold);
+        $deletedRosterTaskCount = $this->purgeRosterTasks($threshold);
+        $deletedCount = $deletedWorkbookTaskCount + $deletedRosterTaskCount;
+
+        if ($deletedCount > 0) {
+            $activity->execute(
+                'maintenance.import_tasks_purged',
+                'import_task',
+                null,
+                null,
+                reason: "Retensi {$retentionDays} hari diterapkan pada task impor terminal.",
+                metadata: [
+                    'deleted_workbook_task_count' => $deletedWorkbookTaskCount,
+                    'deleted_roster_task_count' => $deletedRosterTaskCount,
+                    'retention_days' => $retentionDays,
+                ],
+            );
+        }
+
+        $this->components->info("{$deletedWorkbookTaskCount} task workbook dan {$deletedRosterTaskCount} task roster terminal dihapus.");
+
+        return self::SUCCESS;
+    }
+
+    private function purgeWorkbookTasks(\DateTimeInterface $threshold): int
+    {
         $deletedCount = 0;
 
         KompenResponHubImportTask::query()
@@ -39,19 +66,34 @@ class PurgeKompenResponHubImportTasks extends Command
                 }
             });
 
-        if ($deletedCount > 0) {
-            $activity->execute(
-                'maintenance.import_tasks_purged',
-                'import_task',
-                null,
-                null,
-                reason: "Retensi {$retentionDays} hari diterapkan pada task impor terminal.",
-                metadata: ['deleted_count' => $deletedCount, 'retention_days' => $retentionDays],
-            );
-        }
+        return $deletedCount;
+    }
 
-        $this->components->info("{$deletedCount} task impor terminal dihapus.");
+    private function purgeRosterTasks(\DateTimeInterface $threshold): int
+    {
+        $deletedCount = 0;
 
-        return self::SUCCESS;
+        KompenResponHubActiveStudentImportTask::query()
+            ->where(function ($query) use ($threshold): void {
+                $query
+                    ->where(function ($completedQuery) use ($threshold): void {
+                        $completedQuery
+                            ->where('status', KompenResponHubActiveStudentImportTask::StatusCompleted)
+                            ->where('completed_at', '<=', $threshold);
+                    })
+                    ->orWhere(function ($failedQuery) use ($threshold): void {
+                        $failedQuery
+                            ->where('status', KompenResponHubActiveStudentImportTask::StatusFailed)
+                            ->where('failed_at', '<=', $threshold);
+                    });
+            })
+            ->chunkById(200, function ($tasks) use (&$deletedCount): void {
+                foreach ($tasks as $task) {
+                    $task->delete();
+                    $deletedCount++;
+                }
+            });
+
+        return $deletedCount;
     }
 }

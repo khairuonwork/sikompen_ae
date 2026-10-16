@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\KompenResponHubAdmin;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
@@ -14,17 +15,22 @@ class StoreKompenResponHubAdminSetupRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['username' => Str::lower(trim($this->string('username')->toString()))]);
+    }
+
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {
         return [
-            'email' => [
+            'username' => [
                 'bail',
                 'required',
                 'string',
-                'email:rfc',
-                'max:255',
-                Rule::unique(KompenResponHubAdmin::class, 'email'),
+                'regex:/^[a-z0-9][a-z0-9._@-]{2,63}$/',
+                'max:64',
+                Rule::unique(KompenResponHubAdmin::class, 'username'),
             ],
             'password' => [
                 'bail',

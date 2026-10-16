@@ -10,7 +10,6 @@ import {
 import { useState } from 'react';
 import { store } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
 import { Button } from '@/components/ui/button';
-import { sikompenForm, sikompenUrl } from '@/lib/sikompen-url';
 import {
     Card,
     CardContent,
@@ -73,31 +72,31 @@ export default function AdminSetup({
                     </CardHeader>
 
                     {setupOpen ? (
-                        <Form {...sikompenForm(store.form())} resetOnError>
+                        <Form {...store.form()} resetOnError>
                             {({ errors, processing }) => (
                                 <>
                                     <CardContent className="grid gap-4.5 pt-6">
-                                        {/* Field Email */}
+                                        {/* Field Username */}
                                         <div className="grid gap-2">
                                             <Label
-                                                htmlFor="email"
+                                                htmlFor="username"
                                                 className="text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase"
                                             >
-                                                Email Admin
+                                                Username Admin
                                             </Label>
                                             <Input
-                                                id="email"
-                                                name="email"
-                                                type="email"
-                                                autoComplete="email"
+                                                id="username"
+                                                name="username"
+                                                type="text"
+                                                autoComplete="username"
                                                 autoFocus
                                                 required
                                                 className="rounded-2xl border-[#8AAEE0]/70 bg-white/90 py-2.5 text-sm text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886]"
-                                                placeholder="admin@email.com"
+                                                placeholder="admin-sikompen"
                                             />
-                                            {errors.email && (
+                                            {errors.username && (
                                                 <p className="mt-0.5 text-xs font-bold text-rose-600">
-                                                    {errors.email}
+                                                    {errors.username}
                                                 </p>
                                             )}
                                         </div>
@@ -233,7 +232,7 @@ export default function AdminSetup({
                                                 : 'Buat akun admin'}
                                         </Button>
                                         <Link
-                                            href={sikompenUrl(home.url())}
+                                            href={home.url()}
                                             className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[#395886]/70 transition-all duration-200 hover:-translate-x-1 hover:text-[#395886]"
                                         >
                                             <ArrowLeft className="size-3.5" />
@@ -251,7 +250,7 @@ export default function AdminSetup({
                                 className="w-full rounded-2xl border-[#8AAEE0] bg-white/80 py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#395886] hover:bg-[#395886] hover:text-white active:scale-95"
                             >
                                 <Link
-                                    href={sikompenUrl(home.url())}
+                                    href={home.url()}
                                     className="flex items-center justify-center gap-2"
                                 >
                                     <ArrowLeft className="size-4" />

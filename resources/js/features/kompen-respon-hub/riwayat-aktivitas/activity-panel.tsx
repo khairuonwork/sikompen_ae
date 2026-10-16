@@ -23,6 +23,9 @@ export function activityLabel(eventType: string): string {
         "import.version_activated": "Versi file diaktifkan",
         "import.renamed": "Nama file diperbarui",
         "import.deleted": "Versi file dihapus",
+        "active_students.imported": "Daftar mahasiswa aktif diperbarui",
+        "active_students.activated": "Sumber mahasiswa aktif dipilih",
+        "active_students.import_failed": "Impor mahasiswa aktif gagal",
         "progress.updated": "Progres diperbarui",
         "summary.override_updated": "Koreksi total jam",
         "detail.override_updated": "Koreksi detail",
@@ -43,6 +46,8 @@ export function activityLabel(eventType: string): string {
         "export.timed_out": "Ekspor dihentikan karena waktu habis",
         "maintenance.activity_log_retention_updated":
             "Retensi riwayat diperbarui",
+        "maintenance.import_audit_log_retention_updated":
+            "Retensi Log Upload diperbarui",
     };
 
     return descriptions[eventType] ?? "Aktivitas sistem";
@@ -59,7 +64,7 @@ export function ActivityFilterPanel({
 }: {
     filters: Filters;
     filterOptions: FilterOptions;
-    activityFilterOptions: { event_types: string[]; actor_emails: string[] };
+    activityFilterOptions: { event_types: string[]; actor_usernames: string[] };
 }): React.JSX.Element {
     const [selectedPeriod, setSelectedPeriod] = useState(
         filters.periode_semester ?? "",
@@ -194,13 +199,13 @@ export function ActivityFilterPanel({
                         >
                             Semua admin
                         </SelectItem>
-                        {activityFilterOptions.actor_emails.map((email) => (
+                        {activityFilterOptions.actor_usernames.map((username) => (
                             <SelectItem
-                                key={email}
-                                value={email}
+                                key={username}
+                                value={username}
                                 className="cursor-pointer hover:bg-[#B1C9EF]/20"
                             >
-                                {email}
+                                {username}
                             </SelectItem>
                         ))}
                     </SelectContent>
@@ -234,43 +239,48 @@ export function ActivityLogTable({
 }): React.JSX.Element {
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-sm">
-            <div className="overflow-x-auto">
-                <table className="w-full min-w-[750px] text-sm">
+            <div className="data-table-scroll">
+                <table className="data-table min-w-[1120px]">
+                    <colgroup>
+                        {["14rem", "16rem", "22rem", "12rem", "20rem"].map((width, index) => (
+                            <col key={`${width}-${index}`} style={{ width }} />
+                        ))}
+                    </colgroup>
                     <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
-                            <th className="px-4 py-3">Waktu</th>
-                            <th className="px-4 py-3">Aktivitas</th>
-                            <th className="px-4 py-3">Subjek</th>
-                            <th className="px-4 py-3">Aktor</th>
-                            <th className="px-4 py-3">Alasan</th>
+                            <th className="px-5 py-4">Waktu</th>
+                            <th className="px-5 py-4">Aktivitas</th>
+                            <th className="px-5 py-4">Subjek</th>
+                            <th className="px-5 py-4">Aktor</th>
+                            <th className="px-5 py-4">Alasan</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F0F3FA]">
                         {data.data.map((log) => (
                             <tr key={log.id}>
-                                <td className="px-4 py-3 text-xs">
+                                <td className="px-5 py-4 text-xs whitespace-nowrap">
                                     {new Date(log.occurred_at).toLocaleString(
                                         "id-ID",
                                         { timeZone: "Asia/Jakarta" },
                                     )}
                                 </td>
-                                <td className="px-4 py-3 text-xs font-semibold text-[#395886]">
+                                <td className="px-5 py-4 text-xs font-semibold text-[#395886]">
                                     {activityDescription(log)}
                                 </td>
-                                <td className="px-4 py-3 text-xs">
-                                    <p className="font-semibold text-[#395886]">
+                                <td className="px-5 py-4 text-xs">
+                                    <p className="break-words font-semibold text-[#395886]">
                                         {log.subject_label}
                                     </p>
                                     {log.subject_context ? (
-                                        <p className="text-[11px] text-[#628ECB]">
+                                        <p className="break-words text-[11px] text-[#628ECB]">
                                             {log.subject_context}
                                         </p>
                                     ) : null}
                                 </td>
-                                <td className="px-4 py-3 text-xs">
+                                <td className="px-5 py-4 text-xs">
                                     {log.actor_name ?? "Sistem"}
                                 </td>
-                                <td className="max-w-xs px-4 py-3 text-xs text-[#395886]/70">
+                                <td className="px-5 py-4 text-xs text-[#395886]/70">
                                     {log.reason ?? "—"}
                                 </td>
                             </tr>

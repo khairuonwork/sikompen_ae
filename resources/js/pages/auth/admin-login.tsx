@@ -3,7 +3,6 @@ import { Eye, EyeOff, LockKeyhole, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { store } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
 import { Button } from '@/components/ui/button';
-import { sikompenForm, sikompenUrl } from '@/lib/sikompen-url';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
     Card,
@@ -15,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { home } from '@/routes';
+import { createRequest as passwordResetRequest } from '@/actions/App/Http/Controllers/AdminPasswordResetController';
 
 type AdminLoginProps = {
     flash: {
@@ -55,7 +55,7 @@ export default function AdminLogin({
                         </div>
                     </CardHeader>
 
-                    <Form {...sikompenForm(store.form())} resetOnError>
+                    <Form {...store.form()} resetOnError>
                         {({ errors, processing }) => (
                             <>
                                 <CardContent className="grid gap-5 pt-6">
@@ -71,27 +71,26 @@ export default function AdminLogin({
                                         </Alert>
                                     )}
 
-                                    {/* Email Field */}
+                                    {/* Username Field */}
                                     <div className="grid gap-2">
                                         <Label
-                                            htmlFor="email"
+                                            htmlFor="username"
                                             className="text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase"
                                         >
-                                            Email Address
+                                            Username
                                         </Label>
                                         <Input
-                                            id="email"
-                                            name="email"
-                                            type="email"
-                                            autoComplete="email"
+                                            id="username"
+                                            name="username"
+                                            type="text"
+                                            autoComplete="username"
                                             required
                                             autoFocus
                                             className="rounded-2xl border-[#8AAEE0]/70 bg-white/90 py-2.5 text-sm text-[#395886] shadow-2xs transition-all duration-300 placeholder:text-[#395886]/40 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#395886]"
-                                            placeholder="nama@email.com"
                                         />
-                                        {errors.email && (
+                                        {errors.username && (
                                             <p className="mt-0.5 text-xs font-bold text-rose-600">
-                                                {errors.email}
+                                                {errors.username}
                                             </p>
                                         )}
                                     </div>
@@ -156,7 +155,13 @@ export default function AdminLogin({
                                     </Button>
 
                                     <Link
-                                        href={sikompenUrl(home.url())}
+                                        href={passwordResetRequest.url()}
+                                        className="text-xs font-bold text-[#395886] underline"
+                                    >
+                                        Lupa password?
+                                    </Link>
+                                    <Link
+                                        href={home.url()}
                                         className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[#395886]/70 transition-all duration-200 hover:-translate-x-1 hover:text-[#395886]"
                                     >
                                         <ArrowLeft className="size-3.5" />

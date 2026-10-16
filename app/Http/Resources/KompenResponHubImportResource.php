@@ -19,7 +19,7 @@ class KompenResponHubImportResource extends JsonResource
         return [
             'id' => $this->id,
             'uploader_name' => $this->uploader_name,
-            'uploader_email' => $this->uploader_email,
+            'uploader_username' => $this->uploader_username,
             'periode_semester' => $this->periode_semester,
             'original_filename' => $this->original_filename,
             'class_count' => $this->class_count,

@@ -12,11 +12,25 @@ Schedule::command('sikompen:purge-exports')
     ->hourly()
     ->withoutOverlapping();
 
+Schedule::command('sikompen:purge-api-sync-artifacts')
+    ->hourly()
+    ->withoutOverlapping();
+
 Schedule::command('sikompen:purge-import-tasks')
     ->daily()
     ->withoutOverlapping();
 
 Schedule::command('sikompen:purge-activity-logs')
+    ->dailyAt('02:15')
+    ->timezone('Asia/Jakarta')
+    ->withoutOverlapping(30);
+
+Schedule::command('sikompen:purge-import-audit-logs')
+    ->dailyAt('02:30')
+    ->timezone('Asia/Jakarta')
+    ->withoutOverlapping(30);
+
+Schedule::command('sikompen:purge-recycled-workbooks')
     ->daily()
     ->withoutOverlapping();
 

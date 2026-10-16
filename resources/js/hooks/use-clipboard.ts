@@ -5,23 +5,51 @@ export type CopiedValue = string | null;
 export type CopyFn = (text: string) => Promise<boolean>;
 export type UseClipboardReturn = [CopiedValue, CopyFn];
 
+function copyWithDocument(text: string): boolean {
+    if (typeof document === 'undefined') {
+        return false;
+    }
+
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.setAttribute('aria-hidden', 'true');
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+
+    try {
+        document.body.appendChild(textArea);
+        textArea.select();
+
+        return document.execCommand('copy');
+    } finally {
+        textArea.remove();
+    }
+}
+
 export function useClipboard(): UseClipboardReturn {
     const [copiedText, setCopiedText] = useState<CopiedValue>(null);
 
     const copy: CopyFn = async (text) => {
-        if (!navigator?.clipboard) {
-            console.warn('Clipboard not supported');
+        try {
+            if (typeof navigator !== 'undefined' && navigator.clipboard !== undefined) {
+                await navigator.clipboard.writeText(text);
+                setCopiedText(text);
 
-            return false;
+                return true;
+            }
+        } catch (error) {
+            console.warn('Clipboard API copy failed', error);
         }
 
         try {
-            await navigator.clipboard.writeText(text);
-            setCopiedText(text);
+            const didCopy = copyWithDocument(text);
 
-            return true;
+            setCopiedText(didCopy ? text : null);
+
+            return didCopy;
         } catch (error) {
-            console.warn('Copy failed', error);
+            console.warn('Document copy failed', error);
             setCopiedText(null);
 
             return false;

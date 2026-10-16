@@ -42,6 +42,7 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn (): ?string => $request->session()->get('success'),
                 'error' => fn (): ?string => $request->session()->get('error'),
                 'adminSetupCode' => fn (): ?string => $request->session()->get('admin_setup_code'),
+                'adminResetCode' => fn (): ?string => $request->session()->get('admin_reset_code'),
             ],
         ];
     }

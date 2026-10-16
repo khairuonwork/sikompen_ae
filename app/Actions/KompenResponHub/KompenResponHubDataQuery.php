@@ -2,6 +2,8 @@
 
 namespace App\Actions\KompenResponHub;
 
+use App\Models\KompenResponHubActiveStudentImport;
+use App\Models\KompenResponHubActiveStudentImportReference;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImport;
@@ -26,12 +28,16 @@ class KompenResponHubDataQuery
     public function importAuditLogs(array $filters = []): Builder
     {
         $query = KompenResponHubImportAuditLog::query()
-            ->with('sourceImport.activeReference')
+            ->with(['sourceImport.activeReference', 'sourceActiveStudentImport'])
             ->orderByDesc('occurred_at')
             ->orderByDesc('id');
 
         if (filled($filters['periode_semester'] ?? null)) {
             $query->where('periode_semester', $filters['periode_semester']);
+        }
+
+        if (filled($filters['import_type'] ?? null)) {
+            $query->where('import_type', $filters['import_type']);
         }
 
         if (filled($filters['import_month'] ?? null)) {
@@ -66,6 +72,7 @@ class KompenResponHubDataQuery
     {
         return array_values(KompenResponHubImportAuditLog::query()
             ->select('periode_semester')
+            ->whereNotNull('periode_semester')
             ->selectRaw('MAX(occurred_at) as latest_occurred_at')
             ->groupBy('periode_semester')
             ->orderByDesc('latest_occurred_at')
@@ -100,8 +107,8 @@ class KompenResponHubDataQuery
     {
         $query = KompenResponHubImport::query()
             ->with([
-                'activeReference.activatedByAdmin:id,email',
-                'uploadedByAdmin:id,email',
+                'activeReference.activatedByAdmin:id,username',
+                'uploadedByAdmin:id,username',
             ])
             ->orderByDesc('imported_at')
             ->orderByDesc('id');
@@ -114,12 +121,52 @@ class KompenResponHubDataQuery
     }
 
     /** @return Builder<KompenResponHubImport> */
+    public function recycledImportVersions(): Builder
+    {
+        return KompenResponHubImport::onlyTrashed()
+            ->with(['uploadedByAdmin:id,username'])
+            ->orderByDesc('deleted_at')
+            ->orderByDesc('id');
+    }
+
+    /** @return Builder<KompenResponHubImport> */
     public function activeImportVersions(): Builder
     {
         return $this->importVersions()
             ->has('activeReference')
             ->reorder()
-            ->orderByDesc('periode_semester');
+            ->orderByDesc('periode_semester')
+            ->orderByDesc('id');
+    }
+
+    /** @return Builder<KompenResponHubActiveStudentImport> */
+    public function activeStudentImportVersions(): Builder
+    {
+        return KompenResponHubActiveStudentImport::query()
+            ->with([
+                'uploadedByAdmin:id,username',
+                'activeReference:id,periode_semester,sikompen_active_student_import_id,activated_at',
+            ])
+            ->orderByDesc('imported_at')
+            ->orderByDesc('id');
+    }
+
+    /** @return Builder<KompenResponHubActiveStudentImport> */
+    public function recycledActiveStudentImportVersions(): Builder
+    {
+        return KompenResponHubActiveStudentImport::onlyTrashed()
+            ->with(['uploadedByAdmin:id,username'])
+            ->orderByDesc('deleted_at')
+            ->orderByDesc('id');
+    }
+
+    /** @return Builder<KompenResponHubActiveStudentImportReference> */
+    public function activeStudentImportReferences(): Builder
+    {
+        return KompenResponHubActiveStudentImportReference::query()
+            ->with(['importBatch:id,original_filename,periode_semester,student_count,imported_at'])
+            ->orderByDesc('periode_semester')
+            ->orderByDesc('id');
     }
 
     /**
@@ -216,7 +263,7 @@ class KompenResponHubDataQuery
      */
     public function activityLogs(array $filters): Builder
     {
-        $query = KompenResponHubActivityLog::query();
+        $query = KompenResponHubActivityLog::query()->administrative();
 
         if (filled($filters['periode_semester'] ?? null)) {
             $query->where('periode_semester', $filters['periode_semester']);
@@ -227,7 +274,7 @@ class KompenResponHubDataQuery
         }
 
         if (filled($filters['activity_actor'] ?? null)) {
-            $query->where('actor_email', $filters['activity_actor']);
+            $query->where('actor_username', $filters['activity_actor']);
         }
 
         return $query->orderByDesc('occurred_at')->orderByDesc('id');
@@ -281,12 +328,14 @@ class KompenResponHubDataQuery
         ];
     }
 
-    /** @return array{event_types: list<string>, actor_emails: list<string>} */
+    /** @return array{event_types: list<string>, actor_usernames: list<string>} */
     public function activityFilterOptions(): array
     {
+        $activityLogs = KompenResponHubActivityLog::query()->administrative();
+
         return [
-            'event_types' => array_values(KompenResponHubActivityLog::query()->distinct()->orderBy('event_type')->pluck('event_type')->map(static fn (mixed $eventType): string => (string) $eventType)->all()),
-            'actor_emails' => array_values(KompenResponHubActivityLog::query()->whereNotNull('actor_email')->distinct()->orderBy('actor_email')->pluck('actor_email')->map(static fn (mixed $email): string => (string) $email)->all()),
+            'event_types' => array_values((clone $activityLogs)->distinct()->orderBy('event_type')->pluck('event_type')->map(static fn (mixed $eventType): string => (string) $eventType)->all()),
+            'actor_usernames' => array_values((clone $activityLogs)->whereNotNull('actor_username')->distinct()->orderBy('actor_username')->pluck('actor_username')->map(static fn (mixed $username): string => (string) $username)->all()),
         ];
     }
 

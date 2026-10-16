@@ -3,7 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
-use App\Actions\SiAdminProxy\SiAdminProxyAccess;
+use App\Actions\KompenResponHub\SikompenAdminAccess;
+use App\Actions\KompenResponHub\SikompenStudentAccess;
 use App\Http\Requests\KompenResponHubExportTaskAccessRequest;
 use App\Http\Requests\StoreKompenResponHubExportRequest;
 use App\Http\Resources\KompenResponHubExportTaskResource;
@@ -19,19 +20,20 @@ class KompenResponHubExportController extends Controller
 {
     public function store(
         StoreKompenResponHubExportRequest $request,
-        SiAdminProxyAccess $access,
+        SikompenAdminAccess $access,
+        SikompenStudentAccess $studentAccess,
         RecordKompenResponHubActivity $activity,
     ): RedirectResponse {
         $actor = $access->hasAdminAccess($request)
             ? $access->actor($request)
             : ['id' => null];
         $validated = $request->validated();
-        abort_if($validated['resource'] === 'warnings' && ! $access->hasAdminAccess($request), 403);
+        abort_if(in_array($validated['resource'], ['warnings', 'import_audits'], true) && ! $access->hasAdminAccess($request), 403);
         $filters = collect($validated)
-            ->only(['nim', 'nama', 'search', 'kelas', 'tingkat', 'periode_semester', 'mata_kuliah', 'nama_dosen'])
+            ->only(['nim', 'nama', 'search', 'kelas', 'tingkat', 'periode_semester', 'mata_kuliah', 'nama_dosen', 'import_type', 'import_month', 'import_year'])
             ->filter(fn (mixed $value): bool => filled($value))
             ->all();
-        $studentNim = $access->studentNim($request);
+        $studentNim = $studentAccess->studentNim($request);
 
         if ($studentNim !== null) {
             $filters['nim'] = $studentNim;
@@ -51,7 +53,8 @@ class KompenResponHubExportController extends Controller
             'expires_at' => now()->addHours(max(1, (int) config('kompen-respon-hub.retention.export_hours', 24))),
         ]);
 
-        GenerateKompenResponHubExport::dispatch($task->id);
+        GenerateKompenResponHubExport::dispatch($task->id)
+            ->onQueue(config('kompen-respon-hub.queue.export'));
 
         $admin = is_int($actor['id'])
             ? KompenResponHubAdmin::query()->find($actor['id'])
@@ -98,7 +101,7 @@ class KompenResponHubExportController extends Controller
     public function destroy(
         KompenResponHubExportTaskAccessRequest $request,
         KompenResponHubExportTask $exportTask,
-        SiAdminProxyAccess $access,
+        SikompenAdminAccess $access,
         RecordKompenResponHubActivity $activity,
     ): RedirectResponse {
         $this->authorizeAccess($request, $exportTask);

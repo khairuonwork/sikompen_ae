@@ -141,3 +141,34 @@
         @apply bg-background text-foreground;
     }
 }
+
+@layer components {
+    .data-table-scroll {
+        @apply w-full overflow-x-auto overscroll-x-contain;
+        scrollbar-color: #8aaee0 transparent;
+        scrollbar-width: thin;
+    }
+
+    .data-table-scroll::-webkit-scrollbar {
+        height: 10px;
+    }
+
+    .data-table-scroll::-webkit-scrollbar-thumb {
+        background: #8aaee0;
+        border: 3px solid transparent;
+        border-radius: 9999px;
+        background-clip: content-box;
+    }
+
+    .data-table {
+        @apply min-w-full w-full table-auto text-sm;
+    }
+
+    .data-table th {
+        @apply whitespace-nowrap;
+    }
+
+    .data-table td {
+        @apply align-middle;
+    }
+}

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\SiAdminProxy\SiAdminProxyAccess;
+use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Http\Requests\StoreKompenResponHubAdminSetupRequest;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubAdminSetupWindow;
@@ -19,7 +19,7 @@ class KompenResponHubAdminSetupController extends Controller
 {
     public function create(): Response
     {
-        $hasRegisteredAdmin = KompenResponHubAdmin::query()->exists();
+        $hasRegisteredAdmin = $this->hasRegisteredStandardAdmin();
         $setupWindow = $this->setupWindow();
 
         return Inertia::render('auth/admin-setup', [
@@ -34,7 +34,7 @@ class KompenResponHubAdminSetupController extends Controller
             $setupWindow = KompenResponHubAdminSetupWindow::query()
                 ->lockForUpdate()
                 ->findOrFail(1);
-            $hasRegisteredAdmin = KompenResponHubAdmin::query()->lockForUpdate()->exists();
+            $hasRegisteredAdmin = $this->hasRegisteredStandardAdmin(lockForUpdate: true);
 
             if (! $this->isRegistrationOpen($hasRegisteredAdmin, $setupWindow)) {
                 abort(403, 'Pendaftaran admin sedang tidak dibuka.');
@@ -47,7 +47,7 @@ class KompenResponHubAdminSetupController extends Controller
             }
 
             KompenResponHubAdmin::query()->create([
-                'email' => Str::lower($request->string('email')->toString()),
+                'username' => Str::lower($request->string('username')->toString()),
                 'password' => $request->string('password')->toString(),
             ]);
 
@@ -61,21 +61,29 @@ class KompenResponHubAdminSetupController extends Controller
         return to_route('login')->with('success', 'Akun admin berhasil dibuat. Silakan masuk.');
     }
 
-    public function settings(): Response
+    public function settings(Request $request): Response
     {
         $setupWindow = $this->setupWindow();
 
         return Inertia::render('admin/settings', [
+            'currentAdmin' => [
+                'username' => (string) $request->user('admin')?->username,
+            ],
             'setupWindow' => [
                 'isOpen' => $setupWindow->isOpen(),
                 'expiresAt' => $setupWindow->isOpen()
                     ? $setupWindow->expires_at?->toIso8601String()
                     : null,
             ],
+            'emergencyAdmins' => KompenResponHubAdmin::query()
+                ->where('is_emergency_admin', true)
+                ->orderBy('username')
+                ->get(['id', 'username'])
+                ->map(fn (KompenResponHubAdmin $admin): array => ['id' => $admin->id, 'username' => $admin->username]),
         ]);
     }
 
-    public function enable(Request $request, SiAdminProxyAccess $access): RedirectResponse
+    public function enable(Request $request, SikompenAdminAccess $access): RedirectResponse
     {
         $activationCode = Str::upper(Str::random(20));
         $actor = $access->actor($request);
@@ -105,6 +113,17 @@ class KompenResponHubAdminSetupController extends Controller
     private function setupWindow(): KompenResponHubAdminSetupWindow
     {
         return KompenResponHubAdminSetupWindow::query()->findOrFail(1);
+    }
+
+    private function hasRegisteredStandardAdmin(bool $lockForUpdate = false): bool
+    {
+        $query = KompenResponHubAdmin::query()->where('is_emergency_admin', false);
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+
+        return $query->exists();
     }
 
     private function isRegistrationOpen(

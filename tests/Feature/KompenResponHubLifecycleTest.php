@@ -3,6 +3,7 @@
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
+use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
@@ -209,6 +210,60 @@ test('the warning page keeps candidates scoped to its selected cutoff period', f
         );
 });
 
+test('student and detail tables use the managed warning period when opened from Surat Peringatan', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $gasalStudent = createLifecycleStudent();
+    $genapStudent = $gasalStudent->replicate();
+    $genapStudent->fill([
+        'nim' => '987654321',
+        'nama_mahasiswa' => 'Dani Pratama',
+        'periode_semester' => '2026/2027 Genap',
+        'kelas' => '2AEA1',
+        'tingkat' => 2,
+    ])->save();
+
+    KompenResponHubDetail::create([
+        'kompen_respon_hub_student_id' => $gasalStudent->id,
+        'tanggal' => '2026-09-01',
+        'mata_kuliah' => 'Algoritma',
+        'nama_dosen' => 'Ibu Sari',
+        'jenis_pertemuan' => 'Luring',
+        'presensi' => 'Terlambat',
+        'menit_keterlambatan' => 15,
+        'jam_kompensasi' => 1,
+        'jam_responsi' => 0,
+    ]);
+    KompenResponHubDetail::create([
+        'kompen_respon_hub_student_id' => $genapStudent->id,
+        'tanggal' => '2026-09-02',
+        'mata_kuliah' => 'Basis Data',
+        'nama_dosen' => 'Pak Budi',
+        'jenis_pertemuan' => 'Luring',
+        'presensi' => 'Terlambat',
+        'menit_keterlambatan' => 15,
+        'jam_kompensasi' => 1,
+        'jam_responsi' => 0,
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=students&warning_period=2026%2F2027%20Gasal')
+        ->assertInertia(fn ($page) => $page
+            ->where('filters.warning_period', '2026/2027 Gasal')
+            ->where('filters.periode_semester', '2026/2027 Gasal')
+            ->has('students.data', 1)
+            ->where('students.data.0.id', $gasalStudent->id),
+        );
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=details&warning_period=2026%2F2027%20Gasal')
+        ->assertInertia(fn ($page) => $page
+            ->where('filters.warning_period', '2026/2027 Gasal')
+            ->where('filters.periode_semester', '2026/2027 Gasal')
+            ->has('details.data', 1)
+            ->where('details.data.0.student_id', $gasalStudent->id),
+        );
+});
+
 test('an admin cannot finalize an SP before the cutoff', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
@@ -297,6 +352,7 @@ test('completed progress resolves an existing warning without deleting its trace
 });
 
 test('students have no status before the cutoff has passed', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
     $cutoff = KompenResponHubPeriodCutoff::create([
         'periode_semester' => $student->periode_semester,
@@ -304,7 +360,7 @@ test('students have no status before the cutoff has passed', function () {
         'timezone' => 'Asia/Jakarta',
     ]);
 
-    $this->getJson('/api/kompen-respon/students')
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/students')
         ->assertOk()
         ->assertJsonPath('data.0.progress_status', 'none');
 });
@@ -471,6 +527,7 @@ test('the warning list exposes only active fixed SP records with outstanding deb
 });
 
 test('an outstanding fixed issued SP is exposed as an active SP student status', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
     $cutoff = KompenResponHubPeriodCutoff::create([
         'periode_semester' => $student->periode_semester,
@@ -491,7 +548,7 @@ test('an outstanding fixed issued SP is exposed as an active SP student status',
         'snapshot' => ['sisa_hutang_jam' => 3.5],
     ]);
 
-    $this->getJson('/api/kompen-respon/students')
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/students')
         ->assertOk()
         ->assertJsonPath('data.0.progress_status', 'warning_active')
         ->assertJsonPath('data.0.has_active_warning', true)

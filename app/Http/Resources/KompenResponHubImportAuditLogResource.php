@@ -16,7 +16,10 @@ class KompenResponHubImportAuditLogResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $isActiveStudentImport = $this->import_type === KompenResponHubImportAuditLog::ImportTypeActiveStudents;
         $versionStatus = match (true) {
+            $isActiveStudentImport && $this->sourceActiveStudentImport !== null => 'stored',
+            $isActiveStudentImport => 'unavailable',
             $this->sourceImport === null => 'unavailable',
             $this->sourceImport->activeReference !== null => 'active',
             default => 'stored',
@@ -25,14 +28,17 @@ class KompenResponHubImportAuditLogResource extends JsonResource
         return [
             'id' => $this->id,
             'event_type' => $this->event_type,
+            'import_type' => $this->import_type,
             'source_import_id' => $this->source_import_id,
-            'can_download_file' => $this->relationLoaded('sourceImport')
-                && $this->sourceImport !== null,
+            'source_active_student_import_id' => $this->source_active_student_import_id,
+            'can_download_file' => $isActiveStudentImport
+                ? $this->relationLoaded('sourceActiveStudentImport') && $this->sourceActiveStudentImport !== null
+                : $this->relationLoaded('sourceImport') && $this->sourceImport !== null,
             'version_status' => $versionStatus,
             'version_activated_at' => $this->sourceImport?->activeReference?->activated_at?->toIso8601String(),
             'version_imported_at' => $this->sourceImport?->imported_at?->toIso8601String(),
             'actor_name' => $this->actor_name,
-            'actor_email' => $this->actor_email,
+            'actor_username' => $this->actor_username,
             'periode_semester' => $this->periode_semester,
             'original_filename' => $this->original_filename,
             'class_count' => $this->class_count,

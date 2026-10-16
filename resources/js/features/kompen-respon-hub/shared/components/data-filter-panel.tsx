@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { index as adminIndex } from "@/routes/admin/kompen-respon";
 import { index as studentIndex } from "@/routes/student/kompen-respon";
+import { ClassSelectContent } from "./class-select-content";
 import type { FilterOptions, Filters } from "../types";
 
 export function FilterPanel({
@@ -85,10 +86,10 @@ export function FilterPanel({
                 <SelectTrigger className="w-full rounded-2xl border-[#8AAEE0] bg-white py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
                     <SelectValue placeholder="Semua kelas" />
                 </SelectTrigger>
-                <SelectContent className="rounded-2xl text-xs font-semibold">
+                <ClassSelectContent>
                     <SelectItem
                         value="all"
-                        className="cursor-pointer hover:bg-[#B1C9EF]/20"
+                        className="col-span-full cursor-pointer hover:bg-[#B1C9EF]/20"
                     >
                         Semua kelas
                     </SelectItem>
@@ -101,7 +102,7 @@ export function FilterPanel({
                             {option}
                         </SelectItem>
                     ))}
-                </SelectContent>
+                </ClassSelectContent>
             </Select>
 
             {/* Select Periode */}

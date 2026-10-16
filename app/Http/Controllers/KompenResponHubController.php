@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\KompenResponHub\BuildKompenResponHubDataConsistencyReport;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
-use App\Actions\SiAdminProxy\SiAdminProxyAccess;
+use App\Actions\KompenResponHub\SikompenStudentAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
 use App\Http\Requests\SearchKompenResponHubStudentRequest;
+use App\Http\Resources\KompenResponHubActiveStudentImportReferenceResource;
+use App\Http\Resources\KompenResponHubActiveStudentImportResource;
+use App\Http\Resources\KompenResponHubActiveStudentImportTaskResource;
 use App\Http\Resources\KompenResponHubActivityLogResource;
 use App\Http\Resources\KompenResponHubDetailResource;
 use App\Http\Resources\KompenResponHubExportTaskResource;
@@ -15,13 +19,16 @@ use App\Http\Resources\KompenResponHubImportVersionResource;
 use App\Http\Resources\KompenResponHubStudentResource;
 use App\Http\Resources\KompenResponHubStudentSearchResource;
 use App\Http\Resources\KompenResponHubWarningLetterResource;
+use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubExportTask;
+use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
+use App\Models\KompenResponHubStudentAccount;
 use App\Models\KompenResponHubSystemSetting;
 use App\Models\KompenResponHubWarningLetter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -34,17 +41,18 @@ class KompenResponHubController extends Controller
 {
     public function __construct(
         private KompenResponHubDataQuery $dataQuery,
-        private SiAdminProxyAccess $proxyAccess,
+        private SikompenStudentAccess $studentAccess,
+        private BuildKompenResponHubDataConsistencyReport $dataConsistencyReport,
     ) {}
 
     public function studentIndex(KompenResponHubTableRequest $request): Response
     {
-        return $this->index($request, false);
+        return $this->index($request, false, true);
     }
 
     public function adminIndex(KompenResponHubTableRequest $request): Response
     {
-        return $this->index($request, true);
+        return $this->index($request, true, false);
     }
 
     public function students(KompenResponHubTableRequest $request): JsonResponse
@@ -67,7 +75,7 @@ class KompenResponHubController extends Controller
 
     public function student(KompenResponHubStudent $student): JsonResponse
     {
-        $studentNim = $this->proxyAccess->studentNim(request());
+        $studentNim = $this->studentAccess->studentNim(request());
         abort_if($studentNim !== null && $student->nim !== $studentNim, 404);
 
         $student->load([
@@ -104,6 +112,7 @@ class KompenResponHubController extends Controller
         ], true)->get();
 
         $activities = KompenResponHubActivityLog::query()
+            ->whereIn('actor_type', ['admin', 'system'])
             ->where('nim', $student->nim)
             ->where('periode_semester', $student->periode_semester)
             ->where('kelas', $student->kelas)
@@ -143,14 +152,18 @@ class KompenResponHubController extends Controller
         return response()->json($this->dataQuery->filterOptions($this->filtersForRequest($request)));
     }
 
-    private function index(KompenResponHubTableRequest $request, bool $isAdmin): Response
-    {
-        $filters = $this->filtersForRequest($request);
-        $filterOptions = $this->dataQuery->filterOptions();
+    private function index(
+        KompenResponHubTableRequest $request,
+        bool $isAdmin,
+        bool $scopeToAuthenticatedStudent,
+    ): Response {
+        $filters = $this->filtersForRequest($request, $scopeToAuthenticatedStudent);
         $activeTab = $filters['tab'] ?? 'students';
         if (! $isAdmin && in_array($activeTab, ['upload', 'files', 'imports', 'warnings', 'activity'], true)) {
             $activeTab = 'students';
         }
+
+        $filterOptions = $this->dataQuery->filterOptions($filters);
 
         $cutoffs = $isAdmin
             ? KompenResponHubPeriodCutoff::query()
@@ -166,10 +179,22 @@ class KompenResponHubController extends Controller
             );
         }
 
+        if (
+            $isAdmin
+            && in_array($activeTab, ['students', 'details'], true)
+            && filled($filters['warning_period'] ?? null)
+            && in_array($filters['warning_period'], $filterOptions['periode_semester'], true)
+        ) {
+            $filters['periode_semester'] = $filters['warning_period'];
+            unset($filters['list_period']);
+        }
+
         return Inertia::render('kompen-respon-hub/index', [
             'activeTab' => $activeTab,
             'isAdmin' => $isAdmin,
-            'isProxySession' => $this->proxyAccess->hasValidProxySession($request),
+            'hasStudentSession' => ! $isAdmin
+                && $request->user('student') instanceof KompenResponHubStudentAccount
+                && ! $request->user('student')->requiresPasswordChange(),
             'filters' => $filters,
             'filterOptions' => $filterOptions,
             'warningPeriods' => $isAdmin && $activeTab === 'warnings'
@@ -183,7 +208,7 @@ class KompenResponHubController extends Controller
                 : [],
             'activityFilterOptions' => $isAdmin && $activeTab === 'activity'
                 ? $this->dataQuery->activityFilterOptions()
-                : ['event_types' => [], 'actor_emails' => []],
+                : ['event_types' => [], 'actor_usernames' => []],
             'cutoffs' => $isAdmin
                 ? $cutoffs->map(fn (KompenResponHubPeriodCutoff $cutoff): array => [
                     'id' => $cutoff->id,
@@ -204,16 +229,7 @@ class KompenResponHubController extends Controller
                     ->exists()
                 : false,
             'activeImportTasks' => $isAdmin
-                ? KompenResponHubImportTaskResource::collection(
-                    KompenResponHubImportTask::query()
-                        ->whereIn('status', [
-                            KompenResponHubImportTask::STATUS_QUEUED,
-                            KompenResponHubImportTask::STATUS_PROCESSING,
-                        ])
-                        ->latest('id')
-                        ->limit(3)
-                        ->get(),
-                )->resolve()
+                ? $this->activeImportTasks()
                 : [],
             'exportTasks' => KompenResponHubExportTaskResource::collection(
                 KompenResponHubExportTask::query()
@@ -230,6 +246,12 @@ class KompenResponHubController extends Controller
             'exportStalledAfterMinutes' => max(15, (int) config('kompen-respon-hub.queue.stalled_task_minutes', 15)),
             'activityRetentionDays' => $isAdmin
                 ? KompenResponHubSystemSetting::current()->activity_log_retention_days
+                : null,
+            'importAuditRetentionDays' => $isAdmin
+                ? KompenResponHubSystemSetting::current()->import_audit_log_retention_days
+                : null,
+            'workbookRecycleBinRetentionDays' => $isAdmin
+                ? KompenResponHubSystemSetting::current()->workbook_recycle_bin_retention_days
                 : null,
             'students' => $activeTab === 'students'
                 ? $this->resourcePaginator(
@@ -260,9 +282,22 @@ class KompenResponHubController extends Controller
                 )
                 : null,
             'activeImportVersions' => $isAdmin && $activeTab === 'files'
-                ? KompenResponHubImportVersionResource::collection(
-                    $this->dataQuery->activeImportVersions()->get(),
-                )->resolve()
+                ? $this->activeImportVersionPaginator($filters)
+                : null,
+            'activeStudentImportVersions' => $isAdmin && $activeTab === 'files'
+                ? $this->activeStudentImportVersionPaginator($filters)
+                : null,
+            'activeStudentImportReferences' => $isAdmin && $activeTab === 'files'
+                ? $this->activeStudentImportReferencePaginator($filters)
+                : null,
+            'recycledImportVersions' => $isAdmin && $activeTab === 'files'
+                ? $this->recycledImportVersionPaginator($filters)
+                : null,
+            'recycledActiveStudentImportVersions' => $isAdmin && $activeTab === 'files'
+                ? $this->recycledActiveStudentImportVersionPaginator($filters)
+                : null,
+            'dataConsistencyReport' => $isAdmin && $activeTab === 'files'
+                ? $this->dataConsistencyReport->execute()
                 : [],
             'warnings' => $isAdmin && $activeTab === 'warnings'
                 ? $this->resourcePaginator(
@@ -301,6 +336,151 @@ class KompenResponHubController extends Controller
         return (int) ($filters['per_page'] ?? 15);
     }
 
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function activeStudentImportVersionPaginator(array $filters): array
+    {
+        $pageName = 'active_student_import_page';
+        $requestedPage = max(1, (int) ($filters[$pageName] ?? 1));
+        $paginator = $this->dataQuery->activeStudentImportVersions()
+            ->paginate($this->perPage($filters), ['*'], $pageName, $requestedPage)
+            ->withQueryString();
+
+        if ($paginator->isEmpty() && $paginator->total() > 0 && $paginator->currentPage() > $paginator->lastPage()) {
+            $paginator = $this->dataQuery->activeStudentImportVersions()
+                ->paginate($this->perPage($filters), ['*'], $pageName, $paginator->lastPage())
+                ->withQueryString();
+        }
+
+        return $this->resourcePaginator(
+            $paginator,
+            KompenResponHubActiveStudentImportResource::class,
+            $pageName,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function activeImportVersionPaginator(array $filters): array
+    {
+        $pageName = 'active_import_page';
+        $requestedPage = max(1, (int) ($filters[$pageName] ?? 1));
+        $paginator = $this->dataQuery->activeImportVersions()
+            ->paginate($this->perPage($filters), ['*'], $pageName, $requestedPage)
+            ->withQueryString();
+
+        if ($paginator->isEmpty() && $paginator->total() > 0 && $paginator->currentPage() > $paginator->lastPage()) {
+            $paginator = $this->dataQuery->activeImportVersions()
+                ->paginate($this->perPage($filters), ['*'], $pageName, $paginator->lastPage())
+                ->withQueryString();
+        }
+
+        return $this->resourcePaginator(
+            $paginator,
+            KompenResponHubImportVersionResource::class,
+            $pageName,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function activeStudentImportReferencePaginator(array $filters): array
+    {
+        $pageName = 'active_student_import_reference_page';
+        $requestedPage = max(1, (int) ($filters[$pageName] ?? 1));
+        $paginator = $this->dataQuery->activeStudentImportReferences()
+            ->paginate($this->perPage($filters), ['*'], $pageName, $requestedPage)
+            ->withQueryString();
+
+        if ($paginator->isEmpty() && $paginator->total() > 0 && $paginator->currentPage() > $paginator->lastPage()) {
+            $paginator = $this->dataQuery->activeStudentImportReferences()
+                ->paginate($this->perPage($filters), ['*'], $pageName, $paginator->lastPage())
+                ->withQueryString();
+        }
+
+        return $this->resourcePaginator(
+            $paginator,
+            KompenResponHubActiveStudentImportReferenceResource::class,
+            $pageName,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function recycledImportVersionPaginator(array $filters): array
+    {
+        return $this->resourcePaginator(
+            $this->dataQuery->recycledImportVersions()
+                ->paginate($this->perPage($filters), ['*'], 'recycled_import_page')
+                ->withQueryString(),
+            KompenResponHubImportVersionResource::class,
+            'recycled_import_page',
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function recycledActiveStudentImportVersionPaginator(array $filters): array
+    {
+        return $this->resourcePaginator(
+            $this->dataQuery->recycledActiveStudentImportVersions()
+                ->paginate($this->perPage($filters), ['*'], 'recycled_active_student_import_page')
+                ->withQueryString(),
+            KompenResponHubActiveStudentImportResource::class,
+            'recycled_active_student_import_page',
+        );
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function activeImportTasks(): array
+    {
+        $workbookTasks = KompenResponHubImportTaskResource::collection(
+            KompenResponHubImportTask::query()
+                ->whereIn('status', [
+                    KompenResponHubImportTask::STATUS_QUEUED,
+                    KompenResponHubImportTask::STATUS_PROCESSING,
+                ])
+                ->latest('id')
+                ->limit(3)
+                ->get(),
+        )->resolve();
+        $activeStudentTasks = KompenResponHubActiveStudentImportTaskResource::collection(
+            KompenResponHubActiveStudentImportTask::query()
+                ->whereIn('status', [
+                    KompenResponHubActiveStudentImportTask::StatusQueued,
+                    KompenResponHubActiveStudentImportTask::StatusProcessing,
+                ])
+                ->latest('id')
+                ->limit(3)
+                ->get(),
+        )->resolve();
+
+        /** @var list<array<string, mixed>> $tasks */
+        $tasks = [];
+
+        foreach ([...$workbookTasks, ...$activeStudentTasks] as $task) {
+            if (is_array($task)) {
+                $tasks[] = $task;
+            }
+        }
+
+        usort($tasks, static function (array $left, array $right): int {
+            return strcmp((string) ($right['queued_at'] ?? ''), (string) ($left['queued_at'] ?? ''));
+        });
+
+        return array_slice($tasks, 0, 3);
+    }
+
     /** @return list<int> */
     private function dismissedExportTaskIds(KompenResponHubTableRequest $request): array
     {
@@ -314,7 +494,7 @@ class KompenResponHubController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function filtersForRequest(KompenResponHubTableRequest $request): array
+    private function filtersForRequest(KompenResponHubTableRequest $request, bool $scopeToAuthenticatedStudent = true): array
     {
         $filters = $request->validated();
 
@@ -327,11 +507,13 @@ class KompenResponHubController extends Controller
         }
 
         $requestedPerPage = (int) ($filters['per_page'] ?? 15);
-        $filters['per_page'] = in_array($requestedPerPage, [15, 25, 50, 100], true)
+        $filters['per_page'] = in_array($requestedPerPage, [5, 15, 25, 50, 100], true)
             ? $requestedPerPage
             : 15;
 
-        $studentNim = $this->proxyAccess->studentNim($request);
+        $studentNim = $scopeToAuthenticatedStudent
+            ? $this->studentAccess->studentNim($request)
+            : null;
 
         if ($studentNim !== null) {
             $filters['nim'] = $studentNim;
@@ -387,10 +569,10 @@ class KompenResponHubController extends Controller
     }
 
     /**
-     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog|\App\Models\KompenResponHubImport|\App\Models\KompenResponHubWarningLetter|\App\Models\KompenResponHubActivityLog
+     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog|KompenResponHubImport|\App\Models\KompenResponHubActiveStudentImport|\App\Models\KompenResponHubActiveStudentImportReference|\App\Models\KompenResponHubWarningLetter|\App\Models\KompenResponHubActivityLog
      *
      * @param  LengthAwarePaginator<int, TModel>  $paginator
-     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource|KompenResponHubImportVersionResource|KompenResponHubWarningLetterResource|KompenResponHubActivityLogResource>  $resource
+     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource|KompenResponHubImportVersionResource|KompenResponHubActiveStudentImportResource|KompenResponHubActiveStudentImportReferenceResource|KompenResponHubWarningLetterResource|KompenResponHubActivityLogResource>  $resource
      * @return array<string, mixed>
      */
     private function resourcePaginator(LengthAwarePaginator $paginator, string $resource, string $pageName): array

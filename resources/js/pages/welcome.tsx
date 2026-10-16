@@ -3,7 +3,6 @@ import { GraduationCap, ShieldCheck, UserPlus, ArrowRight } from 'lucide-react';
 import { create as adminLogin } from '@/actions/App/Http/Controllers/AdminAuthenticationController';
 import { create as adminSetup } from '@/actions/App/Http/Controllers/KompenResponHubAdminSetupController';
 import { Button } from '@/components/ui/button';
-import { sikompenUrl } from '@/lib/sikompen-url';
 import {
     Card,
     CardContent,
@@ -46,7 +45,7 @@ export default function Welcome({
                             Pilih Jenis Akses
                         </h1>
                         <p className="text-[#395886]/70 text-sm md:text-base max-w-xl mx-auto leading-relaxed font-medium">
-                            Admin mengelola impor dokumen. Mahasiswa dapat melihat dan mengunduh data berdasarkan filter.
+                            Admin mengelola impor dokumen. Mahasiswa dapat melihat data Kompen/Respon dan Detail Kompen.
                         </p>
                     </div>
 
@@ -78,8 +77,8 @@ export default function Welcome({
                                     <Link
                                         href={
                                             isAdminAuthenticated
-                                                ? sikompenUrl(adminIndex.url())
-                                                : sikompenUrl(adminLogin.url())
+                                                ? adminIndex.url()
+                                                : adminLogin.url()
                                         }
                                         className="flex items-center justify-center gap-2"
                                     >
@@ -96,7 +95,7 @@ export default function Welcome({
                                         variant="outline"
                                         className="w-full border-[#8AAEE0] text-[#395886] bg-white/80 hover:bg-[#395886] hover:text-white hover:border-[#395886] transition-all duration-300 rounded-2xl font-bold active:scale-95 text-xs py-2.5 shadow-2xs"
                                     >
-                                        <Link href={sikompenUrl(adminSetup.url())} className="flex items-center justify-center gap-2">
+                                        <Link href={adminSetup.url()} className="flex items-center justify-center gap-2">
                                             <UserPlus className="size-4" />
                                             {isInitialAdminSetupAvailable
                                                 ? 'Buat akun admin pertama'
@@ -115,13 +114,13 @@ export default function Welcome({
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#628ECB]">
-                                        Public View Access
+                                        Student Portal
                                     </p>
                                     <CardTitle className="text-2xl font-black text-[#395886]">
                                         Mahasiswa
                                     </CardTitle>
                                     <CardDescription className="text-[#395886]/70 text-xs md:text-sm mt-1 leading-relaxed font-normal">
-                                        Akses baca saja untuk melihat Kompen/Respon, Detail Kompen, dan unduhan XLSX sesuai periode.
+                                        Akses baca saja untuk melihat Kompen/Respon dan Detail Kompen.
                                     </CardDescription>
                                 </div>
                             </CardHeader>
@@ -131,8 +130,8 @@ export default function Welcome({
                                     variant="outline"
                                     className="w-full border-[#8AAEE0] text-[#395886] bg-white/80 hover:bg-[#395886] hover:text-white hover:border-[#395886] transition-all duration-300 rounded-2xl font-bold active:scale-95 text-xs py-3 shadow-2xs"
                                 >
-                                    <Link href={sikompenUrl(studentIndex.url())} className="flex items-center justify-center gap-2">
-                                        Lihat data mahasiswa
+                                    <Link href={studentIndex.url()} className="flex items-center justify-center gap-2">
+                                        Buka data mahasiswa
                                         <ArrowRight className="size-4 group-hover:translate-x-1 transition-transform" />
                                     </Link>
                                 </Button>
