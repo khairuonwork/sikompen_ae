@@ -30,7 +30,7 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
     exit 1
 fi
 
-git fetch --no-tags origin "${deploy_branch}"
+git fetch --no-tags origin "+refs/heads/${deploy_branch}:refs/remotes/origin/${deploy_branch}"
 
 if ! git merge-base --is-ancestor "${deploy_ref}" "origin/${deploy_branch}"; then
     printf 'Requested commit is not contained in origin/%s: %s\n' "${deploy_branch}" "${deploy_ref}" >&2
