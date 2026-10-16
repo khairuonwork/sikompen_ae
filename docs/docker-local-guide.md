@@ -47,6 +47,7 @@ Untuk percobaan standar, nilai lain dari `.env.example` sudah cocok. Yang pentin
 
 ```dotenv
 APP_PORT=8080
+APP_BIND_HOST=127.0.0.1
 KOMPEN_DB_PORT=3307
 SESSION_SECURE_COOKIE=false
 ```
