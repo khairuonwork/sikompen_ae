@@ -1,151 +1,52 @@
 # ERD Sikompen
 
-Seluruh tabel domain memakai koneksi `kompen_db` dan awalan fisik `sikompen_`. Kolom bernama `kompen_respon_hub_*` dipertahankan untuk kompatibilitas namespace/migrasi lama, tetapi tetap mengarah ke entitas Sikompen.
+Tabel domain memakai koneksi Sikompen. Sebagian besar bernama `sikompen_*`; API client dan sync run saat ini memakai tabel `kompen_respon_hub_*`.
 
 ```mermaid
 erDiagram
-    sikompen_admins ||--o{ sikompen_imports : uploads
-    sikompen_admins ||--o{ sikompen_import_tasks : starts
-    sikompen_admins ||--o{ sikompen_activity_logs : acts
-    sikompen_imports ||--o| sikompen_active_imports : selected_as_active
-    sikompen_imports ||--o{ sikompen_mahasiswa : sources
-    sikompen_imports ||--o{ sikompen_import_audit_logs : audited
-    sikompen_mahasiswa ||--o{ sikompen_detail_kompen : owns
-    sikompen_mahasiswa ||--o| sikompen_mahasiswa_progress : has
-    sikompen_mahasiswa ||--o| sikompen_mahasiswa_summary_overrides : has
-    sikompen_mahasiswa ||--o{ sikompen_surat_peringatan : receives
-    sikompen_periode_cutoffs ||--o{ sikompen_surat_peringatan : governs
-
-    sikompen_imports {
-        bigint id PK
-        bigint uploaded_by_admin_id FK
-        varchar periode_semester
-        varchar original_filename
-        varchar display_filename
-        varchar stored_path
-        char file_hash
-        json quality_report
-        timestamp imported_at
-    }
-    sikompen_active_imports {
-        bigint id PK
-        varchar periode_semester UK
-        bigint kompen_respon_hub_import_id FK
-        bigint activated_by_admin_id FK
-        timestamp activated_at
-    }
-    sikompen_mahasiswa {
-        bigint id PK
-        bigint kompen_respon_hub_import_id FK
-        varchar nim
-        varchar periode_semester
-        varchar kelas
-        int tingkat
-        decimal total_kompensasi_jam
-        decimal total_responsi_jam
-    }
-    sikompen_detail_kompen {
-        bigint id PK
-        bigint kompen_respon_hub_student_id FK
-        varchar source_key
-        date tanggal
-        decimal jam_kompensasi
-        decimal jam_responsi
-    }
-    sikompen_mahasiswa_progress {
-        bigint id PK
-        bigint current_student_id FK
-        varchar nim
-        varchar periode_semester
-        varchar kelas
-        decimal kompensasi_dikerjakan_jam
-        decimal responsi_dikerjakan_jam
-        timestamp last_worked_at
-    }
-    sikompen_mahasiswa_summary_overrides {
-        bigint id PK
-        bigint current_student_id FK
-        varchar nim
-        varchar periode_semester
-        varchar kelas
-        decimal total_kompensasi_jam
-        decimal total_responsi_jam
-    }
-    sikompen_detail_kompen_overrides {
-        bigint id PK
-        varchar source_key UK
-        json override_values
-    }
-    sikompen_periode_cutoffs {
-        bigint id PK
-        varchar periode_semester UK
-        timestamp deadline_at
-        varchar timezone
-    }
-    sikompen_surat_peringatan {
-        bigint id PK
-        bigint cutoff_id FK
-        bigint current_student_id FK
-        varchar nim
-        varchar periode_semester
-        varchar kelas
-        varchar classification
-        varchar letter_status
-        varchar resolution
-        json snapshot
-    }
-    sikompen_import_tasks {
-        bigint id PK
-        bigint uploaded_by_admin_id FK
-        varchar status
-        int progress
-        varchar stored_path
-    }
-    sikompen_export_tasks {
-        bigint id PK
-        varchar request_session_id
-        varchar access_token UK
-        varchar resource
-        varchar format
-        varchar status
-        json filters
-        varchar output_path
-        timestamp expires_at
-    }
-    sikompen_import_audit_logs {
-        bigint id PK
-        bigint source_import_id FK
-        varchar event_type
-        varchar periode_semester
-        timestamp occurred_at
-    }
-    sikompen_activity_logs {
-        bigint id PK
-        varchar event_type
-        varchar subject_type
-        varchar subject_reference
-        varchar nim
-        varchar periode_semester
-        varchar actor_email
-        json before_state
-        json after_state
-        timestamp occurred_at
-    }
-    sikompen_system_settings {
-        bigint id PK
-        int activity_log_retention_days
-    }
+    SIKOMPEN_ADMINS ||--o{ SIKOMPEN_IMPORTS : uploads
+    SIKOMPEN_ADMINS ||--o{ SIKOMPEN_ACTIVE_STUDENT_IMPORTS : uploads
+    SIKOMPEN_ADMINS ||--o{ SIKOMPEN_ACTIVITY_LOGS : acts
+    SIKOMPEN_IMPORTS ||--o| SIKOMPEN_ACTIVE_IMPORTS : selected_for_period
+    SIKOMPEN_IMPORTS ||--o{ SIKOMPEN_STUDENTS : publishes
+    SIKOMPEN_STUDENTS ||--o{ SIKOMPEN_DETAILS : has
+    SIKOMPEN_STUDENTS ||--o| SIKOMPEN_STUDENT_PROGRESS : has
+    SIKOMPEN_STUDENTS ||--o| SIKOMPEN_STUDENT_SUMMARY_OVERRIDES : has
+    SIKOMPEN_DETAILS ||--o| SIKOMPEN_DETAIL_OVERRIDES : has
+    SIKOMPEN_STUDENTS ||--o{ SIKOMPEN_WARNING_LETTERS : receives
+    SIKOMPEN_PERIOD_CUTOFFS ||--o{ SIKOMPEN_WARNING_LETTERS : classifies
+    SIKOMPEN_ACTIVE_STUDENT_IMPORTS ||--o{ SIKOMPEN_ACTIVE_STUDENTS : contains
+    SIKOMPEN_ACTIVE_STUDENT_IMPORTS ||--o{ SIKOMPEN_ACTIVE_STUDENT_IMPORT_REFERENCES : selected_for_period
+    SIKOMPEN_ACTIVE_STUDENTS ||--o| SIKOMPEN_STUDENT_ACCOUNTS : provisions
+    SIKOMPEN_STUDENT_ACCOUNTS ||--o{ SIKOMPEN_STUDENT_PASSWORD_RESET_REQUESTS : requests
+    SIKOMPEN_ADMINS ||--o{ SIKOMPEN_ADMIN_PASSWORD_RESET_CODES : owns
+    KOMPEN_RESPON_HUB_API_CLIENTS ||--o{ KOMPEN_RESPON_HUB_API_SYNC_RUNS : creates
+    SIKOMPEN_IMPORTS ||--o{ SIKOMPEN_IMPORT_AUDIT_LOGS : recorded
+    SIKOMPEN_ACTIVE_STUDENT_IMPORTS ||--o{ SIKOMPEN_IMPORT_AUDIT_LOGS : recorded
 ```
 
-## Aturan identitas dan indeks penting
+## Kelompok entitas
 
-- Satu data mahasiswa efektif unik pada `(nim, periode_semester, kelas)`; identity ini membuat progress, summary override, dan SP dapat dihubungkan ulang ketika versi periode diganti.
-- `sikompen_active_imports.periode_semester` unik: tepat satu workbook aktif untuk satu periode.
-- SP unik pada `(cutoff_id, current_student_id)`; satu mahasiswa hanya dapat memiliki satu record SP untuk satu cutoff.
-- Detail override unik pada `source_key`; override menempel pada detail asal tanpa mengubah snapshot workbook.
-- Task export memiliki `access_token` unik dan index session/status untuk polling serta pembersihan.
-- Activity log memiliki index periode+waktu, event+waktu, dan identitas mahasiswa untuk audit/pencarian.
+| Kelompok | Entitas | Catatan |
+| --- | --- | --- |
+| Admin | `sikompen_admins`, `sikompen_admin_setup_windows`, `sikompen_admin_password_reset_codes` | Admin emergency ditandai pada akun dan dibatasi ke recovery. |
+| Workbook | `sikompen_imports`, `sikompen_active_imports`, `sikompen_import_tasks` | Satu pointer workbook aktif per `periode_semester`; import mendukung soft delete. |
+| Roster | `sikompen_active_student_imports`, `..._tasks`, `..._students`, `..._references`, `..._sources` | Satu pointer roster aktif per periode; import mendukung soft delete/recycle bin. |
+| Operasional | `sikompen_students`, `sikompen_details`, `..._progress`, `..._summary_overrides`, `..._detail_overrides` | Nilai efektif dibentuk dari sumber dan layer progress/override. |
+| SP | `sikompen_period_cutoffs`, `sikompen_warning_letters` | Cutoff dan keputusan/finalisasi SP per periode. |
+| Akun mahasiswa | `sikompen_student_accounts`, `sikompen_student_password_reset_requests` | Akses bergantung roster aktif dan password-change gate. |
+| Audit/retensi | `sikompen_import_audit_logs`, `sikompen_activity_logs`, `sikompen_system_settings` | Settings menyimpan tiga retensi yang dapat diubah admin. |
+| Task | `sikompen_export_tasks` | Token akses + session pembuat melindungi export task. |
+| API outbound | `kompen_respon_hub_api_clients`, `kompen_respon_hub_api_sync_runs` | Client memiliki token hash, scope, allowlist IP; run memiliki selector dan artifact metadata. |
+
+## Identitas dan indeks penting
+
+- Workbook dan roster dipilih unik per `periode_semester` melalui tabel reference/pointer masing-masing.
+- API sync run unik per pasangan client dan `idempotency_key`; `run_id` adalah ULID yang dipakai pada endpoint.
+- Data operasional/override/progress diidentifikasi agar tetap dapat diselaraskan ketika workbook periode yang sama diganti.
+- Import audit log menyimpan salah satu referensi sumber (`source_import_id` atau `source_active_student_import_id`) plus metadata snapshot.
+- Recycle bin menggunakan soft delete pada versi file; file private baru dihapus permanent oleh command purge setelah retensi.
 
 ## Penyimpanan file
 
-XLSX tidak disimpan di database. `sikompen_imports.stored_path` menunjuk file pada private storage/volume import; `sikompen_export_tasks.output_path` menunjuk hasil export pada volume export. Database hanya menyimpan metadata, checksum/path, status, dan audit.
+Database tidak menyimpan XLSX, PDF, atau NDJSON gzip sebagai BLOB. Path file private tersimpan bersama metadata/checksum; controller/job yang tepat melakukan baca, unduh, atau purge.

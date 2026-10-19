@@ -1,60 +1,33 @@
 # Peta File Frontend
 
-## Entry page dan halaman
+## Halaman dan entry
 
-| File | Tanggung jawab |
+| Lokasi | Fungsi |
 | --- | --- |
-| `resources/js/app.tsx` | Bootstrap Inertia React, title, navigation progress, tooltip, dan Sonner toast. |
-| `pages/kompen-respon-hub/index.tsx` | Shell admin/mahasiswa; header, tab, global search, panel task, dan perakitan feature. |
-| `pages/welcome.tsx` | Landing/pemilih akses. |
-| `pages/auth/admin-login.tsx` | Login admin dan kontrol tampilkan password. |
-| `pages/auth/admin-setup.tsx` | Setup akun admin pertama/tambahan. |
-| `pages/admin/settings.tsx` | Pembukaan/penutupan pendaftaran admin. |
+| `resources/js/app.tsx` | Bootstrap Inertia, CSS, dan resolver halaman. |
+| `pages/welcome.tsx` | Landing pemilih akses. |
+| `pages/kompen-respon-hub/index.tsx` | Shell panel Kompen/Respon untuk admin dan mahasiswa. |
+| `pages/mahasiswa/profile.tsx` | Profil mahasiswa dan status data periode aktif. |
+| `pages/admin/settings.tsx`, `student-password-resets.tsx`, `emergency-recovery.tsx` | Pengaturan, reset mahasiswa, dan recovery emergency. |
+| `pages/auth/` | Login/setup/ganti password/reset untuk admin dan mahasiswa; form reset bersama. |
 
 ## Feature Sikompen
 
-| Lokasi | File penting | Tanggung jawab |
-| --- | --- | --- |
-| `dashboard/` | `global-student-search.tsx`, `dashboard-panel.tsx`, `student-activity-history.tsx` | Pencarian global admin, profil mahasiswa, dan timeline perubahan. |
-| `upload/` | `upload-panel.tsx`, `upload-progress-panel.tsx`, `import-progress-panel.tsx` | Input file/nama pengunggah, proteksi drag drop ke field teks, progres browser, dan polling worker. |
-| `kompen-respon/` | `student-table.tsx`, `edit-mode-control.tsx`, `student-correction-panel.tsx` | Tabel ringkasan, badge status, sakelar mode perbaikan, progress, dan override ringkasan. |
-| `detail-kompen/` | `detail-table.tsx`, `detail-correction-panel.tsx` | Tabel kejadian Detail Kompen dan override manual. |
-| `list-file/` | `import-version-list.tsx` | Versi workbook; rename, download, delete, dan aktivasi versi per periode. |
-| `log-upload/` | `import-audit-filter-panel.tsx`, `import-audit-log-table.tsx` | Filter periode/bulan/tahun serta lifecycle audit workbook. |
-| `surat-peringatan/` | `warning-panel.tsx` | Periode SP dikelola, cutoff, kandidat/list, finalisasi, edit/rollback SP, dan riwayat surat. |
-| `riwayat-aktivitas/` | `activity-panel.tsx` | Label kegiatan yang dapat dibaca, filter actor/event/periode, pagination, dan retensi. |
-| `export/` | `export-panel.tsx`, `export-progress-panel.tsx` | Memulai ekspor serta polling/download/cancel/dismiss task. |
-
-## Shared domain dan UI
-
-| Lokasi | Tanggung jawab |
+| Lokasi | Fungsi |
 | --- | --- |
-| `features/.../shared/types.ts` | Kontrak semua data domain: props Inertia, paginator, mahasiswa, detail, import, cutoff/SP, activity, dan export task. |
-| `shared/constants.ts` | Daftar tab berdasarkan peran. |
-| `shared/lib/formatters.ts` | Format jam/angka dan tanggal berbasis zona waktu. |
-| `shared/components/data-filter-panel.tsx` | Form filter tabel reusable. |
-| `shared/components/pagination.tsx` | Pager 15/25/50/100 dan nomor halaman. |
-| `shared/components/feedback.tsx` | Guide/collapsible note dan empty state yang kontekstual. |
-| `shared/components/progress-bar.tsx` | Visual progres yang dipakai task. |
-| `components/ui/` | Primitive aksesibel berbasis Radix/CVA: button, input, select, dialog, card, alert, dan lain-lain. |
-| `lib/utils.ts` | `cn()` untuk menggabungkan Tailwind class. |
-| `lib/sikompen-url.ts` | Helper URL ketika Sikompen berada di public path gateway. |
-| `resources/css/app.css` | Token theme, Tailwind source, palette, dan style global. |
+| `features/.../upload/` | `upload-workspace`, panel workbook/roster, template menu, dan progress impor. |
+| `features/.../kompen-respon/` | Tabel mahasiswa serta mode koreksi progress/ringkasan. |
+| `features/.../detail-kompen/` | Tabel detail dan correction panel. |
+| `features/.../list-file/` | Versi workbook/roster, report konsistensi, dan recycle bin. |
+| `features/.../log-upload/` | Tabel/filter Log Upload dan panel retensi audit. |
+| `features/.../surat-peringatan/` | Panel cutoff dan SP. |
+| `features/.../riwayat-aktivitas/` | Tabel/filter/retensi aktivitas. |
+| `features/.../export/` | Panel request dan progress ekspor. |
+| `features/.../dashboard/` | Pencarian global dan overview mahasiswa. |
 
-## Generated code dan aturan edit
+## Shared dan generated code
 
-| Lokasi | Aturan |
-| --- | --- |
-| `resources/js/actions/` | Generated Wayfinder controller actions. Jangan edit manual. |
-| `resources/js/routes/` | Generated Wayfinder named routes. Jangan edit manual. |
-| `resources/js/types/` | Type umum starter/app, bukan tempat kontrak domain utama. |
-
-Setelah perubahan route/controller, jalankan:
-
-```bash
-php artisan wayfinder:generate --with-form --no-interaction
-npm run check
-npm run build
-```
-
-Saat menambah UI baru, tempatkan di folder feature yang paling dekat. Jangan mengumpulkan tabel/form panjang ke `pages/kompen-respon-hub/index.tsx`.
+- `features/.../shared/` berisi type domain, constants tab, formatter, filter/pagination, dan komponen feedback.
+- `components/ui/` adalah primitive UI reusable; dampaknya lintas halaman.
+- `hooks/`, `lib/`, dan `types/` menyediakan helper aplikasi, utilitas, dan deklarasi TypeScript.
+- `actions/`, `routes/`, dan `wayfinder/` adalah output generated. Jangan ubah manual; generate ulang setelah kontrak route/controller berubah.

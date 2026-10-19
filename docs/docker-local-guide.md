@@ -1,194 +1,82 @@
 # Menjalankan Sikompen dengan Docker Compose
 
-Panduan ini untuk teman pengembang yang ingin mencoba aplikasi secara lokal setelah melakukan clone repository. Tidak perlu memasang PHP, Composer, Node.js, atau MariaDB di host; semuanya berjalan dalam container.
-
-> Gunakan `.env.example` untuk komputer lokal. Jangan menyalin `.env` dari server dan jangan memakai password produksi.
+Panduan ini untuk lingkungan lokal. Gunakan dokumentasi deployment terpisah untuk lingkungan server.
 
 ## 1. Prasyarat
 
+- Docker Desktop/Engine dengan Docker Compose v2.
 - Git.
-- Docker Desktop (macOS/Windows) atau Docker Engine beserta Docker Compose plugin (Linux).
-- Port `8080`, `8090`, dan `3307` tidak sedang dipakai aplikasi lain.
+- Port lokal `8080`, `8090`, dan `3307` belum dipakai, atau override variabel Compose yang sesuai.
 
-Periksa instalasi:
-
-```bash
-git --version
-docker --version
-docker compose version
-```
-
-## 2. Clone repository
+## 2. Clone dan konfigurasi
 
 ```bash
-git clone https://github.com/khairuonwork/sikompen_ae.git
-cd sikompen_ae
-git checkout fullstack-login-mahasiswa
-git pull --ff-only
-```
-
-Jika branch yang dipakai tim berubah, ganti `fullstack-login-mahasiswa` dengan branch yang diberitahukan maintainer.
-
-## 3. Buat konfigurasi lokal
-
-```bash
+git clone <url-repository> sikompen
+cd sikompen
+git checkout staging # bila ingin menyamakan branch kerja staging
 cp .env.example .env
 ```
 
-Buat application key lokal:
+Atur paling tidak `APP_KEY` (atau biarkan entrypoint mengelolanya bila konfigurasi lokal mendukung), password database lokal, dan URL yang diperlukan. Jangan commit `.env`.
 
-```bash
-docker run --rm php:8.4-cli php -r 'echo "base64:".base64_encode(random_bytes(32)).PHP_EOL;'
-```
+`APP_BIND_HOST` dan `API_MINI_APP_BIND_HOST` adalah override opsional Compose; keduanya default ke loopback. `API_MINI_APP_PORT` default `8090`.
 
-Salin hasilnya ke nilai `APP_KEY=` pada file `.env`.
-
-Untuk percobaan standar, nilai lain dari `.env.example` sudah cocok. Yang penting:
-
-```dotenv
-APP_PORT=8080
-APP_BIND_HOST=127.0.0.1
-KOMPEN_DB_PORT=3307
-SESSION_SECURE_COOKIE=false
-```
-
-Jika Docker network bernama `sikompen_internal` sudah dipakai aplikasi lain, ubah salah satu nilai berikut di `.env` lalu jalankan Compose kembali:
-
-```dotenv
-SIKOMPEN_NETWORK_NAME=sikompen_internal_teman
-SIKOMPEN_NETWORK_SUBNET=172.31.0.0/24
-API_MINI_APP_IP=172.31.0.10
-```
-
-## 4. Build dan jalankan
+## 3. Build dan jalankan
 
 ```bash
 docker compose up -d --build
-docker compose exec -T app php artisan migrate --force
-docker compose exec -T app php artisan db:seed --class=Database\\Seeders\\KompenResponHubSystemSettingSeeder --force
 docker compose ps
 ```
 
-Tunggu sampai database berstatus `healthy` dan service lain berstatus `Up`.
+Stack menyediakan `web`, `app`, `database`, `api-mini-app`, `queue`, `imports`, `exports`, `api-sync`, dan `scheduler`.
 
-| Service | Tugas |
+## 4. Siapkan aplikasi
+
+```bash
+docker compose exec app php artisan migrate --force
+docker compose exec app php artisan storage:link
+```
+
+Buka aplikasi pada `http://localhost:8080`. Buat admin reguler pertama melalui setup. Panel pengujian API mini tersedia pada `http://localhost:8090`; endpoint health ada di `/health`.
+
+## 5. Pemeriksaan cepat
+
+```bash
+docker compose ps
+docker compose logs app --tail=100
+docker compose logs imports --tail=100
+docker compose logs exports --tail=100
+docker compose logs api-sync --tail=100
+docker compose exec app php artisan about
+```
+
+Untuk menguji API mini, buat API client terlebih dahulu dan isi `SIKOMPEN_API_CLIENT_ID` serta `SIKOMPEN_API_BEARER_TOKEN` pada `.env`. Allowlist client harus memuat IP container API mini (default `172.30.0.10`).
+
+## 6. Memperbarui kode lokal
+
+```bash
+git pull
+docker compose up -d --build
+docker compose exec app php artisan migrate --force
+```
+
+Jika route/controller berubah, generate Wayfinder. Jika asset frontend berubah dan image tidak dibangun ulang, build ulang service aplikasi/web.
+
+## 7. Diagnosis
+
+| Gejala | Periksa |
 | --- | --- |
-| `web` | Nginx yang dapat dibuka dari browser di port `8080`. |
-| `app` | Laravel PHP-FPM. |
-| `database` | MariaDB lokal, dipublikasikan hanya di `127.0.0.1:3307`. |
-| `queue` | Pekerjaan umum aplikasi. |
-| `imports` | Worker khusus impor workbook dan roster mahasiswa aktif. |
-| `exports` | Worker khusus XLSX/PDF ekspor. |
-| `api-sync` | Worker khusus artifact API `NDJSON.GZ`. |
-| `scheduler` | Rekonsiliasi task macet dan retensi data. |
-| `api-mini-app` | Panel internal untuk menguji API provider; hanya di `127.0.0.1:8090`. |
+| HTTP 502/500 | `docker compose logs web app --tail=100` dan status database. |
+| Impor tertahan | `docker compose logs imports --tail=100`. |
+| Ekspor tertahan | `docker compose logs exports --tail=100`. |
+| Sync API gagal | `docker compose logs api-sync --tail=100`; periksa token/client/IP allowlist. |
+| Panel mini tidak siap | Buka `/health`; lengkapi tiga `SIKOMPEN_API_*` variables. |
+| Port bentrok | Ubah `APP_PORT`, `API_MINI_APP_PORT`, atau `KOMPEN_DB_PORT` di `.env`. |
 
-## 5. Buka aplikasi dan buat admin pertama
-
-Buka:
-
-```text
-http://localhost:8080
-```
-
-Pada instalasi kosong, buka:
-
-```text
-http://localhost:8080/admin/setup
-```
-
-Buat akun admin reguler pertama dari halaman tersebut. Tidak ada akun admin atau password default.
-
-Untuk mencoba fitur normal admin, langkah ini sudah cukup. Jangan menjalankan seeder akun darurat kecuali memang ingin menguji alur pemulihan password; seeder tersebut membutuhkan empat nilai `SIKOMPEN_EMERGENCY_ADMIN_*` di `.env`.
-
-## 6. Pemeriksaan cepat
-
-```bash
-curl -fsS http://localhost:8080/up
-curl -fsS http://127.0.0.1:8090/health
-docker compose ps
-```
-
-Uji impor dari halaman admin dengan mengunggah workbook contoh. Saat impor/ekspor berjalan, pantau worker:
-
-```bash
-docker compose logs -f imports exports queue api-sync scheduler
-```
-
-Keluar dari mode log dengan `Ctrl+C`; container tetap berjalan.
-
-## 7. Mengambil pembaruan kode
-
-```bash
-git pull --ff-only
-docker compose up -d --build
-docker compose exec -T app php artisan migrate --force
-docker compose exec -T app php artisan optimize
-docker compose ps
-```
-
-Migration aman dijalankan kembali; Laravel hanya mengeksekusi migration yang belum tercatat.
-
-## 8. Diagnosis masalah umum
-
-### Build gagal saat mengambil image Docker Hub
-
-Ini biasanya gangguan sementara Docker Hub/CloudFront, bukan kesalahan source code.
-
-```bash
-docker pull node:22-bookworm-slim
-docker pull php:8.4-fpm-bookworm
-docker pull composer:2
-docker pull nginx:1.27-alpine
-docker compose up -d --build
-```
-
-Jika masih gagal, tunggu beberapa menit lalu ulangi. Jangan menghapus volume database hanya karena build gagal.
-
-### Browser menampilkan 502 atau 500
-
-```bash
-docker compose ps
-docker compose logs --tail=150 web app
-```
-
-Setelah perubahan kode atau environment, rebuild dan recreate service:
-
-```bash
-docker compose up -d --build --force-recreate app web queue imports exports api-sync scheduler
-docker compose exec -T app php artisan migrate --force
-```
-
-### Impor atau ekspor berhenti
-
-```bash
-docker compose logs --tail=200 imports exports queue
-docker compose exec -T app php artisan queue:failed
-```
-
-Worker akan direkonsiliasi oleh `scheduler`; task macet akan ditandai gagal agar dapat diunggah atau diminta ulang.
-
-### Port atau network Docker bentrok
-
-Ubah `APP_PORT`, `KOMPEN_DB_PORT`, atau nilai network pada `.env`, kemudian:
-
-```bash
-docker compose down
-docker compose up -d --build
-```
-
-## 9. Menghentikan atau mereset data lokal
-
-Hentikan container sambil mempertahankan database dan file:
+## 8. Menghentikan atau mereset data lokal
 
 ```bash
 docker compose down
 ```
 
-Untuk menghapus **seluruh data lokal** dan memulai dari kosong:
-
-```bash
-docker compose down -v
-```
-
-`-v` menghapus volume database, upload, ekspor, dan artifact API. Jangan pernah gunakan command ini pada staging atau production.
+Volume database dan storage tetap dipertahankan. Jangan hapus volume bila data lokal masih diperlukan; tindakan itu menghapus database dan file private secara permanen.

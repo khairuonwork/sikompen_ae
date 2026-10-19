@@ -2,130 +2,84 @@
 
 ## Batas sistem
 
-Sikompen adalah aplikasi Laravel + Inertia React untuk mengelola sumber data Kompen/Responsi dalam workbook XLSX, mengaktifkan satu versi data per periode, mencatat progres/koreksi, dan menerbitkan Surat Peringatan (SP) setelah cutoff. File XLSX dan hasil ekspor tidak disimpan sebagai BLOB database: metadata dan audit ada di MariaDB, sedangkan berkas berada pada storage private Laravel.
+Sikompen mengelola dua sumber XLSX per periode: workbook Kompen/Respon dan roster mahasiswa aktif. File dan artifact berada di storage private; MariaDB menyimpan metadata, data operasional, pointer versi, dan audit.
 
 ```mermaid
 flowchart LR
-    A[Admin browser] --> W[Nginx / Laravel web]
-    M[Mahasiswa browser] --> W
+    A[Admin] --> W[Laravel web]
+    M[Mahasiswa] --> W
+    X[Client API] --> W
     W --> DB[(MariaDB)]
-    W --> S[(Private file storage)]
+    W --> S[(Private storage)]
     W --> Q[(Database queue)]
-    Q --> I[Import worker]
+    Q --> I[Import workers]
     Q --> E[Export worker]
-    I --> S
-    I --> DB
-    E --> DB
-    E --> S
+    Q --> Y[API sync worker]
     C[Scheduler] --> DB
     C --> S
 ```
 
-Admin dan mahasiswa menggunakan guard session Laravel yang terpisah. Modul API dapat dikembangkan di aplikasi ini tanpa membagikan cookie atau kunci aplikasi kepada sistem lain.
-
-## Data aktif dan versi workbook
-
-Satu upload selalu menjadi **versi baru**, bukan langsung data live. Ini menghindari file yang salah mengubah tabel secara tidak sengaja.
-
-```mermaid
-stateDiagram-v2
-    [*] --> Queued: file diterima
-    Queued --> Processing: worker mulai membaca
-    Processing --> Failed: file/struktur/validasi gagal
-    Processing --> Stored: impor selesai
-    Stored --> Active: admin pilih Aktifkan
-    Active --> Replaced: versi lain periode sama diaktifkan
-    Stored --> Deleted: admin hapus versi
-    Replaced --> Deleted: admin hapus versi
-```
-
-Aturan utama:
-
-1. Parser memvalidasi template, periode, NIM, kelas, hubungan detail–mahasiswa, dan kecocokan total jam sebelum data versi disimpan.
-2. `sikompen_imports` menyimpan metadata versi dan path XLSX; `sikompen_active_imports` menyimpan tepat satu pilihan aktif untuk setiap `periode_semester`.
-3. Saat aktivasi, data mahasiswa dan detail **hanya untuk periode versi tersebut** diganti dari workbook yang dipilih. Progress, override ringkasan, dan riwayat SP yang identitasnya sama (`NIM + periode + kelas`) dihubungkan kembali ke baris mahasiswa yang baru.
-4. Mengaktifkan versi baru pada periode yang sama otomatis menggantikan pilihan aktif sebelumnya. Periode lain tidak terganggu.
-5. Log Upload mencatat upload, aktivasi, penggantian/restore, rename, dan delete. Riwayat Aktivitas mencatat dampak operasionalnya juga.
-
-## Alur impor dan aktivasi
-
-```mermaid
-sequenceDiagram
-    participant A as Admin
-    participant Web as Laravel web
-    participant Q as Database queue
-    participant W as Import worker
-    participant FS as Private storage
-    participant DB as MariaDB
-
-    A->>Web: Upload XLSX + nama pengunggah
-    Web->>FS: simpan file private
-    Web->>DB: buat import task (queued)
-    Web->>Q: dispatch ProcessImport
-    W->>FS: validasi ZIP/XML dan baca workbook
-    W->>W: validasi template, data, total jam
-    alt valid
-        W->>DB: simpan metadata versi + Log Upload
-        W->>DB: task completed; versi menunggu aktivasi
-        A->>Web: pilih versi di List File
-        Web->>DB: ganti data aktif periode secara transaksional
-    else tidak valid
-        W->>DB: task failed + alasan
-        W->>FS: hapus file task gagal
-    end
-```
-
-## Hutang efektif, koreksi, dan progres
-
-Nilai pada tabel dibaca sebagai nilai efektif, bukan sekadar nilai asal workbook.
-
-```text
-total efektif = override ringkasan jika ada; jika tidak, total dari workbook
-jam dikerjakan = progress manual jika ada; jika tidak, 0
-sisa hutang = max(0, total kompen + total responsi - dikerjakan kompen - dikerjakan responsi)
-```
-
-- Koreksi ringkasan tidak boleh membuat total hutang lebih kecil daripada jam yang sudah dikerjakan.
-- Progress dengan jam dikerjakan lebih dari nol wajib menyertakan waktu terakhir dikerjakan.
-- Koreksi Detail Kompen disimpan sebagai override berbasis `source_key`, sehingga data asal workbook tetap dapat diaudit.
-- Pembaruan progress atau total akan menyelaraskan status penyelesaian SP yang terkait dan mencatat before/after state pada riwayat aktivitas.
-
-## Cutoff dan Surat Peringatan
+## Sumber data per periode
 
 ```mermaid
 flowchart TD
-    P[Data aktif pada periode] --> D[Admin menetapkan / mengubah cutoff Asia/Jakarta]
-    D -->|waktu belum lewat| T[Kandidat sementara]
-    D -->|waktu lewat| K[Daftar kandidat: sisa hutang > 0]
-    K --> F[Finalisasi SP]
-    F --> S[SP diterbitkan / aktif]
-    S --> R[Rollback SP atau rollback finalisasi]
-    R --> H[Masuk riwayat, tidak lagi SP aktif/API]
-    S --> C[Progress menjadi lunas]
-    C --> L[SP tetap bersejarah; resolusi selesai]
+    R[Roster mahasiswa aktif] --> AR[Pointer roster aktif]
+    W[Workbook Kompen/Respon] --> AW[Pointer workbook aktif]
+    AW --> O[Mahasiswa + detail operasional]
+    O --> T[Tabel / API internal / ekspor / cutoff-SP]
+    AR --> C[Laporan konsistensi NIM]
+    AR --> SA[Autorisasi mahasiswa]
 ```
 
-- Cutoff ditulis dan divalidasi dalam zona waktu `Asia/Jakarta`; input minimal lima menit dari waktu Jakarta saat ini.
-- Satu periode dapat dipilih sebagai **Periode SP dikelola**. Daftar mahasiswa dapat diperiksa dengan periode tampilan yang berbeda tanpa mengubah periode yang akan difinalisasi.
-- Setelah cutoff terlewati, mahasiswa dengan sisa jam menjadi kandidat. Tombol **Finalisasi SP** menerbitkan SP untuk kandidat yang masih memiliki sisa jam.
-- SP yang di-rollback tetap tampil di riwayat surat sebagai audit, tetapi bukan SP aktif dan tidak boleh menjadi data integrasi/API SP.
-- Finalisasi bukan penguncian data: cutoff, data aktif, progres, dan koreksi masih bisa diperbaiki. Setiap perbaikan diselaraskan dan dicatat.
+- Mengunggah file menciptakan versi, bukan langsung mengganti data operasional.
+- Pointer roster dan pointer workbook bersifat independen, tetapi keduanya dipilih per periode.
+- Aktivasi workbook mengganti data operasional periode itu secara transaksional. Periode lain tidak berubah.
+- Aktivasi roster hanya mengganti sumber roster periode itu. Roster dipakai untuk akses mahasiswa dan laporan konsistensi, bukan untuk menimpa data Kompen/Respon.
 
-## Ekspor dan audit
+## Lifecycle file
 
-Ekspor adalah request yang diproses asynchronous. Browser menerima task, panel mem-poll status task, dan file baru dapat diunduh ketika berstatus `completed`. Semua task ekspor memakai token acak + session ID peminta; task tidak dapat dibaca/didownload hanya dengan menebak ID.
+1. Browser mengunggah XLSX dan server membuat task `queued`.
+2. Worker memeriksa archive dan template, lalu mem-parsing data bisnis.
+3. Jika valid, worker menyimpan versi dan Log Upload; jika gagal, task menyimpan pesan aman dan file sumber gagal dibersihkan.
+4. Admin mengaktifkan versi yang telah selesai. Versi inactive dapat dipindahkan ke recycle bin dan dipulihkan selama masa retensi.
+5. Versi yang sedang menjadi pointer aktif tidak dapat dihapus. Workbook aktif juga tidak dapat dilepas ketika masih ada SP aktif outstanding pada periodenya.
 
-Nama hasil ekspor mengikuti resource dan filter efektif, misalnya:
+## Nilai efektif dan koreksi
 
 ```text
-kompen-dan-respon--periode-2026-2027-genap--kelas-1aea1--ekspor-42.xlsx
+total efektif = override ringkasan jika ada, selain itu total workbook
+jam dikerjakan = progress manual per jenis pekerjaan
+sisa jenis pekerjaan = max(0, total efektif - jam dikerjakan)
 ```
 
-XLSX mengikuti batas `SIKOMPEN_EXPORT_MAX_ROWS` (default 5.000) untuk melindungi memori worker. PDF landscape tidak memakai batas jumlah baris aplikasi, tetapi tetap bergantung pada kapasitas worker/server. Task dapat dibatalkan sebelum selesai dan task gagal/stale memberi pesan yang dapat ditindaklanjuti.
+Override ringkasan tidak boleh lebih rendah dari jam yang telah dikerjakan. Progress positif memerlukan waktu terakhir mengerjakan. Koreksi detail tersimpan sebagai override berbasis `source_key`, sehingga baris workbook asli tetap tersedia untuk audit. Setiap perubahan yang relevan menyelaraskan resolusi SP dan masuk ke Riwayat Aktivitas.
+
+## Cutoff dan Surat Peringatan
+
+1. Admin menetapkan cutoff dengan zona `Asia/Jakarta`, minimal lima menit ke depan.
+2. Setelah cutoff lewat, mahasiswa dengan sisa hutang efektif masuk kandidat.
+3. Admin meninjau kandidat lalu memfinalisasi; hanya saat ini SP `issued` dibuat.
+4. Progres hingga lunas menyelesaikan SP tanpa menghapus jejaknya.
+5. Admin dapat rollback SP atau finalisasi dengan alasan. Rekam rollback tetap ada untuk audit, tetapi bukan SP aktif.
+
+Finalisasi tidak mengunci data: cutoff, workbook aktif, progress, dan koreksi masih dapat diperbaiki dengan jejak audit.
+
+## Pekerjaan asynchronous
+
+| Pekerjaan | Queue | Hasil |
+| --- | --- | --- |
+| Impor workbook dan roster | `imports` | Versi file yang menunggu aktivasi. |
+| Ekspor XLSX/PDF | `exports` | File private yang hanya dapat diakses pembuat task. |
+| API sync massal | `api-sync` | Artifact NDJSON gzip milik client API. |
+
+Task terminal dan artifact memiliki retensi masing-masing. Reconciler menandai task queued/processing yang melewati ambang sebagai gagal sehingga operator dapat mengulang dengan aman.
 
 ## Retensi
 
-- Hasil dan task ekspor dibersihkan setelah `SIKOMPEN_EXPORT_RETENTION_HOURS` (default 24 jam).
-- Task impor terminal dibersihkan setelah `SIKOMPEN_IMPORT_TASK_RETENTION_DAYS` (default 30 hari).
-- Riwayat aktivitas dibersihkan berdasarkan kebijakan yang dapat diatur admin, default 365 hari.
-- Metadata impor, versi workbook, Log Upload, data aktif, dan riwayat SP tidak dihapus otomatis oleh tiga kebijakan di atas.
+- Hasil ekspor: `SIKOMPEN_EXPORT_RETENTION_HOURS` (default 24 jam).
+- Task impor terminal: `SIKOMPEN_IMPORT_TASK_RETENTION_DAYS` (default 30 hari).
+- Artifact dan run API sync: default 24 jam dan 7 hari.
+- Riwayat aktivitas dan Log Upload: kebijakan admin, default 90 hari.
+- Recycle bin workbook/roster: kebijakan admin, default 30 hari.
+
+Penghapusan terjadwal bersifat permanen setelah retensi lewat. Metadata bisnis lain tidak dihapus oleh kebijakan tersebut kecuali command terkait memang menargetkannya.

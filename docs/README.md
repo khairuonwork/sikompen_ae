@@ -1,34 +1,39 @@
 # Dokumentasi Sikompen
 
-Dokumen di folder ini menjelaskan implementasi Sikompen pada branch saat ini. Gunakan dokumen berikut sebagai titik mulai, lalu masuk ke dokumen yang sesuai dengan kebutuhan.
+Dokumen dalam folder ini menjelaskan aplikasi pada branch saat ini. Kode dan test tetap menjadi sumber kebenaran teknis; dokumen ini menjelaskan cara bagian-bagiannya bekerja bersama.
 
 | Dokumen | Isi |
 | --- | --- |
-| [Arsitektur dan logika sistem](system-logic.md) | Batas sistem, state data, alur impor–aktivasi–SP–ekspor, dan data flow. |
-| [Panduan fungsionalitas](functionality-guide.md) | Perilaku setiap fitur dari sudut pandang admin dan mahasiswa. |
-| [Backend](backend-explained.md) | Struktur HTTP, domain action, model, keamanan, serta API. |
-| [Worker dan scheduler](worker-and-scheduler.md) | Queue impor/ekspor, task state, pemulihan task macet, dan retensi. |
-| [Frontend](frontend-explained.md) | Inertia, React, page shell, feature module, state, dan UX. |
-| [File backend](backend-files-explained.md) | Peta tanggung jawab file PHP yang penting. |
-| [File frontend](frontend-files-explained.md) | Peta folder dan file React/TypeScript yang penting. |
-| [ERD](erd.md) | Entitas database dan hubungan utamanya. |
-| [Deployment](deployment-guide.md) | Docker Compose, storage volume, service, dan operasi deployment. |
-| [Menjalankan Docker lokal](docker-local-guide.md) | Panduan clone, konfigurasi lokal, menjalankan container, dan diagnosis untuk pengembang. |
-| [Framework yang dikustomisasi](framework-files.md) | Konfigurasi Laravel yang diubah untuk Sikompen. |
+| [Arsitektur dan logika sistem](system-logic.md) | Batas sistem, sumber data, lifecycle impor/aktivasi, SP, dan retensi. |
+| [Panduan fungsionalitas](functionality-guide.md) | Alur yang tersedia untuk admin, mahasiswa, dan pengelola reset akun. |
+| [Backend](backend-explained.md) | Surface HTTP, domain action, keamanan, job, API outbound, dan akses. |
+| [Peta file backend](backend-files-explained.md) | Lokasi controller, request, action, job, model, command, dan test penting. |
+| [Worker dan scheduler](worker-and-scheduler.md) | Queue impor, ekspor, API sync, rekonsiliasi task, dan retensi. |
+| [Frontend](frontend-explained.md) | Arsitektur Inertia/React, feature module, tabs, dan perilaku UI. |
+| [Peta file frontend](frontend-files-explained.md) | Halaman, feature, shared code, dan output Wayfinder. |
+| [Panduan perubahan UI](frontend-guide.md) | Aturan menambah tab atau kolom dan verifikasi frontend. |
+| [ERD](erd.md) | Entitas utama dan hubungan data aplikasi. |
+| [Framework dan konfigurasi](framework-files.md) | File framework yang dikustomisasi dan variabel environment domain. |
+| [Docker lokal](docker-local-guide.md) | Menjalankan, memeriksa, dan mendiagnosis stack lokal. |
+| [Kontrak API outbound](api-outbound-integration-proposal.md) | API v1 yang telah diimplementasikan untuk sistem eksternal. |
+| [Deployment](deployment-guide.md) | Dokumen deployment terpisah; belum diperbarui dalam perubahan ini. |
 
-## Istilah yang dipakai konsisten
+## Istilah
 
-- **Workbook / versi file**: satu XLSX yang sudah lolos impor. Mengunggahnya tidak otomatis mengganti data tampil.
-- **Data aktif**: satu versi workbook yang dipilih untuk satu periode. Hanya data aktif yang menjadi sumber tabel mahasiswa, detail, kandidat SP, API, dan ekspor.
-- **Periode**: string akademik dari template, misalnya `2026/2027 Gasal`.
-- **Cutoff**: batas waktu pengerjaan Kompen/Responsi untuk satu periode, selalu dihitung dalam `Asia/Jakarta`.
-- **Kandidat SP**: mahasiswa dengan sisa hutang setelah cutoff lewat, sebelum finalisasi SP dilakukan.
-- **SP aktif**: kandidat yang sudah diterbitkan saat finalisasi, belum di-rollback, dan belum selesai seluruh hutangnya.
-- **Riwayat aktivitas**: audit trail perubahan penting; ini berbeda dari Log Upload yang khusus mencatat versi workbook.
+- **Workbook Kompen/Respon**: XLSX sumber ringkasan dan detail Kompen/Responsi.
+- **Roster mahasiswa aktif**: XLSX daftar mahasiswa aktif; dipilih independen untuk setiap periode.
+- **Versi aktif**: workbook atau roster yang dipilih sebagai sumber pada periodenya.
+- **Data operasional**: mahasiswa/detail yang dipublikasikan dari versi workbook aktif.
+- **Data consistency**: perbandingan NIM workbook aktif terhadap roster aktif untuk periode sama.
+- **Cutoff**: batas pengerjaan per periode dalam zona waktu `Asia/Jakarta`.
+- **Kandidat SP**: mahasiswa dengan hutang efektif tersisa setelah cutoff lewat.
+- **SP aktif**: SP terbit yang belum rollback dan masih outstanding.
+- **Recycle bin**: versi workbook/roster yang dihapus secara lunak sebelum retensinya berakhir.
 
-## Sumber kebenaran
+## Peta alur cepat
 
-1. Kode dan test adalah sumber teknis utama.
-2. `system-logic.md` menjelaskan hubungan antarfitur dan state yang seharusnya terlihat oleh operator.
-3. `functionality-guide.md` menjelaskan perilaku yang diharapkan oleh pengguna.
-4. Dokumen deployment tidak menggantikan konfigurasi rahasia di `.env`.
+1. Admin mengimpor dan memilih roster aktif bila diperlukan.
+2. Admin mengimpor workbook Kompen/Respon; worker memvalidasi lalu menyimpan versi.
+3. Admin mengaktifkan versi workbook per periode; tabel, API lokal, ekspor, dan SP menggunakan data operasional itu.
+4. Admin mencatat progres/koreksi atau menetapkan cutoff dan menerbitkan SP.
+5. Worker membuat ekspor dan artifact API massal; scheduler membersihkan data sementara sesuai retensi.
