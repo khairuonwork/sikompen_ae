@@ -57,9 +57,9 @@ Route::post('admin/setup', [KompenResponHubAdminSetupController::class, 'store']
 
 Route::middleware('sikompen.student')->group(function (): void {
     Route::middleware('sikompen.student-password-changed')->group(function (): void {
-        Route::get('mahasiswa', [KompenResponHubController::class, 'studentIndex'])
+        Route::get('mahasiswa', [StudentProfileController::class, 'show'])
             ->name('student.kompen-respon.index');
-        Route::get('kompen-respon', [KompenResponHubController::class, 'studentIndex'])
+        Route::get('kompen-respon', [StudentProfileController::class, 'show'])
             ->name('kompen-respon-hub.index');
     });
 

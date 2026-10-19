@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Form, Head, Link } from '@inertiajs/react';
 import { toast } from 'sonner';
 import {
@@ -9,7 +9,6 @@ import {
     Settings,
     UserPlus,
     ArrowLeft,
-    ShieldCheck,
     AlertCircle,
     Eye,
     EyeOff,
@@ -122,6 +121,19 @@ export default function AdminSettings({
     const [isCurrentPasswordVisible, setIsCurrentPasswordVisible] = useState(false);
     const [isNewPasswordVisible, setIsNewPasswordVisible] = useState(false);
     const [isPasswordConfirmationVisible, setIsPasswordConfirmationVisible] = useState(false);
+    const [isUsernameDialogOpen, setIsUsernameDialogOpen] = useState(false);
+
+    useEffect(() => {
+        if (flash.success === null) {
+            return;
+        }
+
+        toast.success('Pengaturan berhasil diperbarui', {
+            description: flash.success,
+            closeButton: true,
+            duration: 7000,
+        });
+    }, [flash.success]);
 
     const handleCopy = async (code: string): Promise<void> => {
         if (await copy(code)) {
@@ -175,15 +187,6 @@ export default function AdminSettings({
                             </Link>
                         </Button>
                     </header>
-
-                    {/* Alert Flash Success */}
-                    {flash.success && (
-                        <Alert className="bg-emerald-50/90 border border-emerald-200 text-emerald-900 rounded-2xl backdrop-blur-md shadow-sm animate-in fade-in slide-in-from-top-3 duration-300">
-                            <ShieldCheck className="size-5 text-emerald-600 animate-bounce" />
-                            <AlertTitle className="font-bold text-emerald-950 text-base">Pengaturan Diperbarui</AlertTitle>
-                            <AlertDescription className="text-emerald-700 text-xs mt-0.5">{flash.success}</AlertDescription>
-                        </Alert>
-                    )}
 
                     {/* Alert Setup Code */}
                     {flash.adminSetupCode && (
@@ -294,8 +297,8 @@ export default function AdminSettings({
                             <CardDescription className="text-sm font-medium leading-relaxed text-[#395886]/80">Kelola username dan password hanya saat diperlukan. Setiap perubahan mengeluarkan sesi admin lain.</CardDescription>
                         </CardHeader>
                         <CardContent className="flex flex-col gap-3 sm:flex-row">
-                            <Dialog>
-                                        <DialogTrigger asChild>
+                            <Dialog open={isUsernameDialogOpen} onOpenChange={setIsUsernameDialogOpen}>
+                                <DialogTrigger asChild>
                                     <Button variant="outline" className="justify-start rounded-2xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]">
                                         <UserRound className="size-4" /> Ganti username
                                     </Button>
@@ -305,7 +308,11 @@ export default function AdminSettings({
                                         <DialogTitle className="text-xl font-black text-[#395886]">Ganti username</DialogTitle>
                                         <DialogDescription className="text-[#395886]/70">Gunakan username unik. Konfirmasi password diperlukan sebelum disimpan.</DialogDescription>
                                     </DialogHeader>
-                                    <Form {...updateUsername.form()} className="grid gap-4 px-6 py-5">
+                                    <Form
+                                        {...updateUsername.form()}
+                                        className="grid gap-4 px-6 py-5"
+                                        onSuccess={() => setIsUsernameDialogOpen(false)}
+                                    >
                                         {({ errors, processing }) => (
                                             <>
                                                 <div className="grid gap-1.5">
@@ -325,7 +332,7 @@ export default function AdminSettings({
                                             </>
                                         )}
                                     </Form>
-                                        </DialogContent>
+                                </DialogContent>
                             </Dialog>
 
                             <Dialog>

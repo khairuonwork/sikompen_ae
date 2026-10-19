@@ -49,6 +49,11 @@ test('a student can only view their own records after changing the initial passw
     ]);
     $ownStudent = studentForAuthenticationTest($import->id, $ownNim, 'Rina Utami');
     $otherStudent = studentForAuthenticationTest($import->id, $otherNim, 'Dani Pratama');
+    KompenResponHubPeriodCutoff::create([
+        'periode_semester' => '2026/2027 Ganjil',
+        'deadline_at' => now(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
 
     $this->post('/mahasiswa/login', ['nim' => $ownNim, 'password' => $ownNim])
         ->assertRedirect('/mahasiswa/ganti-password');
@@ -61,10 +66,18 @@ test('a student can only view their own records after changing the initial passw
     $this->get('/mahasiswa')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('isAdmin', false)
-            ->where('hasStudentSession', true)
-            ->has('students.data', 1)
-            ->where('students.data.0.nim', $ownNim),
+            ->component('mahasiswa/profile')
+            ->where('profile.nim', $ownNim)
+            ->where('profile.warning_period', '2026/2027 Ganjil')
+            ->has('profile.records', 1)
+            ->where('profile.records.0.nim', $ownNim),
+        );
+
+    $this->get('/kompen-respon')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('mahasiswa/profile')
+            ->where('profile.nim', $ownNim),
         );
 
     $this->getJson('/api/kompen-respon/students')
