@@ -18,7 +18,7 @@ flowchart LR
     DB --> DBVolume[(sikompen_database_data)]
 ```
 
-- Hanya Nginx `web` yang dipublikasikan pada `${APP_PORT}:80`.
+- Nginx `web` dipublikasikan pada `${APP_BIND_HOST}:${APP_PORT}:80`. Untuk Cloudflare Tunnel gunakan `127.0.0.1`; untuk staging privat Tailscale gunakan IP Tailscale server.
 - PHP-FPM dan queue tidak mengekspos port ke host.
 - MariaDB dipublikasikan hanya pada `127.0.0.1:${KOMPEN_DB_PORT}:3306`, sehingga tidak dapat diakses dari jaringan lain secara langsung.
 - XLSX upload berada di named volume `sikompen_import_storage`, mounted di `storage/app/private/kompen-respon-hub/imports` pada service `app` dan `queue`.
