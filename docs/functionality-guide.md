@@ -1,99 +1,63 @@
 # Panduan Fungsionalitas
 
-Dokumen ini menjelaskan perilaku aplikasi dari sudut pandang pengguna. Hak akses backend tetap menjadi sumber otorisasi; menyembunyikan tombol di frontend bukan satu-satunya perlindungan.
+Hak akses selalu diputuskan backend; menyembunyikan tombol di frontend bukan perlindungan.
 
 ## Matriks akses
 
-| Fitur | Admin | Mahasiswa |
-| --- | --- | --- |
-| Lihat Kompen dan Respon / Detail Kompen | Ya | Ya, read-only |
-| Filter dan pagination | Ya | Ya |
-| Download template | Ya | Tidak |
-| Upload, rename, delete, atau aktifkan versi XLSX | Ya | Tidak |
-| Input progres, koreksi ringkasan/detail | Ya | Tidak |
-| Kelola cutoff dan SP | Ya | Tidak |
-| Lihat Log Upload dan Riwayat Aktivitas | Ya | Tidak |
-| Buat ekspor XLSX/PDF | Ya | Ya, sesuai scope aksesnya |
+| Fitur | Admin reguler | Admin emergency | Mahasiswa |
+| --- | --- | --- | --- |
+| Tabel, detail, filter, dan ekspor scope sendiri | Ya | Tidak | Ya, read-only dan NIM sendiri |
+| Upload/kelola workbook Kompen/Respon | Ya | Tidak | Tidak |
+| Upload/kelola roster mahasiswa aktif | Ya | Tidak | Tidak |
+| Progress, koreksi, cutoff, dan SP | Ya | Tidak | Tidak |
+| Reset password mahasiswa | Ya | Tidak | Meminta reset sendiri |
+| Recovery password admin | Meminta reset sendiri | Terbitkan/batalkan kode | Tidak |
+| Retensi, Log Upload, Riwayat Aktivitas | Ya | Tidak | Tidak |
 
-Scope mahasiswa dipaksa berdasarkan NIM dari session Laravel. Jangan mengandalkan filter URL untuk membatasi data mahasiswa.
+## 1. Dua jenis impor
 
-## 1. Upload Dokumen
+**Workbook Kompen/Respon** berisi ringkasan dan detail pekerjaan. Sistem memeriksa template, periode, NIM, detail, total jam, archive, dan formula sebelum menyimpan versi.
 
-1. Admin mengisi nama pengunggah dan memilih `.xlsx` dari template Sikompen.
-2. Sistem memvalidasi ukuran, tipe file, archive XLSX, formula, struktur template, periode, NIM, detail, dan total jam.
-3. Browser menampilkan progres pengiriman; setelah diterima, panel task menunjukkan proses queue sampai selesai atau gagal.
-4. Upload berhasil menghasilkan **versi file**, bukan langsung mengganti data tabel.
+**Daftar mahasiswa aktif** berisi NIM, nama, dan kelas dalam blok kelas untuk satu periode. Sistem memeriksa struktur template, periode tunggal, NIM duplikat, dan formula.
 
-Jika gagal, baca alasan pada task. Unggah ulang workbook yang telah dibetulkan. Jangan mengubah workbook langsung saat task masih `queued`/`processing`.
+Keduanya diproses di worker dan menghasilkan versi file; keduanya belum dipakai sampai admin memilih **Aktifkan** pada List File.
 
-## 2. List File
+## 2. List File, konsistensi, dan recycle bin
 
-List File adalah pusat pengelolaan versi workbook.
+- Workbook dan roster memiliki daftar versi serta pointer aktif yang independen per periode.
+- Aktivasi workbook memperbarui data Kompen/Respon operasional. Aktivasi roster mengatur master roster periode itu tanpa menimpa data Kompen/Respon.
+- Laporan konsistensi membandingkan NIM antara keduanya; laporan ini tidak mengganti data secara otomatis.
+- Menghapus versi inactive memindahkannya ke recycle bin. Admin dapat memulihkannya sebelum retensi berakhir.
+- Versi yang masih dipakai tidak dapat dihapus. Workbook aktif tidak dapat dilepas bila periode masih memiliki SP aktif outstanding.
 
-- Admin dapat memfilter, mengubah nama tampilan, mengunduh ulang, dan menghapus versi.
-- Admin memilih **Aktifkan** untuk menjadikan satu versi sebagai sumber data periode itu.
-- Hanya boleh ada satu versi aktif pada satu periode. Mengaktifkan versi lain pada periode yang sama menggantikan data aktif periode tersebut saja.
-- File periode lain tetap aktif secara mandiri; tidak ada konflik lintas periode.
-- File aktif sebaiknya tidak dihapus sebelum versi pengganti siap dipilih.
+## 3. Kompen, Respon, dan Detail
 
-## 3. Kompen dan Respon
+Tabel dapat difilter berdasarkan nama/NIM, tingkat, kelas, periode, dan jumlah baris. Admin dapat memasukkan progress serta override ringkasan; nilai efektif tidak boleh bertentangan dengan batas jam bisnis. Detail Kompen dapat dikoreksi melalui override, sementara data asli workbook tetap menjadi referensi audit.
 
-Tabel ini menunjukkan ringkasan total kompen/responsi, jam yang sudah dikerjakan, dan sisa hutang efektif. Filter dapat memakai nama/NIM, tingkat, kelas, periode, serta jumlah baris per halaman (15, 25, 50, atau 100).
+Pencarian global admin membuka overview mahasiswa yang memuat sumber impor, detail, progres, SP, dan aktivitas terbaru.
 
-**Mode perbaikan data** membuka form manual tanpa membuat tombol edit memenuhi setiap baris:
+## 4. Cutoff dan Surat Peringatan
 
-- **Progress mahasiswa**: jam kompen/responsi yang telah dikerjakan, waktu terakhir mengerjakan, dan alasan perubahan.
-- **Koreksi ringkasan**: total kompen/responsi efektif dan alasan perubahan.
+1. Pilih periode dan simpan cutoff dalam `Asia/Jakarta` (minimal lima menit ke depan).
+2. Setelah cutoff lewat, periksa kandidat yang masih memiliki sisa hutang.
+3. Finalisasi menerbitkan SP aktif untuk kandidat outstanding.
+4. Koreksi data/progress dapat menyelesaikan SP; rollback SP atau finalisasi harus disertai alasan dan meninggalkan riwayat.
 
-Setiap nilai dicek agar konsisten dengan batas bisnis lalu dicatat ke Riwayat Aktivitas. Pencarian global admin dapat membuka profil mahasiswa untuk melihat sumber impor, detail, progres, SP, dan aktivitas terakhir.
+Periode yang dikelola dapat berbeda dari periode yang sedang dilihat pada daftar SP untuk kebutuhan histori.
 
-## 4. Detail Kompen
+## 5. Log dan retensi
 
-Menampilkan detail kejadian akademik yang membentuk total Kompen/Responsi. Dalam mode perbaikan, admin dapat mengoreksi atribut seperti mata kuliah, dosen, tanggal, presensi, keterlambatan, jam, dan keterangan. Perubahan disimpan sebagai override; baris asal workbook tetap menjadi referensi audit.
+**Log Upload** mencatat lifecycle workbook dan roster—upload, aktivasi, release, rename, delete, restore, dan purge. **Riwayat Aktivitas** mencatat perubahan domain seperti progress, cutoff, SP, pengaturan, atau export.
 
-## 5. Surat Peringatan
+Admin mengatur tiga retensi terpisah: Riwayat Aktivitas, Log Upload, dan recycle bin workbook/roster. Setelah scheduler memurge data yang melewati batas, data tersebut tidak dapat dikembalikan.
 
-Panel ini sengaja memisahkan dua pilihan periode:
+## 6. Ekspor
 
-| Pilihan | Fungsi |
-| --- | --- |
-| **Periode SP dikelola** | Periode yang cutoff-nya dibuat/diubah dan dapat difinalisasi. |
-| **Periode list mahasiswa** | Periode yang sedang diperiksa dalam daftar kandidat/SP; boleh berbeda untuk melihat histori. |
+Ekspor menggunakan filter resource saat ini. XLSX memiliki batas baris konfigurasi; PDF landscape tidak dibatasi oleh batas aplikasi yang sama. Task diproses asynchronous, dan hasil hanya dapat diunduh oleh session pembuatnya hingga retensi berakhir.
 
-Alur yang dianjurkan:
+## 7. Akun dan pemulihan
 
-1. Pilih periode SP dan simpan cutoff dalam waktu Asia/Jakarta.
-2. Setelah cutoff lewat, periksa daftar mahasiswa yang masih memiliki sisa hutang sebagai kandidat.
-3. Bila data sudah benar, tekan **Finalisasi SP**. Kandidat outstanding diterbitkan sebagai SP aktif.
-4. Bila ditemukan kesalahan, perbaiki data/cutoff atau rollback SP/finalisasi dengan alasan. Riwayat tetap ada, tetapi status rollback tidak dihitung sebagai SP aktif dan tidak boleh dikirim sebagai data SP integrasi.
-
-SP aktif dapat diberi catatan; perubahan progress dapat mengubah resolusi menjadi selesai apabila seluruh hutang telah lunas. Riwayat Surat Peringatan mempertahankan SP terbit dan rollback untuk audit.
-
-## 6. Log Upload
-
-Log Upload adalah jejak lifecycle **file**: upload, aktivasi, rename, restore/penggantian, rollback, dan delete. Gunakan filter periode atau bulan/tahun aktivitas untuk mengurangi kepadatan log. Kolom periode menunjukkan periode yang dibawa workbook, bukan sekadar waktu upload.
-
-Gunakan **Riwayat Aktivitas** bila yang dicari adalah aksi domain lebih luas—misalnya koreksi jam, perubahan cutoff, finalisasi, pembatalan SP, atau request ekspor.
-
-## 7. Riwayat Aktivitas
-
-Setiap aktivitas memiliki subject yang dapat dibaca manusia (misalnya `Mahasiswa: ...`, `Workbook: ...`, `Periode: ...`, atau `Ekspor: ...`), actor, konteks periode/kelas/NIM bila relevan, alasan, dan snapshot before/after bila ada perubahan nilai.
-
-Admin dapat memfilter jenis aktivitas, actor, periode, dan pagination. Kebijakan retensi hari juga diatur dari panel ini. Penghapusan retensi bersifat otomatis dan permanen, sehingga tentukan durasi sesuai kebutuhan audit institusi.
-
-## 8. Ekspor XLSX dan PDF
-
-Ekspor memakai filter tabel saat ini, tetapi filter tidak wajib: tanpa filter berarti semua data pada resource tersebut.
-
-- **XLSX**: dibatasi konfigurasi jumlah baris sebagai pelindung memori.
-- **PDF**: landscape dan tidak dibatasi jumlah baris oleh aplikasi.
-- Task diproses satu per satu di worker. Notifikasi task dapat ditutup setelah terminal atau dibatalkan saat masih berjalan.
-- Nama file mencantumkan resource dan filter efektif agar mudah dibedakan saat diunduh.
-
-Jika ekspor gagal, gunakan pesan task sebagai petunjuk; periksa filter dan ulangi. Jika worker/scheduler bermasalah, administrator perlu mengecek container queue.
-
-## 9. Pengaturan Admin
-
-Pada standalone mode, setup admin pertama terbuka otomatis ketika belum ada akun admin. Admin aktif dapat membuka jendela setup tambahan dengan kode sekali pakai dan masa berlaku terbatas. Login, setup, upload, dan aksi sensitif dilindungi throttle serta validasi server.
-
-Admin memakai guard session Laravel; halaman setup/login lokal selalu mengikuti kebijakan jendela setup admin.
+- Mahasiswa login dengan NIM dan password awal NIM, lalu wajib menggantinya. Mereka dapat melihat profil, data sendiri, mengganti password, atau mengajukan reset.
+- Reset mahasiswa menghasilkan kode yang dikelola admin, berlaku 24 jam dan memiliki batas percobaan. Admin dapat refresh atau membatalkan permintaan.
+- Admin reguler dapat mengganti username/password; perubahan kredensial membatalkan session admin lain. Admin dapat mengajukan reset password tanpa membocorkan keberadaan akun.
+- Admin emergency memiliki area recovery terbatas. Ia dapat menerbitkan kode reset enam digit untuk admin reguler, berlaku 15 menit dan dibatasi percobaan; ia tidak memiliki akses ke data operasional.

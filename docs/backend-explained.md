@@ -2,89 +2,81 @@
 
 ## Teknologi dan batas tanggung jawab
 
-Backend menggunakan Laravel 13, PHP 8.4, MariaDB, database queue, PhpSpreadsheet untuk XLSX, dan Dompdf untuk PDF. Laravel mengendalikan routing, autentikasi/session, otorisasi, validasi, query, mutasi data, dispatch queue, storage private, dan kontrak JSON/Inertia. React tidak memiliki akses langsung ke database atau file system.
+Backend memakai Laravel 13 dan PHP 8.4, MariaDB, database queue, PhpSpreadsheet, dan Dompdf. Laravel mengelola autentikasi, otorisasi, validasi, lifecycle data, file private, queue, scheduler, serta respons Inertia/JSON. React tidak mengakses database atau storage secara langsung.
 
 ```mermaid
 flowchart LR
-    R[Route + middleware] --> V[Form Request]
-    V --> C[Controller]
-    C --> A[Action domain]
-    A --> M[Eloquent models]
+    R[Route + middleware] --> Q[Form Request]
+    Q --> C[Controller]
+    C --> A[Domain Action]
+    A --> M[Eloquent model]
     M --> DB[(MariaDB)]
     C --> I[Inertia / JSON Resource]
-    C --> Q[Queued Job]
+    C --> J[Queued Job]
 ```
 
-## Akses dan session
+## Akses dan identitas
 
-### Standalone
-
-- Guard `admin` menggunakan `KompenResponHubAdmin` pada `sikompen_admins`, bukan tabel `users` bawaan Laravel.
-- Login memakai `StoreAdminLoginRequest`, throttle `admin-login`, hashing Laravel, dan regenerasi session setelah berhasil.
-- Setup akun pertama tersedia ketika belum ada admin. Admin aktif dapat membuka setup tambahan dengan kode acak yang hanya disimpan sebagai hash dan memiliki masa berlaku.
-
-### Mahasiswa
-
-- Guard `student` menggunakan akun mahasiswa yang bersumber dari roster aktif dan hanya dapat membaca NIM miliknya sendiri.
-- Login memakai NIM dan password; password awal wajib diganti sebelum data dapat dilihat.
-
-## HTTP layer
-
-| Surface | Akses | Hasil |
+| Actor | Mekanisme | Batas utama |
 | --- | --- | --- |
-| `/` | Context akses | Landing/pemilih akses. |
-| `/mahasiswa`, `/kompen-respon` | Mahasiswa terautentikasi | Tabel read-only milik NIM sendiri. |
-| `/admin` | Admin terautentikasi | Panel operasional admin. |
-| `/admin/login`, `/admin/setup` | Admin lokal | Login dan setup akun. |
-| `/api/kompen-respon/*` | Session admin/mahasiswa + limiter | Filter, mahasiswa, mahasiswa tunggal, dan detail sebagai JSON Resource. |
+| Admin reguler | Guard `admin`, tabel `sikompen_admins` | Mengelola data, file, SP, retensi, dan reset mahasiswa. |
+| Admin emergency | Guard admin dengan flag emergency | Hanya area recovery: menerbitkan/membatalkan kode reset admin reguler. |
+| Mahasiswa | Guard `student`, akun diprovisikan dari roster aktif | Hanya melihat record NIM sendiri setelah mengganti password awal. |
+| Client API | Bearer token + `X-Client-Id` | Scope, allowlist IP, dan rate limit server-side. |
 
-`KompenResponHubTableRequest` menormalisasi filter, memvalidasi input, dan membatasi `per_page` ke 15/25/50/100. `KompenResponHubController` memuat hanya prop yang diperlukan tab aktif untuk menjaga response Inertia tetap ringan.
+Password awal mahasiswa adalah NIM. Akun hanya dapat melihat data setelah password awal diganti. Jika NIM tidak lagi berada dalam roster aktif untuk periode akses, session mahasiswa tidak dapat melanjutkan akses.
 
-API memiliki endpoint `filter-options`, `students`, `students/{student}`, dan `details`. API memakai middleware `web`, akses session lokal, serta limiter `sikompen-data`. Input diproses Eloquent/builder dengan parameter binding; bukan SQL yang dibangun dari input pengguna.
+## Surface HTTP
 
-## Domain action
-
-| Action | Tanggung jawab |
+| Surface | Tujuan |
 | --- | --- |
-| `ParseKompenResponHubWorkbook` | Membaca template dan menghasilkan payload terstruktur; validasi marker kelas, periode, NIM, detail, serta akumulasi jam. Tidak menulis database. |
-| `ValidateKompenResponHubWorkbookArchive` | Memeriksa ZIP/OXML sebelum parsing: ukuran, entry, rasio kompresi, path, required entry, dan formula cell. |
-| `ImportKompenResponHubWorkbook` | Menyimpan metadata versi + Log Upload; `replaceActiveData()` dipakai ketika aktivasi. |
-| `ActivateKompenResponHubImportVersion` | Memilih satu workbook aktif per periode dan mengganti data live periode tersebut secara transaksional. |
-| `KompenResponHubDataQuery` | Sumber query bersama untuk tabel, API, export, List File, Log Upload, SP, riwayat, dan filter. |
-| `FinalizeKompenResponHubCutoff` | Mengubah kandidat outstanding menjadi SP `issued` dan mencatat aktivitasnya. |
-| `BuildKompenResponHubExport` | Membuat XLSX/PDF landscape dari filter task dan memberi nama file berbasis filter. |
-| `RecordKompenResponHubActivity` | Menyimpan actor, subject, context, alasan, before/after, IP, user agent, dan metadata audit. |
+| `/` | Pemilih akses admin/mahasiswa. |
+| `/admin` | Panel operasional admin; `/admin/kompen-respon` adalah route legacy. |
+| `/mahasiswa`, `/kompen-respon`, `/mahasiswa/profil` | Data mahasiswa read-only berdasarkan session. |
+| `/admin/settings`, `/admin/recovery`, `/admin/student-password-resets` | Pengaturan kredensial, recovery emergency, dan reset mahasiswa. |
+| `/api/kompen-respon/*` | API internal berbasis session untuk filter, mahasiswa, dan detail. |
+| `/api/v1/*` | API outbound berbasis API client; lihat kontrak API. |
 
-## Model dan state utama
+`KompenResponHubTableRequest` menormalisasi filter dan pagination. Semua mutasi memakai Form Request, middleware akses, dan pencatatan aktivitas ketika perubahan tersebut bersifat bisnis/operasional.
 
-| Model/tabel | Fungsi |
+## Domain utama
+
+| Area | Action / komponen penting |
 | --- | --- |
-| `KompenResponHubImport` / `sikompen_imports` | Metadata workbook, filename tampilan, checksum, quality report, dan path private. |
-| `KompenResponHubActiveImport` / `sikompen_active_imports` | Pointer satu versi aktif per periode. |
-| `KompenResponHubStudent`, `KompenResponHubDetail` | Data live dari versi aktif. |
-| `StudentProgress`, `StudentSummaryOverride`, `DetailOverride` | Layer koreksi manual yang membentuk nilai efektif. |
-| `PeriodCutoff`, `WarningLetter` | Cutoff, kandidat, finalisasi, resolusi, dan rollback SP. |
-| `ImportTask`, `ExportTask` | State machine asynchronous worker. |
-| `ImportAuditLog`, `ActivityLog` | Audit lifecycle file dan audit aksi domain. |
-| `SystemSetting` | Kebijakan retensi Riwayat Aktivitas. |
+| Workbook Kompen/Respon | `ParseKompenResponHubWorkbook`, `ValidateKompenResponHubWorkbookArchive`, `ImportKompenResponHubWorkbook`, `ActivateKompenResponHubImportVersion`, `ReleaseKompenResponHubImportVersion`. |
+| Roster mahasiswa aktif | `ParseKompenResponHubActiveStudentWorkbook`, `ImportKompenResponHubActiveStudents`, `ActivateKompenResponHubActiveStudentImport`. |
+| Query dan konsistensi | `KompenResponHubDataQuery`, `BuildKompenResponHubDataConsistencyReport`. |
+| Lifecycle Kompen/SP | `FinalizeKompenResponHubCutoff`, progress dan override melalui controller lifecycle. |
+| File dan audit | `BuildKompenResponHubExport`, `RecordKompenResponHubActivity`. |
+| API massal | `GenerateKompenResponHubApiSyncArtifact`. |
 
-Semua model domain mengambil koneksi dari `config('kompen-respon-hub.database_connection')`, tidak mengandalkan database default Laravel.
+## State data penting
 
-## Keamanan input dan file
+| Model/kelompok | Tanggung jawab |
+| --- | --- |
+| `KompenResponHubImport`, `KompenResponHubActiveImport` | Versi workbook dan pointer aktif per periode. |
+| `KompenResponHubActiveStudentImport`, `...Reference`, `...Student` | Versi roster, pointer aktif per periode, dan baris roster. |
+| `KompenResponHubStudent`, `KompenResponHubDetail` | Data operasional hasil workbook aktif. |
+| `...StudentProgress`, `...StudentSummaryOverride`, `...DetailOverride` | Lapisan nilai efektif tanpa mengubah sumber workbook. |
+| `...PeriodCutoff`, `...WarningLetter` | Cutoff dan lifecycle SP. |
+| `...ImportTask`, `...ActiveStudentImportTask`, `...ExportTask`, `...ApiSyncRun` | State pekerjaan asynchronous. |
+| `...ImportAuditLog`, `...ActivityLog`, `...SystemSetting` | Jejak lifecycle file, aktivitas domain, dan kebijakan retensi. |
 
-- Semua mutasi memakai Form Request, middleware akses, dan throttle route.
-- `SafeSearchTerm` menolak control character/pola input berbahaya pada nama, pencarian, dan alasan.
-- XLSX wajib lolos batas upload konfigurasi serta pemeriksaan archive sebelum PhpSpreadsheet memprosesnya.
-- File private diunduh melalui controller; filename dinormalisasi agar tidak dapat menginjeksi header.
-- Poll/download export membutuhkan access token acak **dan** session ID peminta.
-- Mutasi penting direkam dalam Riwayat Aktivitas agar perubahan dapat ditelusuri.
+Semua model domain memakai koneksi `config('kompen-respon-hub.database_connection')`.
+
+## Keamanan
+
+- Archive XLSX diperiksa sebelum PhpSpreadsheet membaca isi: batas ukuran, entry, rasio kompresi, path, required Office XML, dan formula.
+- Input pencarian/alasan dibatasi `SafeSearchTerm`; nilai query diparameterisasi melalui Eloquent/query builder.
+- Workbook, ekspor, dan artifact sync berada di storage private. Download selalu melalui controller yang memeriksa akses.
+- Poll/download ekspor memerlukan token acak dan session pembuat task.
+- API outbound memverifikasi bearer token, client ID, scope, IP egress, status client, dan limiter sebelum controller dipanggil.
+- Riwayat aktivitas menyaring kredensial dan membatasi payload audit agar informasi sensitif tidak dicatat mentah.
 
 ## Aturan perubahan backend
 
-1. Tempatkan validasi pada Form Request, bukan hanya controller.
-2. Gunakan `KompenResponHubDataQuery` apabila perilaku harus sama di tabel, API, dan ekspor.
-3. Rekam perubahan bisnis melalui `RecordKompenResponHubActivity` dengan subject dan context yang dapat dibaca manusia.
-4. Jika route/controller berubah, generate ulang Wayfinder dan perbarui kontrak frontend.
-5. Setelah PHP berubah, jalankan Pint, test feature relevan, dan static analysis.
-
-Runtime worker/scheduler dijelaskan dalam [worker-and-scheduler.md](worker-and-scheduler.md); perilaku pengguna ada di [functionality-guide.md](functionality-guide.md).
+1. Letakkan validasi di Form Request dan otorisasi di middleware/policy akses yang ada.
+2. Gunakan `KompenResponHubDataQuery` jika perilaku data harus sama pada tabel, API internal, dan ekspor.
+3. Gunakan `RecordKompenResponHubActivity` untuk mutasi domain yang perlu diaudit.
+4. Jika route/controller berubah, generate ulang Wayfinder dan sesuaikan type/frontend.
+5. Jalankan Pint, test feature yang paling sempit, dan static analysis yang relevan setelah perubahan PHP.

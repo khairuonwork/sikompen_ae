@@ -1,49 +1,36 @@
 # File Framework dan Konfigurasi Sikompen
 
-| File | Peran di Sikompen |
+| File | Peran |
 | --- | --- |
-| `config/kompen-respon-hub.php` | Koneksi domain, limit upload/archive XLSX, batas XLSX export, retensi task, dan ambang task macet. |
-| `config/database.php` | Koneksi MariaDB `kompen_db` untuk data Sikompen. |
-| `config/auth.php` | Guard session `admin` dengan provider `KompenResponHubAdmin`; tidak memakai user default. |
-| `config/session.php` | Session database `sikompen_sessions`, encryption, cookie, dan SameSite. |
-| `config/queue.php` | Database queue pada `kompen_db`; timeout/retry mendukung job hingga 10 menit. |
-| `config/filesystems.php` | Disk local private untuk import/export; tidak ada file XLSX di database/public disk. |
-| `app/Providers/AppServiceProvider.php` | Password policy produksi, Carbon immutable, guard command destruktif, serta limiter. |
-| `bootstrap/app.php` | Route registration, middleware Inertia, alias middleware Sikompen, serta error response API. |
-| `routes/web.php` | Semua surface browser dan mutasi admin. |
-| `routes/api.php` | Data API filter/mahasiswa/detail yang dilindungi session dan limiter. |
-| `routes/console.php` | Jadwal reconciling task dan retensi. |
-| `resources/views/app.blade.php` | Shell Blade Inertia/Vite. |
-| `resources/views/exports/kompen-respon-hub.blade.php` | Layout PDF landscape untuk export. |
-| `vite.config.ts` | Vite + React + Inertia + Tailwind + Wayfinder. |
-| `Dockerfile` | Multi-stage Node/PHP-FPM/Nginx; asset production dan extension PHP. |
-| `docker-compose.yml` | `web`, `app`, `queue`, `scheduler`, `database`, serta volume database/import/export. |
-| `nginx.conf` | Entry public Nginx, FastCGI PHP, batas request dan timeout. |
-| `docker-entrypoint.sh` | Membuat/chown storage logs, imports, dan exports agar web/worker konsisten. |
+| `bootstrap/app.php` | Alias middleware, cookie exception, dan redirect guard. |
+| `bootstrap/providers.php` | Pendaftaran provider aplikasi. |
+| `app/Providers/AppServiceProvider.php` | Rate limiter dan konfigurasi aplikasi saat boot. |
+| `config/auth.php` | Guard/provider admin dan mahasiswa. |
+| `config/kompen-respon-hub.php` | Koneksi domain, import, queue, retention, API sync, dan emergency admin. |
+| `config/database.php`, `queue.php`, `cache.php`, `session.php` | Koneksi `kompen_db`, database queue/cache, dan session aplikasi. |
+| `routes/web.php`, `routes/api.php`, `routes/console.php` | Surface browser, API, dan schedule. |
+| `docker-compose.yml` | Stack lokal sembilan service dan volume private. |
+| `Dockerfile`, `docker-entrypoint.sh`, `nginx*.conf` | Image aplikasi/web, bootstrap runtime, dan Nginx. |
+| `vite.config.ts`, `tsconfig.json`, `components.json` | Vite, TypeScript, Tailwind/UI tooling, dan Wayfinder. |
 
-## Environment penting
+## Environment domain penting
 
-Nilai rahasia hanya ada di `.env`, tidak di Git.
-
-| Variable | Fungsi |
+| Kelompok | Variabel |
 | --- | --- |
-| `APP_ENV=production`, `APP_DEBUG=false` | Perilaku dan error handling produksi. |
-| `APP_KEY` | Kunci enkripsi Laravel; unik dan stabil per deployment. |
-| `APP_URL`, `DOCKER_APP_URL`, `APP_PORT` | URL/base URL serta binding port aplikasi. |
-| `KOMPEN_RESPON_HUB_DB_CONNECTION=kompen_db` | Koneksi yang digunakan semua model domain. |
-| `KOMPEN_DB_*` | Host, port, database, user, password MariaDB; Compose memakai host `database`. |
-| `SESSION_*` | Driver, koneksi, cookie, encryption, secure cookie, SameSite, dan path session. |
-| `QUEUE_CONNECTION`, `DB_QUEUE_CONNECTION`, `DB_QUEUE_RETRY_AFTER` | Queue import/export pada database. |
-| `SIKOMPEN_IMPORT_*` | Batas file/archive workbook. |
-| `SIKOMPEN_EXPORT_MAX_ROWS`, `SIKOMPEN_EXPORT_RETENTION_HOURS` | Batas XLSX dan usia hasil export. |
-| `SIKOMPEN_IMPORT_TASK_RETENTION_DAYS`, `SIKOMPEN_STALLED_TASK_MINUTES` | Retensi task dan deteksi task macet. |
+| Data | `KOMPEN_RESPON_HUB_DB_CONNECTION`, `KOMPEN_DB_*`, `SESSION_*`, `DB_QUEUE_CONNECTION`. |
+| Import/export | `SIKOMPEN_IMPORT_*`, `SIKOMPEN_EXPORT_MAX_ROWS`, `SIKOMPEN_EXPORT_RETENTION_HOURS`, `SIKOMPEN_IMPORT_TASK_RETENTION_DAYS`. |
+| Worker | `SIKOMPEN_IMPORT_QUEUE`, `SIKOMPEN_EXPORT_QUEUE`, `SIKOMPEN_API_SYNC_QUEUE`, `SIKOMPEN_STALLED_TASK_MINUTES`, `SIKOMPEN_QUEUED_TASK_MINUTES`. |
+| API sync | `SIKOMPEN_API_SYNC_ARTIFACT_RETENTION_HOURS`, `SIKOMPEN_API_SYNC_RUN_RETENTION_DAYS`. |
+| API mini app | `SIKOMPEN_API_BASE_URL`, `SIKOMPEN_API_CLIENT_ID`, `SIKOMPEN_API_BEARER_TOKEN`, `API_MINI_APP_PORT`, serta bind/IP/network override opsional Compose. |
+| Darurat | `SIKOMPEN_EMERGENCY_ADMIN_1_*`, `SIKOMPEN_EMERGENCY_ADMIN_2_*`. |
+| Cache | `DB_CACHE_CONNECTION`, `DB_CACHE_TABLE`, `DB_CACHE_LOCK_CONNECTION`, `DB_CACHE_LOCK_TABLE`, `CACHE_PREFIX`. |
 
-## Route generated untuk frontend
+Salin `.env.example` untuk nilai awal lokal. Jangan memasukkan credential, token, atau password aktual ke dokumentasi maupun commit.
 
-Setiap perubahan route/controller yang dipakai React memerlukan:
+## Route TypeScript generated
+
+Wayfinder menghasilkan `resources/js/actions/` dan `resources/js/routes/`. Keduanya bukan source manual. Setelah route atau signature controller berubah, jalankan:
 
 ```bash
 php artisan wayfinder:generate --with-form --no-interaction
 ```
-
-Output di `resources/js/actions/` serta `resources/js/routes/` harus di-commit bersama perubahan route, tetapi tidak diedit manual.
