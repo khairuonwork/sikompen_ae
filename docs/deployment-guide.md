@@ -2,7 +2,7 @@
 
 ## Kondisi deployment saat ini
 
-Repository sudah memiliki Docker Compose single-host dengan lima service:
+Repository sudah memiliki Docker Compose single-host dengan service web, PHP-FPM, MariaDB, worker umum, worker impor, worker ekspor, worker API, scheduler, serta API Mini App internal:
 
 ```mermaid
 flowchart LR
@@ -15,6 +15,8 @@ flowchart LR
     Queue --> Files
     App --> Exports[(sikompen_export_storage)]
     Queue --> Exports
+    ApiSync[api-sync worker] --> ApiFiles[(sikompen_api_sync_storage)]
+    Mini[API Mini App :8090 localhost] -->|Bearer token| Web
     DB --> DBVolume[(sikompen_database_data)]
 ```
 
@@ -23,8 +25,11 @@ flowchart LR
 - MariaDB dipublikasikan hanya pada `127.0.0.1:${KOMPEN_DB_PORT}:3306`, sehingga tidak dapat diakses dari jaringan lain secara langsung.
 - XLSX upload berada di named volume `sikompen_import_storage`, mounted di `storage/app/private/kompen-respon-hub/imports` pada service `app` dan `queue`.
 - Hasil ekspor berada di named volume `sikompen_export_storage`, mounted di `storage/app/private/kompen-respon-hub/exports` pada service `app` dan `queue`.
+- Artifact sync API `.ndjson.gz` berada di `sikompen_api_sync_storage`, mounted di service `app`, `api-sync`, dan `scheduler`; artifact ini hanya berlaku 24 jam.
 - Data database berada pada named volume `sikompen_database_data`.
-- Service `scheduler` menjalankan reconciliation task serta kebijakan retensi; ia harus hidup bersama `queue`.
+- `api-sync` adalah worker tunggal khusus artifact API. Jangan menggantinya dengan worker impor/ekspor.
+- API Mini App hanya dipublikasikan ke loopback host pada `${API_MINI_APP_BIND_HOST}:${API_MINI_APP_PORT}`; ia bukan layanan publik.
+- Service `scheduler` menjalankan reconciliation task serta kebijakan retensi; ia harus hidup bersama seluruh worker.
 
 ## Prasyarat host
 
@@ -58,6 +63,15 @@ SESSION_TABLE=sikompen_sessions
 QUEUE_CONNECTION=database
 DB_QUEUE_CONNECTION=kompen_db
 DB_QUEUE_RETRY_AFTER=660
+
+# Satu objek untuk setiap sistem peminta yang diizinkan. Gunakan [] bila client
+# tidak memiliki IP egress statis; isi IP/CIDR hanya bila egress client stabil.
+SIKOMPEN_API_CLIENTS_JSON='[{"key":"akademik-production","token":"GANTI_TOKEN_MINIMAL_32_KARAKTER","allowed_ips":[],"rate_limit_per_minute":30}]'
+
+# PHP-FPM mempercayai Nginx pada network internal; Nginx hanya menerima
+# CF-Connecting-IP dari network Cloudflare Tunnel terpisah.
+SIKOMPEN_TRUSTED_PROXY_CIDRS=172.30.0.0/24
+SIKOMPEN_TRUSTED_PROXY_CIDR=172.31.0.0/24
 ```
 
 Di Compose, `KOMPEN_DB_HOST` dan `KOMPEN_DB_PORT` untuk container sudah dioverride menjadi `database:3306`. Jangan arahkan container ke `127.0.0.1`.
@@ -155,10 +169,10 @@ Perintah `migrate` tidak perlu dijalankan ulang pada setiap restart. Jalankan ha
 
 ```bash
 git pull
-docker compose up -d --build app web queue scheduler
+docker compose up -d --build app web queue imports exports api-sync scheduler api-mini-app
 docker compose exec app php artisan migrate --force
 docker compose exec app php artisan optimize
-docker compose logs --tail=100 app web queue scheduler
+docker compose logs --tail=100 app web queue imports exports api-sync scheduler api-mini-app
 ```
 
 Jika hanya mengubah UI atau backend, command build di atas sudah membangun asset React dan image PHP yang baru.
@@ -168,17 +182,19 @@ Jika hanya mengubah UI atau backend, command build di atas sudah membangun asset
 | Kebutuhan | Command |
 | --- | --- |
 | Status container | `docker compose ps` |
-| Log web/PHP/queue/scheduler | `docker compose logs -f web app queue scheduler` |
+| Log web/PHP/worker/scheduler | `docker compose logs -f web app queue imports exports api-sync scheduler` |
 | Log task impor gagal | `docker compose logs -f queue` lalu cek tab Log upload/admin |
 | Shell aplikasi | `docker compose exec app sh` |
 | Cek migration | `docker compose exec app php artisan migrate:status` |
 | Cek queue gagal | `docker compose exec app php artisan queue:failed` |
 | Restart worker | `docker compose restart queue` |
-| Rebuild penuh setelah kode berubah | `docker compose up -d --build app web queue scheduler` |
+| Cek worker API | `docker compose logs api-sync --tail=100` |
+| Cek API Mini App | `curl http://127.0.0.1:8090/health` |
+| Rebuild penuh setelah kode berubah | `docker compose up -d --build app web queue imports exports api-sync scheduler api-mini-app` |
 
 ## Backup dan restore
 
-Backup harus mencakup **tiga** named volume. Database tanpa volume import membuat audit metadata masih ada tetapi XLSX sumber tidak bisa diunduh; volume export menentukan apakah file ekspor yang masih dalam masa retensi masih dapat didownload.
+Backup harus mencakup **empat** named volume. Database tanpa volume import membuat audit metadata masih ada tetapi XLSX sumber tidak bisa diunduh; volume export menentukan apakah file ekspor yang masih dalam masa retensi masih dapat didownload. Volume API sync menyimpan artifact sementara dan tidak perlu dipulihkan bila masa retensi 24 jam telah berlalu.
 
 Sebelum melakukan restore, hentikan service atau setidaknya hentikan `queue` agar tidak ada task impor aktif. Uji prosedur restore di host non-produksi terlebih dahulu.
 
@@ -188,6 +204,7 @@ Untuk mengetahui path volume:
 docker volume inspect sikompen_database_data
 docker volume inspect sikompen_import_storage
 docker volume inspect sikompen_export_storage
+docker volume inspect sikompen_api_sync_storage
 ```
 
 Jangan gunakan `docker compose down -v` di production, karena opsi `-v` menghapus volume beserta database dan file upload.
@@ -199,9 +216,11 @@ Jangan gunakan `docker compose down -v` di production, karena opsi `-v` menghapu
 - Ganti seluruh nilai password contoh. Batasi akses SSH dan Docker socket hanya ke operator tepercaya.
 - Pertahankan `APP_DEBUG=false`, `server_tokens off`, serta header Nginx yang sudah ada.
 - Exposure database tetap localhost saja; jika tidak membutuhkan akses host, hapus mapping port database dari Compose.
+- Client API hanya didefinisikan melalui `SIKOMPEN_API_CLIENTS_JSON`; gunakan token unik minimal 32 karakter untuk setiap peminta. Isi IP/CIDR egress paling sempit bila peminta memilikinya; gunakan `allowed_ips: []` bila egress tidak stabil dan jangan menggantinya dengan header IP buatan.
+- Saat Cloudflare Tunnel digunakan, hubungkan hanya tunnel ke network `sikompen_proxy` dan pertahankan `SIKOMPEN_TRUSTED_PROXY_CIDR` pada CIDR network tersebut. Jangan mempercayai `CF-Connecting-IP` dari network aplikasi umum.
 - Pantau disk volume; file upload dan audit log akan bertambah seiring waktu.
 - Update base image dan dependensi secara berkala, rebuild, lalu jalankan test sebelum deploy.
 
 ## Integrasi layanan lain
 
-Sikompen memakai session Laravel lokal untuk antarmuka admin dan mahasiswa. Integrasi dengan aplikasi lain dilakukan melalui modul API terautentikasi yang akan ditambahkan terpisah; aplikasi lain tidak pernah berbagi `APP_KEY`, database session, atau cookie Sikompen.
+Sikompen memakai session Laravel lokal untuk antarmuka admin dan mahasiswa. Integrasi aplikasi lain memakai `/api/sikompen/v1` dengan Bearer token serta IP/CIDR allowlist opsional; aplikasi lain tidak pernah berbagi `APP_KEY`, database session, atau cookie Sikompen. Lihat `docs/api-outbound-integration-proposal.md` untuk kontrak lengkap.

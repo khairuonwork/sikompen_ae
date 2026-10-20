@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
 COPY app ./app
 
+RUN chown -R api:api /app
+
 USER api
 
 EXPOSE 8000

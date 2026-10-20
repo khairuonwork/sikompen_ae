@@ -56,8 +56,13 @@ services:
     depends_on:
       app:
         condition: service_healthy
+    environment:
+      SIKOMPEN_TRUSTED_PROXY_CIDR: "${SIKOMPEN_TRUSTED_PROXY_CIDR:-172.31.0.0/24}"
     ports:
       - "${APP_BIND_HOST:-127.0.0.1}:${APP_PORT:-8080}:80"
+    networks:
+      default:
+      proxy:
 
   api-mini-app:
     build:
@@ -198,7 +203,7 @@ services:
     image: sikompen-app:local
     restart: unless-stopped
     init: true
-    command: php artisan queue:work database --queue=${SIKOMPEN_API_SYNC_QUEUE:-api-sync} --sleep=3 --tries=1 --timeout=600 --memory=90%
+    command: php artisan queue:work database --queue=${SIKOMPEN_API_SYNC_QUEUE:-api-sync} --sleep=3 --tries=3 --timeout=600 --memory=90%
     env_file:
       - .env
     environment:
@@ -297,3 +302,8 @@ networks:
     ipam:
       config:
         - subnet: "${SIKOMPEN_NETWORK_SUBNET:-172.30.0.0/24}"
+  proxy:
+    name: "${SIKOMPEN_PROXY_NETWORK_NAME:-sikompen_proxy}"
+    ipam:
+      config:
+        - subnet: "${SIKOMPEN_PROXY_NETWORK_SUBNET:-172.31.0.0/24}"

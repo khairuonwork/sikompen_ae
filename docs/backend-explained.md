@@ -22,7 +22,7 @@ flowchart LR
 | Admin reguler | Guard `admin`, tabel `sikompen_admins` | Mengelola data, file, SP, retensi, dan reset mahasiswa. |
 | Admin emergency | Guard admin dengan flag emergency | Hanya area recovery: menerbitkan/membatalkan kode reset admin reguler. |
 | Mahasiswa | Guard `student`, akun diprovisikan dari roster aktif | Hanya melihat record NIM sendiri setelah mengganti password awal. |
-| Client API | Bearer token + `X-Client-Id` | Scope, allowlist IP, dan rate limit server-side. |
+| Client API | Bearer token | Allowlist IP dan rate limit dari environment server. |
 
 Password awal mahasiswa adalah NIM. Akun hanya dapat melihat data setelah password awal diganti. Jika NIM tidak lagi berada dalam roster aktif untuk periode akses, session mahasiswa tidak dapat melanjutkan akses.
 
@@ -35,7 +35,7 @@ Password awal mahasiswa adalah NIM. Akun hanya dapat melihat data setelah passwo
 | `/mahasiswa`, `/kompen-respon`, `/mahasiswa/profil` | Data mahasiswa read-only berdasarkan session. |
 | `/admin/settings`, `/admin/recovery`, `/admin/student-password-resets` | Pengaturan kredensial, recovery emergency, dan reset mahasiswa. |
 | `/api/kompen-respon/*` | API internal berbasis session untuk filter, mahasiswa, dan detail. |
-| `/api/v1/*` | API outbound berbasis API client; lihat kontrak API. |
+| `/api/sikompen/v1/*` | API outbound berbasis bearer token; lihat kontrak API. |
 
 `KompenResponHubTableRequest` menormalisasi filter dan pagination. Semua mutasi memakai Form Request, middleware akses, dan pencatatan aktivitas ketika perubahan tersebut bersifat bisnis/operasional.
 
@@ -70,7 +70,7 @@ Semua model domain memakai koneksi `config('kompen-respon-hub.database_connectio
 - Input pencarian/alasan dibatasi `SafeSearchTerm`; nilai query diparameterisasi melalui Eloquent/query builder.
 - Workbook, ekspor, dan artifact sync berada di storage private. Download selalu melalui controller yang memeriksa akses.
 - Poll/download ekspor memerlukan token acak dan session pembuat task.
-- API outbound memverifikasi bearer token, client ID, scope, IP egress, status client, dan limiter sebelum controller dipanggil.
+- API outbound memverifikasi bearer token, scope, dan limiter sebelum controller dipanggil. IP egress adalah lapis tambahan opsional per client: bila `allowed_ips` tidak kosong, kecocokan IP/CIDR juga wajib; bila kosong, autentikasi memakai token unik saja. Konfigurasi client berada pada environment server, bukan panel aplikasi atau database operasional.
 - Riwayat aktivitas menyaring kredensial dan membatasi payload audit agar informasi sensitif tidak dicatat mentah.
 
 ## Aturan perubahan backend

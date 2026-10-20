@@ -2,9 +2,10 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\KompenResponHubApiClient;
+use App\KompenResponHub\SikompenApiClientConfiguration;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -20,19 +21,23 @@ class EnsureSikompenApiClient
         $requestId = (string) Str::ulid();
         $request->attributes->set('sikompen_api_request_id', $requestId);
 
-        $clientId = $request->header('X-Client-Id');
         $token = $request->bearerToken();
 
-        if (! is_string($clientId) || ! is_string($token) || $clientId === '' || $token === '') {
+        if (! is_string($token) || $token === '') {
             return $this->error($requestId, 'unauthenticated', 'Kredensial client API tidak valid.', Response::HTTP_UNAUTHORIZED);
         }
 
-        $client = KompenResponHubApiClient::query()
-            ->where('client_id', $clientId)
-            ->where('token_hash', hash('sha256', $token))
-            ->first();
+        try {
+            $client = SikompenApiClientConfiguration::forBearerToken($token);
+        } catch (\InvalidArgumentException $exception) {
+            Log::error('Konfigurasi client API Sikompen tidak valid.', [
+                'exception' => $exception::class,
+            ]);
 
-        if (! $client instanceof KompenResponHubApiClient || ! $client->is_active) {
+            return $this->error($requestId, 'service_unavailable', 'Konfigurasi provider API belum siap.', Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        if (! $client instanceof SikompenApiClientConfiguration) {
             return $this->error($requestId, 'unauthenticated', 'Kredensial client API tidak valid.', Response::HTTP_UNAUTHORIZED);
         }
 
@@ -40,13 +45,14 @@ class EnsureSikompenApiClient
             return $this->error($requestId, 'forbidden', 'Client API tidak memiliki cakupan akses yang diperlukan.', Response::HTTP_FORBIDDEN);
         }
 
-        $ip = $request->ip();
+        if ($client->requiresIpAllowlist()) {
+            $ip = $request->ip();
 
-        if (! is_string($ip) || ! $client->allowsIp($ip)) {
-            return $this->error($requestId, 'ip_not_allowed', 'Alamat IP peminta tidak diizinkan.', Response::HTTP_FORBIDDEN);
+            if (! is_string($ip) || ! $client->allowsIp($ip)) {
+                return $this->error($requestId, 'ip_not_allowed', 'Alamat IP peminta tidak diizinkan.', Response::HTTP_FORBIDDEN);
+            }
         }
 
-        $client->forceFill(['last_used_at' => now()])->saveQuietly();
         $request->attributes->set('sikompen_api_client', $client);
 
         return $next($request);

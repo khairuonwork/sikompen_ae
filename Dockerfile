@@ -76,4 +76,5 @@ WORKDIR /var/www/html
 
 COPY nginx-main.conf /etc/nginx/nginx.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx-realip.conf.template /etc/nginx/templates/realip.conf.template
 COPY --from=app /var/www/html/public ./public

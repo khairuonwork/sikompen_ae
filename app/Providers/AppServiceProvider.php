@@ -2,8 +2,8 @@
 
 namespace App\Providers;
 
+use App\KompenResponHub\SikompenApiClientConfiguration;
 use App\Models\KompenResponHubAdmin;
-use App\Models\KompenResponHubApiClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -104,8 +104,8 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('sikompen-api', function (Request $request): Limit {
             $client = $request->attributes->get('sikompen_api_client');
-            $limit = $client instanceof KompenResponHubApiClient ? $client->rate_limit_per_minute : 10;
-            $key = $client instanceof KompenResponHubApiClient ? $client->client_id : 'unknown';
+            $limit = $client instanceof SikompenApiClientConfiguration ? $client->rateLimitPerMinute : 10;
+            $key = $client instanceof SikompenApiClientConfiguration ? $client->key : 'unknown';
 
             return Limit::perMinute($limit)->by(Str::transliterate("sikompen-api|{$key}|{$request->ip()}"));
         });
