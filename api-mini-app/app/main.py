@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import re
-import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -19,11 +18,10 @@ NIM_PATTERN = re.compile(r"^\d{6,32}$")
 
 class Settings(BaseModel):
     base_url: str = Field(default_factory=lambda: os.getenv("SIKOMPEN_API_BASE_URL", "http://web").rstrip("/"))
-    client_id: str = Field(default_factory=lambda: os.getenv("SIKOMPEN_API_CLIENT_ID", ""))
     bearer_token: str = Field(default_factory=lambda: os.getenv("SIKOMPEN_API_BEARER_TOKEN", ""))
 
     def is_configured(self) -> bool:
-        return self.base_url != "" and self.client_id != "" and self.bearer_token != ""
+        return self.base_url != "" and self.bearer_token != ""
 
 
 class SingleStudentRequest(BaseModel):
@@ -35,7 +33,6 @@ class BulkSyncRequest(BaseModel):
     type: str
     periode: str = Field(min_length=14, max_length=32)
     kelas: str | None = Field(default=None, max_length=32)
-    idempotency_key: str = Field(default_factory=lambda: str(uuid.uuid4()), min_length=1, max_length=128)
 
 
 @asynccontextmanager
@@ -92,7 +89,7 @@ async def test_student(payload: SingleStudentRequest, request: Request) -> JSONR
     return await provider_json(
         request,
         "GET",
-        f"/api/v1/mahasiswa/{payload.nim}",
+        f"/api/sikompen/v1/mahasiswa/{payload.nim}",
         params={"periode": payload.periode},
     )
 
@@ -112,9 +109,8 @@ async def create_sync_run(payload: BulkSyncRequest, request: Request) -> JSONRes
     return await provider_json(
         request,
         "POST",
-        "/api/v1/sync-runs",
-        json={"selector": selector, "format": "ndjson", "compression": "gzip"},
-        headers={"Idempotency-Key": payload.idempotency_key},
+        "/api/sikompen/v1/sync-runs",
+        json={"selector": selector},
     )
 
 
@@ -123,7 +119,7 @@ async def get_sync_run(run_id: str, request: Request) -> JSONResponse:
     if not re.fullmatch(r"[0-9A-HJKMNP-TV-Z]{26}", run_id):
         raise HTTPException(status_code=422, detail="ID sync run tidak valid.")
 
-    return await provider_json(request, "GET", f"/api/v1/sync-runs/{run_id}")
+    return await provider_json(request, "GET", f"/api/sikompen/v1/sync-runs/{run_id}")
 
 
 @app.get("/tests/sync-runs/{run_id}/download", response_model=None)
@@ -136,7 +132,7 @@ async def download_sync_run(run_id: str, request: Request) -> StreamingResponse 
 
     try:
         upstream = await client.send(
-            client.build_request("GET", f"{settings.base_url}/api/v1/sync-runs/{run_id}/download", headers=provider_headers(settings)),
+            client.build_request("GET", f"{settings.base_url}/api/sikompen/v1/sync-runs/{run_id}/download", headers=provider_headers(settings)),
             stream=True,
         )
     except httpx.HTTPError:
@@ -180,7 +176,6 @@ def configured_settings() -> Settings:
 def provider_headers(settings: Settings) -> dict[str, str]:
     return {
         "Authorization": f"Bearer {settings.bearer_token}",
-        "X-Client-Id": settings.client_id,
         "Accept": "application/json",
     }
 
@@ -248,14 +243,13 @@ PAGE = """<!doctype html>
   </section>
   <section>
     <h2>Uji sync kelas/periode</h2>
-    <form id="sync-form" class="grid"><label>Jenis<select name="type"><option value="periode">Satu periode</option><option value="kelas">Satu kelas</option></select></label><label>Periode<input name="periode" placeholder="2026/2027 Gasal" required></label><label>Kelas (wajib bila jenis kelas)<input name="kelas" placeholder="1AEA1"></label><label>Idempotency key<input name="idempotency_key" id="idempotency-key" required></label><button>Buat sync run</button></form>
+    <form id="sync-form" class="grid"><label>Jenis<select name="type"><option value="periode">Satu periode</option><option value="kelas">Satu kelas</option></select></label><label>Periode<input name="periode" placeholder="2026/2027 Gasal" required></label><label>Kelas (wajib bila jenis kelas)<input name="kelas" placeholder="1AEA1"></label><button>Buat sync run</button></form>
     <p class="hint" id="download"></p>
   </section>
   <section><h2>Hasil respons</h2><pre id="result">Belum ada permintaan.</pre></section>
 </main>
 <script>
   const result = document.getElementById('result');
-  const key = document.getElementById('idempotency-key'); key.value = crypto.randomUUID();
   async function submit(form, url) {
     const payload = Object.fromEntries(new FormData(form)); result.textContent = 'Meminta provider…';
     const response = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });

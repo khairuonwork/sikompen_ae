@@ -179,6 +179,7 @@ class ReconcileKompenResponHubTasks extends Command
                         ]);
 
                     if ($updated === 1) {
+                        Storage::disk('local')->delete(sprintf('kompen-respon-hub/api-sync/%s.ndjson.gz', $run->run_id));
                         $count++;
                     }
                 }

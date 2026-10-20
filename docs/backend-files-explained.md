@@ -7,7 +7,7 @@ Dokumen ini memetakan file aplikasi yang membentuk fitur Sikompen; framework dan
 | Lokasi/kelompok | Tanggung jawab |
 | --- | --- |
 | `routes/web.php` | Halaman admin/mahasiswa, import, lifecycle SP, export, pengaturan, dan recovery. |
-| `routes/api.php` | API internal berbasis session serta API outbound `/api/v1`. |
+| `routes/api.php` | API internal berbasis session serta API outbound `/api/sikompen/v1`. |
 | `KompenResponHubController` | Props Inertia, tabel/API internal, pencarian global, dan overview mahasiswa. |
 | `KompenResponHubImport*Controller` | Upload, activate/release, download, rename, recycle bin, dan polling workbook. |
 | `KompenResponHubActiveStudentImportController` | Template, upload, activate, restore, download, dan polling roster. |
@@ -25,7 +25,7 @@ Dokumen ini memetakan file aplikasi yang membentuk fitur Sikompen; framework dan
 | Roster | `ParseKompenResponHubActiveStudentWorkbook`, `ImportKompenResponHubActiveStudents`, `ActivateKompenResponHubActiveStudentImport`. |
 | Data/lifecycle | `KompenResponHubDataQuery`, `BuildKompenResponHubDataConsistencyReport`, `FinalizeKompenResponHubCutoff`, `RecordKompenResponHubActivity`. |
 | Job | `ProcessKompenResponHubImport`, `ProcessKompenResponHubActiveStudentImport`, `GenerateKompenResponHubExport`, `GenerateKompenResponHubApiSyncArtifact`. |
-| Command | `Reconcile...Tasks`, seluruh `Purge...`, serta `Create/RevokeKompenResponHubApiClient`. |
+| Command | `Reconcile...Tasks` dan seluruh `Purge...`. Client API dikelola melalui environment deployment. |
 
 ## Model dan resource
 

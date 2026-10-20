@@ -41,7 +41,7 @@ Task gagal membersihkan source file private-nya. Task berhasil tidak otomatis me
 
 ## API sync run
 
-API v1 membuat `sync run` dengan state `queued → processing → ready|failed|expired`. Job `GenerateKompenResponHubApiSyncArtifact` memiliki satu percobaan dan timeout 600 detik. Artifact NDJSON gzip hanya dapat dibaca/download oleh API client pembuat run.
+API `/api/sikompen/v1` membuat `sync run` dengan state `queued → processing → ready|failed|expired`. Job `GenerateKompenResponHubApiSyncArtifact` memiliki tiga percobaan (backoff 30/120 detik) dan timeout 600 detik. Artifact NDJSON gzip dibangun dari snapshot transaksi database, dibatasi ukuran, dan hanya dapat dibaca/download oleh client pembuat run.
 
 ## Schedule pemeliharaan
 
@@ -63,6 +63,6 @@ Semua schedule menggunakan `withoutOverlapping()`. Ambang `processing` default 1
 | --- | --- | --- |
 | Upload berhenti | `docker compose logs imports --tail=100` | Pastikan worker `imports` hidup; jangan hapus task. |
 | Ekspor berhenti | `docker compose logs exports --tail=100` | Tunggu reconciler atau buat task baru setelah status terminal. |
-| API run gagal | `docker compose logs api-sync --tail=100` | Periksa client/selector dan ulangi dengan idempotency key baru bila diperlukan. |
+| API run gagal | `docker compose logs api-sync --tail=100` | Periksa selector, kapasitas artifact, dan konfigurasi client; kirim ulang selector setelah status `failed`. |
 | Status tak berubah | Periksa `scheduler` | Reconciler akan memberi state gagal setelah ambang terlewati. |
 | File recycle bin hilang | Periksa retensi | File yang sudah dipurge tidak dapat dipulihkan. |

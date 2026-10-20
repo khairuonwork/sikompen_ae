@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * @property int $id
  * @property int $api_client_id
+ * @property string|null $api_client_key
  * @property string $run_id
  * @property string $idempotency_key
  * @property string $selector_type
@@ -23,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $artifact_size_bytes
  * @property string|null $failure_code
  * @property CarbonInterface|null $started_at
+ * @property CarbonInterface|null $snapshot_at
  * @property CarbonInterface|null $completed_at
  * @property CarbonInterface|null $expires_at
  * @property CarbonInterface|null $created_at
@@ -36,6 +38,7 @@ class KompenResponHubApiSyncRun extends Model
 
     protected $fillable = [
         'api_client_id',
+        'api_client_key',
         'run_id',
         'idempotency_key',
         'selector_type',
@@ -48,6 +51,7 @@ class KompenResponHubApiSyncRun extends Model
         'artifact_size_bytes',
         'failure_code',
         'started_at',
+        'snapshot_at',
         'completed_at',
         'expires_at',
     ];
@@ -58,6 +62,7 @@ class KompenResponHubApiSyncRun extends Model
             'record_count' => 'integer',
             'artifact_size_bytes' => 'integer',
             'started_at' => 'immutable_datetime',
+            'snapshot_at' => 'immutable_datetime',
             'completed_at' => 'immutable_datetime',
             'expires_at' => 'immutable_datetime',
         ];

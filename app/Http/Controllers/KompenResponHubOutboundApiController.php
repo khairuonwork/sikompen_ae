@@ -6,12 +6,14 @@ use App\Http\Requests\ShowKompenResponHubOutboundStudentRequest;
 use App\Http\Requests\StoreKompenResponHubApiSyncRunRequest;
 use App\Http\Resources\KompenResponHubOutboundStudentResource;
 use App\Jobs\GenerateKompenResponHubApiSyncArtifact;
+use App\KompenResponHub\SikompenApiClientConfiguration;
 use App\Models\KompenResponHubApiClient;
 use App\Models\KompenResponHubApiSyncRun;
 use App\Models\KompenResponHubStudent;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -19,12 +21,15 @@ use Symfony\Component\HttpFoundation\Response;
 
 class KompenResponHubOutboundApiController extends Controller
 {
+    private const CONFIGURED_RUNTIME_CLIENT_ID = 'configured-runtime';
+
     public function student(ShowKompenResponHubOutboundStudentRequest $request, string $nim): Response
     {
         $validated = $request->validated();
         $student = $this->studentQuery()
             ->where('nim', $nim)
             ->where('periode_semester', $validated['periode'])
+            ->orderByDesc('id')
             ->first();
 
         if (! $student instanceof KompenResponHubStudent) {
@@ -40,64 +45,55 @@ class KompenResponHubOutboundApiController extends Controller
     {
         $client = $this->client($request);
         $validated = $request->validated();
+        /** @var array{type: 'kelas'|'periode', periode: string, kelas?: string|null} $selector */
         $selector = $validated['selector'];
-        $idempotencyKey = $request->header('Idempotency-Key');
-
-        if (! is_string($idempotencyKey) || ! preg_match('/^[\x21-\x7E]{1,128}$/', $idempotencyKey)) {
-            return $this->error($request, 'invalid_idempotency_key', 'Header Idempotency-Key wajib berupa maksimal 128 karakter yang dapat dicetak.', Response::HTTP_UNPROCESSABLE_ENTITY);
-        }
-
-        $existingRun = KompenResponHubApiSyncRun::query()
-            ->where('api_client_id', $client->id)
-            ->where('idempotency_key', $idempotencyKey)
-            ->first();
-
-        if ($existingRun instanceof KompenResponHubApiSyncRun) {
-            if (! $this->matchesSelector($existingRun, $selector)) {
-                return $this->error($request, 'idempotency_conflict', 'Idempotency-Key sudah dipakai untuk selector lain.', Response::HTTP_CONFLICT);
-            }
-
-            return $this->syncRunResponse($request, $existingRun, Response::HTTP_OK);
-        }
-
-        $query = KompenResponHubStudent::query()
-            ->where('periode_semester', $selector['periode']);
-
-        if ($selector['type'] === 'kelas') {
-            $query->where('kelas', $selector['kelas']);
-        }
-
-        if (! $query->exists()) {
-            return $this->error($request, 'not_found', 'Tidak ada data Kompen dan Respon untuk selector yang diminta.', Response::HTTP_NOT_FOUND);
-        }
+        $lockKey = 'sikompen:api-sync:'.hash('sha256', implode('|', [
+            $client->key,
+            $selector['type'],
+            $selector['periode'],
+            $selector['kelas'] ?? '',
+        ]));
 
         try {
-            $run = KompenResponHubApiSyncRun::query()->create([
-                'api_client_id' => $client->id,
-                'run_id' => (string) Str::ulid(),
-                'idempotency_key' => $idempotencyKey,
-                'selector_type' => $selector['type'],
-                'periode_semester' => $selector['periode'],
-                'kelas' => $selector['type'] === 'kelas' ? $selector['kelas'] : null,
-                'status' => 'queued',
+            return Cache::lock($lockKey, 10)->block(5, function () use ($request, $client, $selector): Response {
+                $existingRun = $this->findReusableRun($client, $selector);
+
+                if ($existingRun instanceof KompenResponHubApiSyncRun) {
+                    return $this->syncRunResponse($request, $existingRun, Response::HTTP_OK);
+                }
+
+                $query = KompenResponHubStudent::query()
+                    ->where('periode_semester', $selector['periode']);
+
+                if ($selector['type'] === 'kelas') {
+                    $query->where('kelas', $selector['kelas'] ?? null);
+                }
+
+                if (! $query->exists()) {
+                    return $this->error($request, 'not_found', 'Tidak ada data Kompen dan Respon untuk selector yang diminta.', Response::HTTP_NOT_FOUND);
+                }
+
+                $run = KompenResponHubApiSyncRun::query()->create([
+                    'api_client_id' => $this->configuredRuntimeClientId(),
+                    'api_client_key' => $client->key,
+                    'run_id' => (string) Str::ulid(),
+                    'idempotency_key' => 'internal:'.$client->key.':'.Str::ulid(),
+                    'selector_type' => $selector['type'],
+                    'periode_semester' => $selector['periode'],
+                    'kelas' => $selector['type'] === 'kelas' ? $selector['kelas'] : null,
+                    'status' => 'queued',
+                ]);
+
+                GenerateKompenResponHubApiSyncArtifact::dispatch($run->id)
+                    ->onQueue(config('kompen-respon-hub.api_sync.queue'));
+
+                return $this->syncRunResponse($request, $run, Response::HTTP_ACCEPTED);
+            });
+        } catch (LockTimeoutException) {
+            return $this->error($request, 'sync_request_busy', 'Permintaan sinkronisasi yang sama sedang diproses. Coba lagi beberapa detik.', Response::HTTP_TOO_MANY_REQUESTS, [
+                'Retry-After' => '3',
             ]);
-        } catch (UniqueConstraintViolationException) {
-            $run = KompenResponHubApiSyncRun::query()
-                ->where('api_client_id', $client->id)
-                ->where('idempotency_key', $idempotencyKey)
-                ->first();
-
-            if (! $run instanceof KompenResponHubApiSyncRun || ! $this->matchesSelector($run, $selector)) {
-                return $this->error($request, 'idempotency_conflict', 'Idempotency-Key sudah dipakai untuk selector lain.', Response::HTTP_CONFLICT);
-            }
-
-            return $this->syncRunResponse($request, $run, Response::HTTP_OK);
         }
-
-        GenerateKompenResponHubApiSyncArtifact::dispatch($run->id)
-            ->onQueue(config('kompen-respon-hub.api_sync.queue'));
-
-        return $this->syncRunResponse($request, $run, Response::HTTP_ACCEPTED);
     }
 
     public function showSyncRun(Request $request, string $runId): Response
@@ -154,27 +150,52 @@ class KompenResponHubOutboundApiController extends Controller
         return KompenResponHubStudent::query()->with(['progress', 'summaryOverride']);
     }
 
-    /** @param array{type: string, periode: string, kelas?: string|null} $selector */
-    private function matchesSelector(KompenResponHubApiSyncRun $run, array $selector): bool
+    /**
+     * @param  array{type: 'kelas'|'periode', periode: string, kelas?: string|null}  $selector
+     */
+    private function findReusableRun(SikompenApiClientConfiguration $client, array $selector): ?KompenResponHubApiSyncRun
     {
-        return $run->selector_type === $selector['type']
-            && $run->periode_semester === $selector['periode']
-            && $run->kelas === ($selector['type'] === 'kelas' ? $selector['kelas'] ?? null : null);
+        return KompenResponHubApiSyncRun::query()
+            ->where('api_client_key', $client->key)
+            ->where('selector_type', $selector['type'])
+            ->where('periode_semester', $selector['periode'])
+            ->where('kelas', $selector['type'] === 'kelas' ? $selector['kelas'] ?? null : null)
+            ->where(function (Builder $query): void {
+                $query->whereIn('status', ['queued', 'processing'])
+                    ->orWhere(function (Builder $readyQuery): void {
+                        $readyQuery
+                            ->where('status', 'ready')
+                            ->where('expires_at', '>', now());
+                    });
+            })
+            ->latest('id')
+            ->first();
     }
 
-    private function client(Request $request): KompenResponHubApiClient
+    private function client(Request $request): SikompenApiClientConfiguration
     {
         $client = $request->attributes->get('sikompen_api_client');
 
-        abort_unless($client instanceof KompenResponHubApiClient, Response::HTTP_UNAUTHORIZED);
+        abort_unless($client instanceof SikompenApiClientConfiguration, Response::HTTP_UNAUTHORIZED);
 
         return $client;
+    }
+
+    private function configuredRuntimeClientId(): int
+    {
+        $id = KompenResponHubApiClient::query()
+            ->where('client_id', self::CONFIGURED_RUNTIME_CLIENT_ID)
+            ->value('id');
+
+        abort_unless(is_int($id), Response::HTTP_SERVICE_UNAVAILABLE);
+
+        return $id;
     }
 
     private function findOwnedRun(Request $request, string $runId): ?KompenResponHubApiSyncRun
     {
         return KompenResponHubApiSyncRun::query()
-            ->where('api_client_id', $this->client($request)->id)
+            ->where('api_client_key', $this->client($request)->key)
             ->where('run_id', $runId)
             ->first();
     }
@@ -197,15 +218,37 @@ class KompenResponHubOutboundApiController extends Controller
                 'periode' => $run->periode_semester,
                 'kelas' => $run->kelas,
             ],
-            'format' => 'ndjson',
-            'compression' => 'gzip',
+            'snapshot_at' => $run->snapshot_at?->setTimezone('Asia/Jakarta')->toIso8601String(),
             'record_count' => $run->record_count,
-            'artifact_sha256' => $run->artifact_checksum,
-            'artifact_size_bytes' => $run->artifact_size_bytes,
-            'download_url' => $run->status === 'ready' ? route('api.v1.kompen-respon.sync-runs.download', $run->run_id) : null,
+            'artifact' => [
+                'format' => 'ndjson',
+                'compression' => 'gzip',
+                'sha256' => $run->artifact_checksum,
+                'size_bytes' => $run->artifact_size_bytes,
+            ],
+            'download_url' => $run->status === 'ready' ? route('api.sikompen.v1.sync-runs.download', $run->run_id) : null,
             'expires_at' => $run->expires_at?->setTimezone('Asia/Jakarta')->toIso8601String(),
             'failure_code' => $run->failure_code,
         ];
+    }
+
+    /**
+     * @param  array<string, string>  $headers
+     */
+    private function error(Request $request, string $code, string $message, int $status, array $headers = []): Response
+    {
+        return response()->json([
+            'status' => 'error',
+            'request_id' => $this->requestId($request),
+            'error' => [
+                'code' => $code,
+                'message' => $message,
+            ],
+        ], $status, [
+            'Cache-Control' => 'no-store',
+            'X-Content-Type-Options' => 'nosniff',
+            ...$headers,
+        ]);
     }
 
     /** @param array<string, mixed> $data */
@@ -215,21 +258,6 @@ class KompenResponHubOutboundApiController extends Controller
             'status' => 'success',
             'request_id' => $this->requestId($request),
             ...$data,
-        ], $status, [
-            'Cache-Control' => 'no-store',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
-    }
-
-    private function error(Request $request, string $code, string $message, int $status): Response
-    {
-        return response()->json([
-            'status' => 'error',
-            'request_id' => $this->requestId($request),
-            'error' => [
-                'code' => $code,
-                'message' => $message,
-            ],
         ], $status, [
             'Cache-Control' => 'no-store',
             'X-Content-Type-Options' => 'nosniff',

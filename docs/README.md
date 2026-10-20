@@ -4,6 +4,8 @@ Dokumen dalam folder ini menjelaskan aplikasi pada branch saat ini. Kode dan tes
 
 | Dokumen | Isi |
 | --- | --- |
+| [System overview](system-overview.md) | Tujuan, aktor, komponen, dan alur informasi utama. |
+| [System design](system-design.md) | Topologi container, queue, consistency, keamanan, dan operasi. |
 | [Arsitektur dan logika sistem](system-logic.md) | Batas sistem, sumber data, lifecycle impor/aktivasi, SP, dan retensi. |
 | [Panduan fungsionalitas](functionality-guide.md) | Alur yang tersedia untuk admin, mahasiswa, dan pengelola reset akun. |
 | [Backend](backend-explained.md) | Surface HTTP, domain action, keamanan, job, API outbound, dan akses. |
@@ -16,7 +18,17 @@ Dokumen dalam folder ini menjelaskan aplikasi pada branch saat ini. Kode dan tes
 | [Framework dan konfigurasi](framework-files.md) | File framework yang dikustomisasi dan variabel environment domain. |
 | [Docker lokal](docker-local-guide.md) | Menjalankan, memeriksa, dan mendiagnosis stack lokal. |
 | [Kontrak API outbound](api-outbound-integration-proposal.md) | API v1 yang telah diimplementasikan untuk sistem eksternal. |
-| [Deployment](deployment-guide.md) | Dokumen deployment terpisah; belum diperbarui dalam perubahan ini. |
+| [Deployment](deployment-guide.md) | Referensi teknis deployment dan operasi Docker. |
+
+## Panduan PDF per peran
+
+| Dokumen | Untuk siapa |
+| --- | --- |
+| [Deploy setelah clone](panduan-deploy-setelah-clone.pdf) | Admin server/operator. |
+| [Penggunaan API](panduan-penggunaan-api.pdf) | Tim aplikasi yang mengonsumsi API Sikompen. |
+| [Panduan Admin](panduan-admin.pdf) | Admin reguler Sikompen. |
+| [Panduan Mahasiswa](panduan-mahasiswa.pdf) | Mahasiswa pengguna portal. |
+| [Panduan Admin Darurat](panduan-admin-darurat.pdf) | Pemegang akun emergency recovery. |
 
 ## Istilah
 

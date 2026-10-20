@@ -21,6 +21,9 @@ return [
         'queue' => env('SIKOMPEN_API_SYNC_QUEUE', 'api-sync'),
         'artifact_retention_hours' => (int) env('SIKOMPEN_API_SYNC_ARTIFACT_RETENTION_HOURS', 24),
         'run_retention_days' => (int) env('SIKOMPEN_API_SYNC_RUN_RETENTION_DAYS', 7),
+        'max_artifact_bytes' => (int) env('SIKOMPEN_API_SYNC_MAX_ARTIFACT_BYTES', 268435456),
+        'max_uncompressed_bytes' => (int) env('SIKOMPEN_API_SYNC_MAX_UNCOMPRESSED_BYTES', 536870912),
+        'clients' => json_decode((string) env('SIKOMPEN_API_CLIENTS_JSON', '[]'), true),
     ],
 
     'retention' => [

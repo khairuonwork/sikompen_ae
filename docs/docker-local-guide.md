@@ -28,7 +28,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Stack menyediakan `web`, `app`, `database`, `api-mini-app`, `queue`, `imports`, `exports`, `api-sync`, dan `scheduler`.
+Stack menyediakan `web`, `app`, `database`, `api-mini-app`, `queue`, `imports`, `exports`, `api-sync`, dan `scheduler`. Network `sikompen_proxy` disiapkan khusus untuk Cloudflare Tunnel dan tidak perlu dipakai saat lokal.
 
 ## 4. Siapkan aplikasi
 
@@ -50,7 +50,7 @@ docker compose logs api-sync --tail=100
 docker compose exec app php artisan about
 ```
 
-Untuk menguji API mini, buat API client terlebih dahulu dan isi `SIKOMPEN_API_CLIENT_ID` serta `SIKOMPEN_API_BEARER_TOKEN` pada `.env`. Allowlist client harus memuat IP container API mini (default `172.30.0.10`).
+Untuk menguji API mini, isi `SIKOMPEN_API_BEARER_TOKEN` pada `.env`, lalu daftarkan token serta IP container API mini pada `SIKOMPEN_API_CLIENTS_JSON`. Allowlist default container mini adalah `172.30.0.10/32`.
 
 ## 6. Memperbarui kode lokal
 
@@ -69,8 +69,8 @@ Jika route/controller berubah, generate Wayfinder. Jika asset frontend berubah d
 | HTTP 502/500 | `docker compose logs web app --tail=100` dan status database. |
 | Impor tertahan | `docker compose logs imports --tail=100`. |
 | Ekspor tertahan | `docker compose logs exports --tail=100`. |
-| Sync API gagal | `docker compose logs api-sync --tail=100`; periksa token/client/IP allowlist. |
-| Panel mini tidak siap | Buka `/health`; lengkapi tiga `SIKOMPEN_API_*` variables. |
+| Sync API gagal | `docker compose logs api-sync --tail=100`; periksa token/client/rate limit, serta IP allowlist bila client tersebut menggunakannya. |
+| Panel mini tidak siap | Buka `/health`; lengkapi `SIKOMPEN_API_BASE_URL` dan `SIKOMPEN_API_BEARER_TOKEN`. |
 | Port bentrok | Ubah `APP_PORT`, `API_MINI_APP_PORT`, atau `KOMPEN_DB_PORT` di `.env`. |
 
 ## 8. Menghentikan atau mereset data lokal
