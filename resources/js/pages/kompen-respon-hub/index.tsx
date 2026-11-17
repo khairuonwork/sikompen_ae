@@ -39,7 +39,6 @@ import { ImportAuditFilterPanel } from "@/features/kompen-respon-hub/log-upload/
 import { ImportAuditRetentionPanel } from "@/features/kompen-respon-hub/log-upload/import-audit-retention-panel";
 import { ImportVersionList } from "@/features/kompen-respon-hub/list-file/import-version-list";
 import { ActiveStudentImportList } from "@/features/kompen-respon-hub/list-file/active-student-import-list";
-import { DataConsistencyPanel } from "@/features/kompen-respon-hub/list-file/data-consistency-panel";
 import { RecycleBinPanel } from "@/features/kompen-respon-hub/list-file/recycle-bin-panel";
 import { ActivityFilterPanel, ActivityLogTable, ActivityRetentionPanel } from "@/features/kompen-respon-hub/riwayat-aktivitas/activity-panel";
 import { EmptyTableState, TableGuide } from "@/features/kompen-respon-hub/shared/components/feedback";
@@ -77,7 +76,6 @@ export default function KompenResponHubIndex({
     activeStudentImportReferences,
     recycledImportVersions,
     recycledActiveStudentImportVersions,
-    dataConsistencyReport,
     warnings,
     warningCandidates,
     rolledBackWarnings,
@@ -455,10 +453,11 @@ export default function KompenResponHubIndex({
                             <TableGuide
                                 title="Panduan List File"
                                 items={[
-                                    "Kompen dan Respon serta Daftar Mahasiswa Aktif dikelola pada tabel yang terpisah agar versi file mudah ditelusuri.",
+                                    "Daftar Mahasiswa Aktif menentukan akses login dan hanya satu roster yang dapat digunakan secara global.",
                                     "Periode dibaca otomatis dari isi setiap file. Tidak ada pemetaan periode manual.",
-                                    "Pilih satu workbook Kompen dan Respon serta satu daftar mahasiswa aktif untuk setiap periode.",
-                                    "Kedua jenis file dapat diunggah dan digunakan secara mandiri; sistem tidak mewajibkan pasangan periode yang sama.",
+                                    "Pilih satu workbook Kompen dan Respon untuk setiap periode yang ingin ditampilkan; beberapa periode dapat digunakan bersamaan.",
+                                    "Saat roster diganti, mahasiswa pada roster sebelumnya tidak lagi dapat masuk.",
+                                    "Roster login dan workbook Kompen dan Respon dikelola mandiri. Sistem tidak memasangkan atau membandingkan periode maupun NIM di antara keduanya.",
                                 ]}
                             />
                             {activeStudentImportVersions !== null && activeStudentImportReferences !== null ? (
@@ -467,7 +466,6 @@ export default function KompenResponHubIndex({
                                     versions={activeStudentImportVersions}
                                 />
                             ) : null}
-                            <DataConsistencyPanel records={dataConsistencyReport} />
                             {importVersions?.data.length && activeImportVersions !== null ? (
                                 <ImportVersionList
                                     activeVersions={activeImportVersions}

@@ -5,8 +5,6 @@ namespace App\Http\Controllers;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Http\Resources\KompenResponHubStudentResource;
 use App\Models\KompenResponHubActiveStudent;
-use App\Models\KompenResponHubActiveStudentImportReference;
-use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubStudentAccount;
 use Illuminate\Http\Request;
@@ -20,7 +18,8 @@ class StudentProfileController extends Controller
     {
         /** @var KompenResponHubStudentAccount $account */
         $account = $request->user('student');
-        $warningPeriod = $this->activeWarningPeriod();
+        $warningPeriod = $dataQuery->selectedWarningPeriod();
+        $rosterStudent = $this->activeRosterStudent($account->nim);
         $studentRecords = $warningPeriod === null
             ? collect()
             : $dataQuery->students([
@@ -28,13 +27,10 @@ class StudentProfileController extends Controller
                 'periode_semester' => $warningPeriod,
             ])->get();
         $studentRecord = $studentRecords->first();
-        $studentName = null;
 
-        if ($studentRecord !== null) {
-            $studentName = $studentRecord->nama_mahasiswa;
-        } else {
-            $studentName = $this->activeRosterStudentName($account->nim);
-        }
+        $studentName = filled($studentRecord?->nama_mahasiswa)
+            ? $studentRecord->nama_mahasiswa
+            : $rosterStudent?->nama_mahasiswa;
 
         return Inertia::render('mahasiswa/profile', [
             'profile' => [
@@ -42,56 +38,51 @@ class StudentProfileController extends Controller
                 'nama_mahasiswa' => $studentName,
                 'warning_period' => $warningPeriod,
                 'records' => KompenResponHubStudentResource::collection($studentRecords)->resolve(),
-                'missing_data' => $this->missingData($studentRecords, $warningPeriod),
+                'missing_data' => $this->missingData($studentRecords, $warningPeriod, $rosterStudent),
             ],
         ]);
     }
 
-    private function activeWarningPeriod(): ?string
-    {
-        return KompenResponHubPeriodCutoff::query()
-            ->orderByDesc('deadline_at')
-            ->value('periode_semester');
-    }
-
-    private function activeRosterStudentName(string $nim): ?string
+    private function activeRosterStudent(string $nim): ?KompenResponHubActiveStudent
     {
         $query = KompenResponHubActiveStudent::query()
             ->where('nim', $nim)
             ->orderByDesc('id');
 
-        if (KompenResponHubActiveStudentImportReference::query()->exists()) {
-            $query->fromActiveRosterReference();
-        }
+        $query->fromActiveRosterReference();
 
-        return $query->value('nama_mahasiswa');
+        return $query->first();
     }
 
     /**
      * @param  Collection<int, KompenResponHubStudent>  $studentRecords
      * @return list<string>
      */
-    private function missingData(Collection $studentRecords, ?string $warningPeriod): array
-    {
+    private function missingData(
+        Collection $studentRecords,
+        ?string $warningPeriod,
+        ?KompenResponHubActiveStudent $rosterStudent,
+    ): array {
         $missing = [];
 
         if ($warningPeriod === null) {
-            $missing[] = 'Periode Surat Peringatan aktif belum ditetapkan.';
+            $missing[] = 'Admin belum memilih periode Surat Peringatan aktif.';
         }
 
-        if ($studentRecords->isEmpty()) {
-            $periodLabel = $warningPeriod ?? 'periode Surat Peringatan aktif';
-            $missing[] = "Data Kompen dan Respon belum tersedia untuk {$periodLabel}.";
+        if ($studentRecords->isEmpty() && $warningPeriod !== null) {
+            $missing[] = "Belum ada catatan Kompen dan Respon untuk NIM ini pada periode SP {$warningPeriod}.";
         }
 
-        foreach ($studentRecords as $student) {
-            if (blank($student->nama_mahasiswa)) {
-                $missing[] = "Nama mahasiswa belum tersedia pada data Kompen dan Respon periode {$student->periode_semester}.";
-            }
+        $student = $studentRecords->first();
+        $studentName = $student?->nama_mahasiswa ?? $rosterStudent?->nama_mahasiswa;
+        $studentClass = $student?->kelas ?? $rosterStudent?->kelas;
 
-            if (blank($student->kelas)) {
-                $missing[] = "Kelas belum tersedia pada data Kompen dan Respon periode {$student->periode_semester}.";
-            }
+        if (blank($studentName)) {
+            $missing[] = 'Nama mahasiswa belum tersedia pada roster aktif maupun catatan Kompen dan Respon.';
+        }
+
+        if (blank($studentClass)) {
+            $missing[] = 'Kelas mahasiswa belum tersedia pada roster aktif maupun catatan Kompen dan Respon.';
         }
 
         return array_values(array_unique($missing));

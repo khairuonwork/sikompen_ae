@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
+ * @property string $selection_key
  * @property string $periode_semester
  * @property int $sikompen_active_student_import_id
  * @property int|null $activated_by_admin_id
@@ -19,12 +20,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class KompenResponHubActiveStudentImportReference extends Model
 {
+    public const StudentLoginSelectionKey = 'student-login';
+
     /** @use HasFactory<KompenResponHubActiveStudentImportReferenceFactory> */
     use HasFactory;
 
     protected $table = 'sikompen_active_student_import_references';
 
     protected $fillable = [
+        'selection_key',
         'periode_semester',
         'sikompen_active_student_import_id',
         'activated_by_admin_id',

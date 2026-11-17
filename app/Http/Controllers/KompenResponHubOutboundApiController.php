@@ -56,21 +56,14 @@ class KompenResponHubOutboundApiController extends Controller
 
         try {
             return Cache::lock($lockKey, 10)->block(5, function () use ($request, $client, $selector): Response {
+                if (! $this->selectorQuery($selector['type'], $selector['periode'], $selector['kelas'] ?? null)->exists()) {
+                    return $this->error($request, 'not_found', 'Tidak ada data Kompen dan Respon untuk selector yang diminta.', Response::HTTP_NOT_FOUND);
+                }
+
                 $existingRun = $this->findReusableRun($client, $selector);
 
                 if ($existingRun instanceof KompenResponHubApiSyncRun) {
                     return $this->syncRunResponse($request, $existingRun, Response::HTTP_OK);
-                }
-
-                $query = KompenResponHubStudent::query()
-                    ->where('periode_semester', $selector['periode']);
-
-                if ($selector['type'] === 'kelas') {
-                    $query->where('kelas', $selector['kelas'] ?? null);
-                }
-
-                if (! $query->exists()) {
-                    return $this->error($request, 'not_found', 'Tidak ada data Kompen dan Respon untuk selector yang diminta.', Response::HTTP_NOT_FOUND);
                 }
 
                 $run = KompenResponHubApiSyncRun::query()->create([
@@ -104,6 +97,10 @@ class KompenResponHubOutboundApiController extends Controller
             return $this->error($request, 'not_found', 'Sync run tidak ditemukan.', Response::HTTP_NOT_FOUND);
         }
 
+        if (! $this->selectorQuery($run->selector_type, $run->periode_semester, $run->kelas)->exists()) {
+            return $this->error($request, 'not_found', 'Data sumber sync tidak lagi digunakan.', Response::HTTP_NOT_FOUND);
+        }
+
         if ($run->status === 'expired' || ($run->expires_at !== null && $run->expires_at->isPast())) {
             return $this->error($request, 'artifact_expired', 'Artifact sync telah kedaluwarsa.', Response::HTTP_GONE);
         }
@@ -119,6 +116,10 @@ class KompenResponHubOutboundApiController extends Controller
 
         if (! $run instanceof KompenResponHubApiSyncRun) {
             return $this->error($request, 'not_found', 'Sync run tidak ditemukan.', Response::HTTP_NOT_FOUND);
+        }
+
+        if (! $this->selectorQuery($run->selector_type, $run->periode_semester, $run->kelas)->exists()) {
+            return $this->error($request, 'not_found', 'Data sumber sync tidak lagi digunakan.', Response::HTTP_NOT_FOUND);
         }
 
         if ($run->status === 'expired' || ($run->expires_at !== null && $run->expires_at->isPast())) {
@@ -147,7 +148,21 @@ class KompenResponHubOutboundApiController extends Controller
     /** @return Builder<KompenResponHubStudent> */
     private function studentQuery(): Builder
     {
-        return KompenResponHubStudent::query()->with(['progress', 'summaryOverride']);
+        return KompenResponHubStudent::query()
+            ->fromActiveImportReference()
+            ->with(['progress', 'summaryOverride']);
+    }
+
+    /** @return Builder<KompenResponHubStudent> */
+    private function selectorQuery(string $type, string $period, ?string $class): Builder
+    {
+        $query = $this->studentQuery()->where('periode_semester', $period);
+
+        if ($type === 'kelas') {
+            $query->where('kelas', $class);
+        }
+
+        return $query;
     }
 
     /**

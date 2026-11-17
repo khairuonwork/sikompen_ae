@@ -102,6 +102,13 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(30)->by(Str::transliterate("{$sessionId}|{$request->ip()}"));
         });
 
+        RateLimiter::for('sikompen-workbook-activation', function (Request $request): Limit {
+            $admin = $request->user('admin');
+            $adminKey = $admin instanceof KompenResponHubAdmin ? (string) $admin->id : 'unknown';
+
+            return Limit::perMinute(10)->by(Str::transliterate("sikompen-workbook-activation|{$adminKey}|{$request->ip()}"));
+        });
+
         RateLimiter::for('sikompen-api', function (Request $request): Limit {
             $client = $request->attributes->get('sikompen_api_client');
             $limit = $client instanceof SikompenApiClientConfiguration ? $client->rateLimitPerMinute : 10;

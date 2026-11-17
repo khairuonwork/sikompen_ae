@@ -15,6 +15,7 @@ use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubStudent;
+use App\Models\KompenResponHubStudentAccount;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -96,6 +97,84 @@ test('an administrator can queue an active student list import and select it as 
             ->exists())->toBeTrue();
 });
 
+test('an identical active student workbook is not queued twice even when its filename changes', function (): void {
+    Storage::fake('local');
+    Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
+    $contents = activeStudentWorkbookContents();
+
+    $this->actingAs($admin, 'admin')
+        ->post('/admin/kompen-respon/active-students/imports', [
+            'uploader_name' => 'Admin Akademik',
+            'file' => UploadedFile::fake()->createWithContent('mahasiswa-aktif-awal.xlsx', $contents),
+        ])
+        ->assertRedirect('/admin?tab=upload');
+
+    $this->actingAs($admin, 'admin')
+        ->post('/admin/kompen-respon/active-students/imports', [
+            'uploader_name' => 'Admin Akademik',
+            'file' => UploadedFile::fake()->createWithContent('mahasiswa-aktif-salinan.xlsx', $contents),
+        ])
+        ->assertRedirect('/admin?tab=upload')
+        ->assertSessionHas('error', 'Daftar mahasiswa aktif identik sedang diproses sebagai mahasiswa-aktif-awal.xlsx. Tunggu proses tersebut selesai.');
+
+    expect(KompenResponHubActiveStudentImportTask::query()->count())->toBe(1);
+    Queue::assertPushed(ProcessKompenResponHubActiveStudentImport::class, 1);
+});
+
+test('an identical imported active student workbook is not queued again', function (): void {
+    Storage::fake('local');
+    Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
+    $contents = activeStudentWorkbookContents();
+    $storedPath = 'kompen-respon-hub/imports/active-students/roster-tersimpan.xlsx';
+    Storage::disk('local')->put($storedPath, $contents);
+
+    KompenResponHubActiveStudentImport::factory()->create([
+        'original_filename' => 'roster-tersimpan.xlsx',
+        'stored_path' => $storedPath,
+        'file_hash' => hash('sha256', $contents),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post('/admin/kompen-respon/active-students/imports', [
+            'uploader_name' => 'Admin Akademik',
+            'file' => UploadedFile::fake()->createWithContent('unggah-ulang.xlsx', $contents),
+        ])
+        ->assertRedirect('/admin?tab=upload')
+        ->assertSessionHas('error', 'Daftar mahasiswa aktif identik sudah tersimpan sebagai roster-tersimpan.xlsx. Gunakan versi yang ada di List File.');
+
+    expect(KompenResponHubActiveStudentImportTask::query()->doesntExist())->toBeTrue();
+    Queue::assertNothingPushed();
+});
+
+test('an identical active student workbook in the recycle bin must be restored instead of uploaded again', function (): void {
+    Storage::fake('local');
+    Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
+    $contents = activeStudentWorkbookContents();
+    $storedPath = 'kompen-respon-hub/imports/active-students/roster-lama.xlsx';
+    Storage::disk('local')->put($storedPath, $contents);
+
+    $import = KompenResponHubActiveStudentImport::factory()->create([
+        'original_filename' => 'roster-lama.xlsx',
+        'stored_path' => $storedPath,
+        'file_hash' => hash('sha256', $contents),
+    ]);
+    $import->delete();
+
+    $this->actingAs($admin, 'admin')
+        ->post('/admin/kompen-respon/active-students/imports', [
+            'uploader_name' => 'Admin Akademik',
+            'file' => UploadedFile::fake()->createWithContent('unggah-ulang.xlsx', $contents),
+        ])
+        ->assertRedirect('/admin?tab=upload')
+        ->assertSessionHas('error', 'Daftar mahasiswa aktif identik sudah berada di Recycle Bin sebagai roster-lama.xlsx. Pulihkan versi tersebut, bukan mengunggah ulang.');
+
+    expect(KompenResponHubActiveStudentImportTask::query()->doesntExist())->toBeTrue();
+    Queue::assertNothingPushed();
+});
+
 test('an administrator can move an unused active student roster version to the recycle bin', function (): void {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
@@ -144,6 +223,43 @@ test('an administrator cannot delete an active student roster version in use', f
         ->assertUnprocessable();
 
     expect(KompenResponHubActiveStudentImport::query()->find($import->id))->not->toBeNull();
+});
+
+test('an administrator can deactivate the roster without deleting student accounts or source rows', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $import = KompenResponHubActiveStudentImport::factory()->create([
+        'periode_semester' => '2027/2028 Gasal',
+    ]);
+    $student = KompenResponHubActiveStudent::factory()
+        ->for($import, 'importBatch')
+        ->create(['nim' => '261000001']);
+    $account = KompenResponHubStudentAccount::factory()->create([
+        'nim' => $student->nim,
+        'password_changed_at' => now(),
+    ]);
+    KompenResponHubActiveStudentImportReference::factory()->create([
+        'selection_key' => KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey,
+        'periode_semester' => $import->periode_semester,
+        'sikompen_active_student_import_id' => $import->id,
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/active-students/imports/{$import->id}/activation")
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    expect(KompenResponHubActiveStudentImportReference::query()->doesntExist())->toBeTrue()
+        ->and(KompenResponHubActiveStudentImport::query()->find($import->id))->not->toBeNull()
+        ->and(KompenResponHubActiveStudent::query()->find($student->id))->not->toBeNull()
+        ->and(KompenResponHubStudentAccount::query()->find($account->id))->not->toBeNull()
+        ->and(KompenResponHubImportAuditLog::query()
+            ->where('event_type', KompenResponHubImportAuditLog::EVENT_RELEASE)
+            ->where('source_active_student_import_id', $import->id)
+            ->exists())->toBeTrue();
+
+    $this->actingAs($account, 'student')
+        ->get('/mahasiswa')
+        ->assertRedirect('/mahasiswa/login');
 });
 
 test('a duplicate NIM leaves the existing active student master list unchanged', function () {
@@ -208,7 +324,7 @@ test('the active student parser accepts repeatable class blocks for one period',
         ->and($payload['preview']['periode_semester'])->toBe('2027/2028 Gasal');
 });
 
-test('active roster sources are selected independently across periods', function (): void {
+test('selecting a roster replaces the former login roster across periods', function (): void {
     $admin = KompenResponHubAdmin::factory()->create();
     $gasalImport = KompenResponHubActiveStudentImport::factory()->create([
         'periode_semester' => '2027/2028 Gasal',
@@ -231,9 +347,14 @@ test('active roster sources are selected independently across periods', function
         ->assertSessionHas('success');
 
     expect(KompenResponHubActiveStudentImportReference::query()
-        ->orderBy('periode_semester')
-        ->pluck('periode_semester')
-        ->all())->toBe(['2027/2028 Gasal', '2027/2028 Genap']);
+        ->count())
+        ->toBe(1)
+        ->and(KompenResponHubActiveStudentImportReference::query()
+            ->value('periode_semester'))
+        ->toBe('2027/2028 Genap')
+        ->and(KompenResponHubActiveStudentImportReference::query()
+            ->value('sikompen_active_student_import_id'))
+        ->toBe($genapImport->id);
 });
 
 test('selecting a new active roster replaces the former roster for the same period', function (): void {
@@ -252,10 +373,8 @@ test('selecting a new active roster replaces the former roster for the same peri
         ->assertSessionHas('success');
 
     expect(KompenResponHubActiveStudentImportReference::query()
-        ->where('periode_semester', $period)
         ->count())->toBe(1)
         ->and(KompenResponHubActiveStudentImportReference::query()
-            ->where('periode_semester', $period)
             ->value('sikompen_active_student_import_id'))->toBe($replacementImport->id);
 });
 
@@ -307,16 +426,13 @@ test('the file list keeps workbook and active student sources independent', func
             ->missing('filePairingWarnings'));
 });
 
-test('the file list paginates active student roster versions and selected roster references independently', function (): void {
+test('the file list paginates active student roster versions and keeps one selected roster', function (): void {
     $admin = KompenResponHubAdmin::factory()->create();
     $imports = KompenResponHubActiveStudentImport::factory()->count(16)->create();
 
-    foreach ($imports as $index => $import) {
-        KompenResponHubActiveStudentImportReference::factory()->create([
-            'periode_semester' => '20'.(27 + $index).'/'.(28 + $index).' Gasal',
-            'sikompen_active_student_import_id' => $import->id,
-        ]);
-    }
+    KompenResponHubActiveStudentImportReference::factory()->create([
+        'sikompen_active_student_import_id' => $imports->last()->id,
+    ]);
 
     $this->actingAs($admin, 'admin')
         ->get('/admin?tab=files&per_page=15&active_student_import_page=99&active_student_import_reference_page=99')
@@ -325,7 +441,7 @@ test('the file list paginates active student roster versions and selected roster
             ->where('activeStudentImportVersions.meta.current_page', 2)
             ->has('activeStudentImportVersions.data', 1)
             ->where('activeStudentImportReferences.meta.page_name', 'active_student_import_reference_page')
-            ->where('activeStudentImportReferences.meta.current_page', 2)
+            ->where('activeStudentImportReferences.meta.current_page', 1)
             ->has('activeStudentImportReferences.data', 1));
 });
 
@@ -342,6 +458,8 @@ test('an administrator can select more than five active student roster versions 
             ->post("/admin/kompen-respon/active-students/imports/{$import->id}/activate")
             ->assertSessionHas('success');
     }
+
+    expect(KompenResponHubActiveStudentImportReference::query()->count())->toBe(1);
 });
 
 test('the active student parser rejects blocks that use different periods', function (): void {

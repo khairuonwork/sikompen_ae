@@ -6,7 +6,6 @@ use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Http\Requests\DestroyStudentPasswordResetRequest;
 use App\Http\Requests\RefreshStudentPasswordResetRequest;
 use App\Models\KompenResponHubActiveStudent;
-use App\Models\KompenResponHubActiveStudentImportReference;
 use App\Models\KompenResponHubStudentPasswordResetRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -164,26 +163,10 @@ class StudentPasswordResetManagementController extends Controller
             "{$studentTable}.kelas",
         ];
 
-        if (! KompenResponHubActiveStudentImportReference::query()->exists()) {
-            return KompenResponHubActiveStudent::query()
-                ->whereIn("{$studentTable}.nim", $nims)
-                ->latest("{$studentTable}.id")
-                ->get($studentColumns)
-                ->unique('nim')
-                ->keyBy('nim');
-        }
-
-        $referenceTable = (new KompenResponHubActiveStudentImportReference)->getTable();
-
         return KompenResponHubActiveStudent::query()
-            ->join(
-                $referenceTable,
-                "{$referenceTable}.sikompen_active_student_import_id",
-                '=',
-                "{$studentTable}.sikompen_active_student_import_id",
-            )
+            ->fromActiveRosterReference()
             ->whereIn("{$studentTable}.nim", $nims)
-            ->latest("{$referenceTable}.activated_at")
+            ->latest("{$studentTable}.id")
             ->get($studentColumns)
             ->unique('nim')
             ->keyBy('nim');

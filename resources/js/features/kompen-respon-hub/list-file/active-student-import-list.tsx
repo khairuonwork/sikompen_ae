@@ -1,10 +1,11 @@
 import { Form } from "@inertiajs/react";
-import { CheckCircle2, Download, FilePenLine, Trash2, UsersRound } from "lucide-react";
+import { CheckCircle2, Download, FilePenLine, Power, Trash2, UsersRound } from "lucide-react";
 import { useState } from "react";
 import {
     activate,
     destroy as destroyImport,
     downloadUploadedWorkbook,
+    release,
 } from "@/actions/App/Http/Controllers/KompenResponHubActiveStudentImportController";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,7 +49,7 @@ export function ActiveStudentImportList({
                         Daftar mahasiswa aktif yang digunakan
                     </h3>
                     <p className="text-xs font-medium text-[#395886]/70">
-                        Satu file roster aktif berlaku untuk seluruh kelas pada satu periode. Memilih file baru akan menggantikan file aktif sebelumnya untuk periode tersebut.
+                        Satu file roster aktif menentukan seluruh akun mahasiswa yang dapat masuk. Memilih file baru langsung menggantikan roster sebelumnya, meski periodenya berbeda.
                     </p>
                 </div>
                 {references.data.length > 0 ? (
@@ -72,15 +73,34 @@ export function ActiveStudentImportList({
                                 <p className="mt-1 text-[11px] text-[#395886]/60">
                                     Dipilih {formatJakartaDateTime(reference.activated_at)}
                                 </p>
-                                <div className="mt-4 flex items-center justify-between gap-3">
+                                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                                     <p className="text-[11px] font-medium text-[#395886]/70">
                                         {reference.import.class_count} kelas · {reference.import.student_count} mahasiswa
                                     </p>
-                                    <Button asChild size="sm" variant="outline" className="h-8 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
-                                        <a href={downloadUploadedWorkbook.url(reference.import.id)}>
-                                            <Download className="mr-1.5 size-3.5" /> Unduh
-                                        </a>
-                                    </Button>
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button asChild size="sm" variant="outline" className="h-8 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                            <a href={downloadUploadedWorkbook.url(reference.import.id)}>
+                                                <Download className="mr-1.5 size-3.5" /> Unduh
+                                            </a>
+                                        </Button>
+                                        <Form
+                                            {...release.form(reference.import.id)}
+                                            onBefore={() => window.confirm("Nonaktifkan roster ini? Seluruh mahasiswa akan langsung kehilangan akses masuk. Akun dan riwayatnya tetap tersimpan.")}
+                                        >
+                                            {({ processing }) => (
+                                                <Button
+                                                    type="submit"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={processing}
+                                                    className="h-8 rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
+                                                >
+                                                    <Power className="mr-1.5 size-3.5" />
+                                                    {processing ? "Menonaktifkan…" : "Nonaktifkan akses"}
+                                                </Button>
+                                            )}
+                                        </Form>
+                                    </div>
                                 </div>
                             </article>
                         ))}
@@ -100,7 +120,7 @@ export function ActiveStudentImportList({
                             <UsersRound className="size-4" /> Semua versi daftar mahasiswa aktif
                         </h3>
                         <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
-                            Pilih satu file untuk menjadi roster aktif seluruh kelas pada periodenya. Pemilihan roster tidak bergantung pada workbook Kompen dan Respon.
+                            Pilih satu file untuk menjadi roster aktif seluruh kelas. Pemilihan roster tidak bergantung pada periode maupun workbook Kompen dan Respon.
                         </p>
                     </div>
                     <Button
@@ -190,7 +210,7 @@ export function ActiveStudentImportList({
                                             ) : (
                                                 <Form
                                                     {...activate.form(version.id)}
-                                                    onBefore={() => window.confirm(`Gunakan ${version.original_filename} sebagai satu-satunya roster aktif untuk periode ${version.periode_semester ?? "ini"}? File roster aktif sebelumnya untuk periode tersebut akan digantikan.`)}
+                                                    onBefore={() => window.confirm(`Gunakan ${version.original_filename} sebagai satu-satunya roster aktif? Roster aktif sebelumnya akan langsung digantikan dan mahasiswa di dalamnya tidak lagi dapat masuk.`)}
                                                 >
                                                     {({ processing }) => (
                                                         <Button type="submit" size="sm" disabled={processing || version.is_active} className="shrink-0 rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">

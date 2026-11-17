@@ -1,6 +1,8 @@
 <?php
 
+use App\Actions\KompenResponHub\ReleaseKompenResponHubImportVersion;
 use App\Jobs\GenerateKompenResponHubApiSyncArtifact;
+use App\Models\KompenResponHubActiveImport;
 use App\Models\KompenResponHubApiSyncRun;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubStudent;
@@ -138,6 +140,44 @@ test('a configured client cannot view another client sync run', function (): voi
         ->assertNotFound();
 });
 
+test('a released workbook cannot be served through an existing API sync artifact', function (): void {
+    $student = outboundStudent();
+    $token = configureOutboundClient();
+    Queue::fake();
+    Storage::fake('local');
+
+    $runId = $this->withHeaders(outboundHeaders($token))
+        ->postJson('/api/sikompen/v1/sync-runs', [
+            'selector' => ['type' => 'periode', 'periode' => '2026/2027 Gasal'],
+        ])
+        ->assertAccepted()
+        ->json('data.sync_run_id');
+
+    $run = KompenResponHubApiSyncRun::query()->where('run_id', $runId)->sole();
+    (new GenerateKompenResponHubApiSyncArtifact($run->id))->handle();
+
+    app(ReleaseKompenResponHubImportVersion::class)->execute(
+        $student->importBatch()->sole(),
+        'Admin Uji',
+        'admin-uji',
+    );
+
+    $this->withHeaders(outboundHeaders($token))
+        ->getJson("/api/sikompen/v1/sync-runs/{$runId}")
+        ->assertNotFound()
+        ->assertJsonPath('error.code', 'not_found');
+
+    $this->withHeaders(outboundHeaders($token))
+        ->get("/api/sikompen/v1/sync-runs/{$runId}/download")
+        ->assertNotFound();
+
+    $this->withHeaders(outboundHeaders($token))
+        ->postJson('/api/sikompen/v1/sync-runs', [
+            'selector' => ['type' => 'periode', 'periode' => '2026/2027 Gasal'],
+        ])
+        ->assertNotFound();
+});
+
 test('a class sync requires a valid class selector', function (): void {
     outboundStudent();
     $token = configureOutboundClient();
@@ -228,6 +268,14 @@ function outboundStudent(array $attributes = []): KompenResponHubStudent
             'student_count' => 2,
             'detail_count' => 0,
             'imported_at' => now(),
+        ],
+    );
+
+    KompenResponHubActiveImport::query()->firstOrCreate(
+        ['periode_semester' => $import->periode_semester],
+        [
+            'kompen_respon_hub_import_id' => $import->id,
+            'activated_at' => now(),
         ],
     );
 

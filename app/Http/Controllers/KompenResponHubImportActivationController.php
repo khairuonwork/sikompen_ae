@@ -103,12 +103,12 @@ class KompenResponHubImportActivationController extends Controller
             $admin,
             $request,
             period: $releasedVersion['periode_semester'],
-            reason: 'Workbook dilepas dari sumber data aktif. Data SP final tidak diubah.',
+            reason: 'Workbook dilepas dari sumber data aktif dan data operasional periode ini tidak lagi ditampilkan.',
             afterState: ['active_reference_removed' => true],
         );
 
         return to_route('admin.kompen-respon.index', ['tab' => 'files'])
-            ->with('success', "Versi {$releasedVersion['display_filename']} tidak lagi digunakan. Workbook dan data SP final tetap tersimpan.");
+            ->with('success', "Versi {$releasedVersion['display_filename']} tidak lagi digunakan. Data operasional periode ini disembunyikan, sementara versi workbook dan riwayat audit tetap tersimpan.");
     }
 
     private function hasActiveImportTask(): bool

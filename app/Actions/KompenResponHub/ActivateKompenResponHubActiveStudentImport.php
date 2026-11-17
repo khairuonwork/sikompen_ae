@@ -48,12 +48,13 @@ class ActivateKompenResponHubActiveStudentImport
                 }
 
                 $activeReference = KompenResponHubActiveStudentImportReference::query()
-                    ->where('periode_semester', $period)
+                    ->where('selection_key', KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey)
                     ->lockForUpdate()
                     ->first();
 
                 if ($activeReference === null) {
                     KompenResponHubActiveStudentImportReference::query()->create([
+                        'selection_key' => KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey,
                         'periode_semester' => $period,
                         'sikompen_active_student_import_id' => $lockedImport->id,
                         'activated_by_admin_id' => $actorAdminId,
@@ -61,6 +62,7 @@ class ActivateKompenResponHubActiveStudentImport
                     ]);
                 } else {
                     $activeReference->update([
+                        'periode_semester' => $period,
                         'sikompen_active_student_import_id' => $lockedImport->id,
                         'activated_by_admin_id' => $actorAdminId,
                         'activated_at' => now(),

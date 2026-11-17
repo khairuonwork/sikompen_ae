@@ -74,6 +74,7 @@ class FinalizeKompenResponHubCutoff
             });
 
         KompenResponHubStudent::query()
+            ->fromActiveImportReference()
             ->where('periode_semester', $cutoff->periode_semester)
             ->with(['progress', 'summaryOverride'])
             ->chunkById(200, function ($students) use ($cutoff, $actor, $request, &$issuedWarningCount): void {

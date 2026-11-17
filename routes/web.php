@@ -127,6 +127,9 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
     Route::post('kompen-respon/active-students/imports/{import}/activate', [KompenResponHubActiveStudentImportController::class, 'activate'])
         ->middleware('throttle:20,1')
         ->name('kompen-respon.active-students.imports.activate');
+    Route::delete('kompen-respon/active-students/imports/{import}/activation', [KompenResponHubActiveStudentImportController::class, 'release'])
+        ->middleware('throttle:10,1')
+        ->name('kompen-respon.active-students.imports.activation.destroy');
     Route::delete('kompen-respon/active-students/imports/{import}', [KompenResponHubActiveStudentImportController::class, 'destroy'])
         ->middleware('throttle:10,1')
         ->name('kompen-respon.active-students.imports.destroy');
@@ -144,16 +147,19 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
         ->middleware('throttle:10,15')
         ->name('kompen-respon.imports.destroy');
     Route::post('kompen-respon/imports/{import}/activate', [KompenResponHubImportActivationController::class, 'store'])
-        ->middleware('throttle:5,15')
+        ->middleware('throttle:sikompen-workbook-activation')
         ->name('kompen-respon.imports.activate');
     Route::delete('kompen-respon/imports/{import}/activation', [KompenResponHubImportActivationController::class, 'destroy'])
-        ->middleware('throttle:5,15')
+        ->middleware('throttle:sikompen-workbook-activation')
         ->name('kompen-respon.imports.activation.destroy');
     Route::get('kompen-respon/import-tasks/{importTask}', [KompenResponHubImportTaskController::class, 'show'])
         ->name('kompen-respon.import-tasks.show');
     Route::put('kompen-respon/cutoffs', [KompenResponHubLifecycleController::class, 'storeCutoff'])
         ->middleware('throttle:20,1')
         ->name('kompen-respon.cutoffs.store');
+    Route::post('kompen-respon/cutoffs/{cutoff}/select', [KompenResponHubLifecycleController::class, 'selectCutoff'])
+        ->middleware('throttle:20,1')
+        ->name('kompen-respon.cutoffs.select');
     Route::post('kompen-respon/cutoffs/{cutoff}/finalize', [KompenResponHubLifecycleController::class, 'finalizeCutoff'])
         ->middleware('throttle:5,15')
         ->name('kompen-respon.cutoffs.finalize');

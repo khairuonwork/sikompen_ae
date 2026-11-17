@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\KompenResponHub\BuildKompenResponHubDataConsistencyReport;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Actions\KompenResponHub\SikompenStudentAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
@@ -33,7 +32,6 @@ use App\Models\KompenResponHubSystemSetting;
 use App\Models\KompenResponHubWarningLetter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -42,7 +40,6 @@ class KompenResponHubController extends Controller
     public function __construct(
         private KompenResponHubDataQuery $dataQuery,
         private SikompenStudentAccess $studentAccess,
-        private BuildKompenResponHubDataConsistencyReport $dataConsistencyReport,
     ) {}
 
     public function studentIndex(KompenResponHubTableRequest $request): Response
@@ -75,6 +72,14 @@ class KompenResponHubController extends Controller
 
     public function student(KompenResponHubStudent $student): JsonResponse
     {
+        abort_unless(
+            KompenResponHubStudent::query()
+                ->fromActiveImportReference()
+                ->whereKey($student->id)
+                ->exists(),
+            404,
+        );
+
         $studentNim = $this->studentAccess->studentNim(request());
         abort_if($studentNim !== null && $student->nim !== $studentNim, 404);
 
@@ -96,6 +101,14 @@ class KompenResponHubController extends Controller
 
     public function adminStudentOverview(KompenResponHubStudent $student): JsonResponse
     {
+        abort_unless(
+            KompenResponHubStudent::query()
+                ->fromActiveImportReference()
+                ->whereKey($student->id)
+                ->exists(),
+            404,
+        );
+
         $student->load([
             'importBatch:id,original_filename,imported_at',
             'progress',
@@ -165,17 +178,23 @@ class KompenResponHubController extends Controller
 
         $filterOptions = $this->dataQuery->filterOptions($filters);
 
+        $selectedWarningPeriod = $isAdmin
+            ? $this->dataQuery->selectedWarningPeriod()
+            : null;
         $cutoffs = $isAdmin
             ? KompenResponHubPeriodCutoff::query()
                 ->orderByDesc('deadline_at')
                 ->get(['id', 'periode_semester', 'deadline_at', 'timezone'])
             : collect();
+        $warningPeriods = $cutoffs
+            ->pluck('periode_semester')
+            ->all();
 
         if ($isAdmin && $activeTab === 'warnings') {
             $filters = $this->filtersForWarningPeriod(
                 $filters,
-                $cutoffs,
-                $filterOptions['periode_semester'],
+                $warningPeriods,
+                $selectedWarningPeriod,
             );
         }
 
@@ -198,7 +217,7 @@ class KompenResponHubController extends Controller
             'filters' => $filters,
             'filterOptions' => $filterOptions,
             'warningPeriods' => $isAdmin && $activeTab === 'warnings'
-                ? $filterOptions['periode_semester']
+                ? $warningPeriods
                 : [],
             'importAuditPeriods' => $isAdmin && $activeTab === 'imports'
                 ? $this->dataQuery->importAuditPeriods()
@@ -217,6 +236,8 @@ class KompenResponHubController extends Controller
                         ->setTimezone($cutoff->timezone)
                         ->toIso8601String(),
                     'timezone' => $cutoff->timezone,
+                    'is_available' => in_array($cutoff->periode_semester, $filterOptions['periode_semester'], true),
+                    'is_selected' => $cutoff->periode_semester === $selectedWarningPeriod,
                 ])
                     ->all()
                 : [],
@@ -296,9 +317,6 @@ class KompenResponHubController extends Controller
             'recycledActiveStudentImportVersions' => $isAdmin && $activeTab === 'files'
                 ? $this->recycledActiveStudentImportVersionPaginator($filters)
                 : null,
-            'dataConsistencyReport' => $isAdmin && $activeTab === 'files'
-                ? $this->dataConsistencyReport->execute()
-                : [],
             'warnings' => $isAdmin && $activeTab === 'warnings'
                 ? $this->resourcePaginator(
                     $this->dataQuery->warnings($filters)->paginate($this->perPage($filters))->withQueryString(),
@@ -527,12 +545,14 @@ class KompenResponHubController extends Controller
      * optional inspection period for the displayed list.
      *
      * @param  array<string, mixed>  $filters
-     * @param  Collection<int, KompenResponHubPeriodCutoff>  $cutoffs
      * @param  list<string>  $warningPeriods
      * @return array<string, mixed>
      */
-    private function filtersForWarningPeriod(array $filters, Collection $cutoffs, array $warningPeriods): array
-    {
+    private function filtersForWarningPeriod(
+        array $filters,
+        array $warningPeriods,
+        ?string $selectedWarningPeriod,
+    ): array {
         if ($warningPeriods === []) {
             unset($filters['periode_semester']);
             unset($filters['warning_period']);
@@ -541,16 +561,19 @@ class KompenResponHubController extends Controller
             return $filters;
         }
 
-        $requestedWarningPeriod = $filters['warning_period'] ?? $filters['periode_semester'] ?? null;
-        $hasRequestedWarningPeriod = filled($requestedWarningPeriod)
-            && in_array($requestedWarningPeriod, $warningPeriods, true);
+        $warningPeriod = filled($selectedWarningPeriod)
+            && in_array($selectedWarningPeriod, $warningPeriods, true)
+            ? $selectedWarningPeriod
+            : null;
 
-        $firstCutoff = $cutoffs->first();
-        $warningPeriod = $hasRequestedWarningPeriod
-            ? $requestedWarningPeriod
-            : ($firstCutoff instanceof KompenResponHubPeriodCutoff
-                ? $firstCutoff->periode_semester
-                : $warningPeriods[0]);
+        if ($warningPeriod === null) {
+            unset($filters['periode_semester']);
+            unset($filters['warning_period']);
+            unset($filters['list_period']);
+
+            return $filters;
+        }
+
         $requestedListPeriod = $filters['list_period'] ?? $warningPeriod;
         $hasRequestedListPeriod = filled($requestedListPeriod)
             && in_array($requestedListPeriod, $warningPeriods, true);

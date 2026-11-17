@@ -7,16 +7,13 @@ use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubWarningLetter;
+use App\Models\KompenResponHubWarningPeriodSelection;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class ReleaseKompenResponHubImportVersion
 {
-    /**
-     * Remove a workbook from the active source registry without changing the
-     * operational student records or finalized warning-letter records.
-     *
-     * @return array{import_id: int, periode_semester: string, display_filename: string}
-     */
+    /** @return array{import_id: int, periode_semester: string, display_filename: string} */
     public function execute(
         KompenResponHubImport $import,
         string $actorName,
@@ -52,6 +49,16 @@ class ReleaseKompenResponHubImportVersion
 
                 if ($hasActiveWarning) {
                     throw new \LogicException('Workbook tidak dapat dilepas karena periode ini masih memiliki SP aktif. Rollback atau selesaikan SP terlebih dahulu.');
+                }
+
+                $isSelectedWarningPeriod = KompenResponHubWarningPeriodSelection::query()
+                    ->where('selection_key', KompenResponHubWarningPeriodSelection::ManagedWarningPeriodSelectionKey)
+                    ->whereHas('cutoff', fn (Builder $cutoffQuery): Builder => $cutoffQuery->where('periode_semester', $lockedImport->periode_semester))
+                    ->lockForUpdate()
+                    ->exists();
+
+                if ($isSelectedWarningPeriod) {
+                    throw new \LogicException('Workbook tidak dapat dilepas karena periodenya sedang dipilih sebagai periode SP aktif. Pilih periode SP aktif lain terlebih dahulu.');
                 }
 
                 $activeImport->delete();

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\FinalizeKompenResponHubCutoff;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Actions\KompenResponHub\SelectKompenResponHubWarningPeriod;
 use App\Http\Requests\DestroyKompenResponHubWarningLetterRequest;
 use App\Http\Requests\FinalizeKompenResponHubPeriodRequest;
 use App\Http\Requests\RollbackKompenResponHubPeriodFinalizationRequest;
@@ -12,6 +13,7 @@ use App\Http\Requests\StoreKompenResponHubPeriodCutoffRequest;
 use App\Http\Requests\StoreKompenResponHubStudentProgressRequest;
 use App\Http\Requests\StoreKompenResponHubStudentSummaryOverrideRequest;
 use App\Http\Requests\UpdateKompenResponHubWarningLetterRequest;
+use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
 use App\Models\KompenResponHubDetailOverride;
 use App\Models\KompenResponHubPeriodCutoff;
@@ -21,6 +23,7 @@ use App\Models\KompenResponHubStudentSummaryOverride;
 use App\Models\KompenResponHubWarningLetter;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class KompenResponHubLifecycleController extends Controller
@@ -28,12 +31,20 @@ class KompenResponHubLifecycleController extends Controller
     public function __construct(
         private RecordKompenResponHubActivity $activity,
         private FinalizeKompenResponHubCutoff $finalizeCutoff,
+        private SelectKompenResponHubWarningPeriod $warningPeriodSelector,
     ) {}
 
     public function storeCutoff(StoreKompenResponHubPeriodCutoffRequest $request): RedirectResponse
     {
         $validated = $request->validated();
-        abort_unless(KompenResponHubStudent::query()->where('periode_semester', $validated['periode_semester'])->exists(), 422, 'Periode belum memiliki data mahasiswa.');
+        abort_unless(
+            KompenResponHubStudent::query()
+                ->fromActiveImportReference()
+                ->where('periode_semester', $validated['periode_semester'])
+                ->exists(),
+            422,
+            'Periode belum memiliki data mahasiswa aktif.',
+        );
 
         /** @var array{cutoff: KompenResponHubPeriodCutoff, synchronized_warning_count: int} $result */
         $result = DB::connection(config('kompen-respon-hub.database_connection'))->transaction(function () use ($request, $validated): array {
@@ -77,7 +88,59 @@ class KompenResponHubLifecycleController extends Controller
             ? " {$result['synchronized_warning_count']} status SP diselaraskan."
             : '';
 
+        $admin = $request->user('admin');
+        $selection = $this->warningPeriodSelector->selectWhenMissing(
+            $result['cutoff'],
+            $admin instanceof KompenResponHubAdmin ? $admin->id : null,
+        );
+
+        if ($selection['changed']) {
+            $this->activity->execute(
+                'cutoff.selected',
+                'period_cutoff',
+                (string) $selection['cutoff']->id,
+                $admin instanceof KompenResponHubAdmin ? $admin : null,
+                $request,
+                period: $selection['cutoff']->periode_semester,
+                reason: 'Periode SP aktif dipilih otomatis karena belum ada periode yang dikelola.',
+            );
+        }
+
         return back()->with('success', "Batas waktu periode berhasil disimpan.{$synchronizationSummary}");
+    }
+
+    public function selectCutoff(
+        Request $request,
+        KompenResponHubPeriodCutoff $cutoff,
+    ): RedirectResponse {
+        abort_unless(
+            KompenResponHubStudent::query()
+                ->fromActiveImportReference()
+                ->where('periode_semester', $cutoff->periode_semester)
+                ->exists(),
+            422,
+            'Periode SP hanya dapat dipilih ketika workbook Kompen dan Respon periode tersebut masih digunakan.',
+        );
+
+        $admin = $request->user('admin');
+        $selection = $this->warningPeriodSelector->execute(
+            $cutoff,
+            $admin instanceof KompenResponHubAdmin ? $admin->id : null,
+        );
+
+        if ($selection['changed']) {
+            $this->activity->execute(
+                'cutoff.selected',
+                'period_cutoff',
+                (string) $selection['cutoff']->id,
+                $admin instanceof KompenResponHubAdmin ? $admin : null,
+                $request,
+                period: $selection['cutoff']->periode_semester,
+                reason: 'Periode dipilih sebagai periode SP aktif.',
+            );
+        }
+
+        return back()->with('success', "Periode SP aktif sekarang {$selection['cutoff']->periode_semester}.");
     }
 
     public function finalizeCutoff(
@@ -173,6 +236,7 @@ class KompenResponHubLifecycleController extends Controller
 
     public function storeProgress(StoreKompenResponHubStudentProgressRequest $request, KompenResponHubStudent $student): RedirectResponse
     {
+        $this->ensureStudentUsesActiveWorkbook($student);
         $validated = $request->validated();
         $override = KompenResponHubStudentSummaryOverride::query()->where('current_student_id', $student->id)->first();
         $totalKompen = $override instanceof KompenResponHubStudentSummaryOverride
@@ -205,6 +269,7 @@ class KompenResponHubLifecycleController extends Controller
 
     public function storeSummaryOverride(StoreKompenResponHubStudentSummaryOverrideRequest $request, KompenResponHubStudent $student): RedirectResponse
     {
+        $this->ensureStudentUsesActiveWorkbook($student);
         $validated = $request->validated();
         $progress = KompenResponHubStudentProgress::query()->where('current_student_id', $student->id)->first();
         $workedKompen = $progress instanceof KompenResponHubStudentProgress
@@ -237,6 +302,8 @@ class KompenResponHubLifecycleController extends Controller
     {
         $validated = $request->validated();
         $detail->loadMissing('student');
+        abort_unless($detail->student instanceof KompenResponHubStudent, 404);
+        $this->ensureStudentUsesActiveWorkbook($detail->student);
         $sourceKey = $detail->source_key ?? hash('sha256', "legacy-detail:{$detail->id}");
         if ($detail->source_key === null) {
             $detail->update(['source_key' => $sourceKey]);
@@ -383,5 +450,16 @@ class KompenResponHubLifecycleController extends Controller
     private function candidateClassification(KompenResponHubPeriodCutoff $cutoff): string
     {
         return $cutoff->deadline_at->isPast() ? 'fixed' : 'temporary';
+    }
+
+    private function ensureStudentUsesActiveWorkbook(KompenResponHubStudent $student): void
+    {
+        abort_unless(
+            KompenResponHubStudent::query()
+                ->fromActiveImportReference()
+                ->whereKey($student->id)
+                ->exists(),
+            404,
+        );
     }
 }

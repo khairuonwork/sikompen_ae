@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
+use App\Models\KompenResponHubActiveImport;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
@@ -9,6 +10,7 @@ use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubStudentProgress;
 use App\Models\KompenResponHubWarningLetter;
+use App\Models\KompenResponHubWarningPeriodSelection;
 use Carbon\CarbonImmutable;
 
 test('an admin can set a cutoff five minutes from the current Asia Jakarta time', function () {
@@ -152,7 +154,7 @@ test('a legacy not-created warning remains a candidate after its cutoff passes',
         ->toContain($student->id);
 });
 
-test('the warning page keeps candidates scoped to its selected cutoff period', function () {
+test('the warning page uses the persisted selected SP period and only allows list inspection to vary', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     $gasalStudent = createLifecycleStudent();
     $genapStudent = $gasalStudent->replicate();
@@ -164,50 +166,59 @@ test('the warning page keeps candidates scoped to its selected cutoff period', f
         'tingkat' => 2,
     ])->save();
 
-    KompenResponHubPeriodCutoff::create([
+    $gasalCutoff = KompenResponHubPeriodCutoff::create([
         'periode_semester' => $gasalStudent->periode_semester,
         'deadline_at' => now()->subMinute(),
         'timezone' => 'Asia/Jakarta',
     ]);
-    KompenResponHubPeriodCutoff::create([
+    $genapCutoff = KompenResponHubPeriodCutoff::create([
         'periode_semester' => $genapStudent->periode_semester,
         'deadline_at' => now()->addWeek(),
         'timezone' => 'Asia/Jakarta',
+    ]);
+    KompenResponHubWarningPeriodSelection::query()->create([
+        'selection_key' => KompenResponHubWarningPeriodSelection::ManagedWarningPeriodSelectionKey,
+        'sikompen_period_cutoff_id' => $genapCutoff->id,
+        'selected_at' => now(),
     ]);
 
     $this->actingAs($admin, 'admin')
         ->get('/admin?tab=warnings')
         ->assertInertia(fn ($page) => $page
             ->where('filters.periode_semester', '2026/2027 Genap')
+            ->where('filters.warning_period', '2026/2027 Genap')
             ->has('warningCandidates.data', 0),
         );
 
     $this->actingAs($admin, 'admin')
-        ->get('/admin?tab=warnings&periode_semester=2026%2F2027%20Gasal')
+        ->get('/admin?tab=warnings&warning_period=2026%2F2027%20Gasal')
         ->assertInertia(fn ($page) => $page
-            ->where('filters.periode_semester', '2026/2027 Gasal')
-            ->has('warningCandidates.data', 1)
-            ->where('warningCandidates.data.0.id', $gasalStudent->id),
-        );
-
-    $this->actingAs($admin, 'admin')
-        ->get('/admin?tab=warnings&warning_period=2026%2F2027%20Gasal&list_period=2026%2F2027%20Genap')
-        ->assertInertia(fn ($page) => $page
-            ->where('filters.warning_period', '2026/2027 Gasal')
-            ->where('filters.list_period', '2026/2027 Genap')
             ->where('filters.periode_semester', '2026/2027 Genap')
+            ->where('filters.warning_period', '2026/2027 Genap')
             ->has('warningCandidates.data', 0),
         );
 
     $this->actingAs($admin, 'admin')
-        ->get('/admin?tab=warnings&warning_period=2026%2F2027%20Genap')
+        ->get('/admin?tab=warnings&list_period=2026%2F2027%20Gasal')
         ->assertInertia(fn ($page) => $page
             ->where('filters.warning_period', '2026/2027 Genap')
-            ->where('filters.periode_semester', '2026/2027 Genap')
+            ->where('filters.list_period', '2026/2027 Gasal')
+            ->where('filters.periode_semester', '2026/2027 Gasal')
+            ->has('warningCandidates.data', 1)
+            ->where('warningCandidates.data.0.id', $gasalStudent->id)
             ->has('warningPeriods', 2)
             ->where('warningPeriods.0', '2026/2027 Genap')
             ->where('warningPeriods.1', '2026/2027 Gasal'),
         );
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/cutoffs/{$gasalCutoff->id}/select")
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    expect(KompenResponHubWarningPeriodSelection::query()
+        ->sole()
+        ->sikompen_period_cutoff_id)->toBe($gasalCutoff->id);
 });
 
 test('student and detail tables use the managed warning period when opened from Surat Peringatan', function () {
@@ -594,6 +605,11 @@ function createLifecycleStudent(): KompenResponHubStudent
         'student_count' => 1,
         'detail_count' => 0,
         'imported_at' => now(),
+    ]);
+    KompenResponHubActiveImport::query()->create([
+        'periode_semester' => $import->periode_semester,
+        'kompen_respon_hub_import_id' => $import->id,
+        'activated_at' => now(),
     ]);
 
     return KompenResponHubStudent::create([

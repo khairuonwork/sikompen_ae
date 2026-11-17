@@ -7,6 +7,7 @@ use App\Jobs\GenerateKompenResponHubExport;
 use App\Jobs\ProcessKompenResponHubImport;
 use App\Models\KompenResponHubActiveImport;
 use App\Models\KompenResponHubActiveStudent;
+use App\Models\KompenResponHubActiveStudentImportReference;
 use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
@@ -286,6 +287,11 @@ test('the dynamic filters only expose uploaded periods and filter their records'
         'total_hutang_jam' => 0,
         'kompensasi_dikerjakan_jam' => 0,
         'sisa_hutang_jam' => 0,
+    ]);
+    KompenResponHubActiveImport::query()->create([
+        'periode_semester' => $otherImport->periode_semester,
+        'kompen_respon_hub_import_id' => $otherImport->id,
+        'activated_at' => now(),
     ]);
 
     $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/filter-options')
@@ -744,7 +750,14 @@ test('an unexpected export failure is logged with task context while keeping its
 
 test('a student cannot queue an export of warning letters', function () {
     $account = KompenResponHubStudentAccount::factory()->create(['nim' => '261000001']);
-    KompenResponHubActiveStudent::factory()->create(['nim' => $account->nim]);
+    $activeStudent = KompenResponHubActiveStudent::factory()->create(['nim' => $account->nim]);
+    $rosterImport = $activeStudent->importBatch()->sole();
+    KompenResponHubActiveStudentImportReference::query()->create([
+        'selection_key' => KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey,
+        'periode_semester' => $rosterImport->periode_semester,
+        'sikompen_active_student_import_id' => $rosterImport->id,
+        'activated_at' => now(),
+    ]);
 
     $this->actingAs($account, 'student')->post('/exports', [
         'resource' => 'warnings',
@@ -1120,6 +1133,31 @@ test('an admin can switch the active source to a chosen prior workbook version',
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.version_activated')->exists())->toBeTrue();
 });
 
+test('an administrator can retry selecting a workbook without hitting the activation rate limit', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $storedPath = 'kompen-respon-hub/imports/retryable.xlsx';
+    Storage::disk('local')->put($storedPath, workbookContents());
+
+    $import = KompenResponHubImport::create([
+        'periode_semester' => '2026/2027 Gasal',
+        'original_filename' => 'retryable.xlsx',
+        'display_filename' => 'retryable.xlsx',
+        'stored_path' => $storedPath,
+        'file_hash' => str_repeat('d', 64),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 1,
+        'imported_at' => now(),
+    ]);
+
+    foreach (range(1, 6) as $attempt) {
+        $this->actingAs($admin, 'admin')
+            ->post("/admin/kompen-respon/imports/{$import->id}/activate")
+            ->assertRedirect('/admin?tab=files');
+    }
+});
+
 test('a guest cannot activate a selected upload version', function () {
     $import = KompenResponHubImport::create([
         'periode_semester' => '2026/2027 Ganjil',
@@ -1214,6 +1252,110 @@ test('an uploaded workbook is queued and its progress remains available outside 
         ->assertOk()
         ->assertJsonPath('data.id', $importTask->id)
         ->assertJsonPath('data.progress', 0);
+});
+
+test('an identical workbook is not queued twice even when uploaded with a different filename', function () {
+    Storage::fake('local');
+    Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
+    $contents = workbookContents();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent('kompen-respon-awal.xlsx', $contents),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent('kompen-respon-salinan.xlsx', $contents),
+    ])
+        ->assertRedirect('/admin?tab=upload')
+        ->assertSessionHas('error', 'Workbook identik sedang diproses sebagai kompen-respon-awal.xlsx. Tunggu proses tersebut selesai.');
+
+    expect(KompenResponHubImportTask::query()->count())->toBe(1);
+    Queue::assertPushed(ProcessKompenResponHubImport::class, 1);
+});
+
+test('a workbook with the same filename and different content can be queued', function () {
+    Storage::fake('local');
+    Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent('kompen-respon.xlsx', workbookContents(compensationHours: 1.5)),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent('kompen-respon.xlsx', workbookContents(compensationHours: 2.5)),
+    ])->assertRedirect('/admin?tab=upload');
+
+    expect(KompenResponHubImportTask::query()->count())->toBe(2);
+    Queue::assertPushed(ProcessKompenResponHubImport::class, 2);
+});
+
+test('an identical workbook that has already been imported is not queued again', function () {
+    Storage::fake('local');
+    Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
+    $contents = workbookContents();
+    $storedPath = 'kompen-respon-hub/imports/workbook-tersimpan.xlsx';
+    Storage::disk('local')->put($storedPath, $contents);
+
+    KompenResponHubImport::create([
+        'periode_semester' => '2026/2027 Gasal',
+        'original_filename' => 'workbook-tersimpan.xlsx',
+        'display_filename' => 'workbook-tersimpan.xlsx',
+        'stored_path' => $storedPath,
+        'file_hash' => hash('sha256', $contents),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 1,
+        'imported_at' => now(),
+    ]);
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent('unggah-ulang.xlsx', $contents),
+    ])
+        ->assertRedirect('/admin?tab=upload')
+        ->assertSessionHas('error', 'Workbook identik sudah tersimpan sebagai workbook-tersimpan.xlsx. Gunakan versi yang ada di List File.');
+
+    expect(KompenResponHubImportTask::query()->doesntExist())->toBeTrue();
+    Queue::assertNothingPushed();
+});
+
+test('an identical workbook in the recycle bin must be restored instead of uploaded again', function () {
+    Storage::fake('local');
+    Queue::fake();
+    $admin = KompenResponHubAdmin::factory()->create();
+    $contents = workbookContents();
+    $storedPath = 'kompen-respon-hub/imports/workbook-lama.xlsx';
+    Storage::disk('local')->put($storedPath, $contents);
+
+    $import = KompenResponHubImport::create([
+        'periode_semester' => '2026/2027 Gasal',
+        'original_filename' => 'workbook-lama.xlsx',
+        'display_filename' => 'workbook-lama.xlsx',
+        'stored_path' => $storedPath,
+        'file_hash' => hash('sha256', $contents),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 1,
+        'imported_at' => now(),
+    ]);
+    $import->delete();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent('unggah-ulang.xlsx', $contents),
+    ])
+        ->assertRedirect('/admin?tab=upload')
+        ->assertSessionHas('error', 'Workbook identik sudah berada di Recycle Bin sebagai workbook-lama.xlsx. Pulihkan versi tersebut, bukan mengunggah ulang.');
+
+    expect(KompenResponHubImportTask::query()->doesntExist())->toBeTrue();
+    Queue::assertNothingPushed();
 });
 
 test('an import rejects an XLSX archive with too many internal entries before storage', function () {

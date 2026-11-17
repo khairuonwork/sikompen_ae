@@ -201,7 +201,7 @@ test('an invalid administrator reset submission records the failed code attempt'
 
 test('an active student receives an admin-managed reset code and can use it once', function (): void {
     $nim = '261000001';
-    KompenResponHubActiveStudent::factory()->create(['nim' => $nim]);
+    useStudentForPasswordReset(KompenResponHubActiveStudent::factory()->create(['nim' => $nim]));
 
     $this->post('/mahasiswa/lupa-password', ['nim' => $nim])
         ->assertRedirect('/mahasiswa/reset-password');
@@ -222,7 +222,7 @@ test('an active student receives an admin-managed reset code and can use it once
 
 test('an invalid student reset submission preserves the request and records a failed code attempt', function (): void {
     $nim = '261000001';
-    KompenResponHubActiveStudent::factory()->create(['nim' => $nim]);
+    useStudentForPasswordReset(KompenResponHubActiveStudent::factory()->create(['nim' => $nim]));
     $request = KompenResponHubStudentPasswordResetRequest::query()->create([
         'nim' => $nim,
         'reset_code' => 'ABCDEFG1',
@@ -250,10 +250,6 @@ test('an administrator can view student reset requests outside settings', functi
     $admin = KompenResponHubAdmin::factory()->create();
     $olderImport = KompenResponHubActiveStudentImport::factory()->create();
     $latestImport = KompenResponHubActiveStudentImport::factory()->create();
-    KompenResponHubActiveStudentImportReference::factory()->create([
-        'sikompen_active_student_import_id' => $olderImport->id,
-        'activated_at' => now()->subDay(),
-    ]);
     KompenResponHubActiveStudentImportReference::factory()->create([
         'sikompen_active_student_import_id' => $latestImport->id,
         'periode_semester' => '2027/2028 Genap',
@@ -312,7 +308,7 @@ test('an administrator can refresh or cancel a student reset request', function 
 
 test('a pending student reset request retains its code until it expires', function (): void {
     $nim = '261000001';
-    KompenResponHubActiveStudent::factory()->create(['nim' => $nim]);
+    useStudentForPasswordReset(KompenResponHubActiveStudent::factory()->create(['nim' => $nim]));
     $existing = KompenResponHubStudentPasswordResetRequest::query()->create([
         'nim' => $nim,
         'reset_code' => 'ABCDEFG1',
@@ -335,3 +331,17 @@ test('the emergency admin seeder creates the two configured emergency accounts',
 
     expect(KompenResponHubAdmin::query()->where('is_emergency_admin', true)->count())->toBe(2);
 });
+
+function useStudentForPasswordReset(KompenResponHubActiveStudent $student): void
+{
+    $import = $student->importBatch()->sole();
+
+    KompenResponHubActiveStudentImportReference::query()->updateOrCreate(
+        ['selection_key' => KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey],
+        [
+            'periode_semester' => $import->periode_semester,
+            'sikompen_active_student_import_id' => $student->sikompen_active_student_import_id,
+            'activated_at' => now(),
+        ],
+    );
+}

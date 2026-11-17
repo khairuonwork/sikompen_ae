@@ -26,7 +26,6 @@ export type Student = {
     has_active_warning: boolean;
     warning: Pick<Warning, "id" | "letter_status" | "resolution"> | null;
 };
-
 export type Detail = {
     id: number;
     student_id: number;
@@ -92,6 +91,8 @@ export type Cutoff = {
     periode_semester: string;
     deadline_at: string;
     timezone: string;
+    is_available: boolean;
+    is_selected: boolean;
 };
 
 export type ImportAuditLog = {
@@ -302,7 +303,6 @@ export type KompenResponHubPageProps = {
     activeStudentImportReferences: Pagination<ActiveStudentImportReference> | null;
     recycledImportVersions: Pagination<ImportVersion> | null;
     recycledActiveStudentImportVersions: Pagination<ActiveStudentImportVersion> | null;
-    dataConsistencyReport: DataConsistencyRecord[];
     warnings: Pagination<Warning> | null;
     warningCandidates: Pagination<Student> | null;
     rolledBackWarnings: Pagination<Warning> | null;
@@ -315,13 +315,4 @@ export type KompenResponHubPageProps = {
     exportTasks: ExportTask[];
     exportStalledAfterMinutes: number;
     managedPeriodHasActiveWarnings: boolean;
-};
-
-export type DataConsistencyRecord = {
-    periode_semester: string;
-    status: "ready" | "roster_missing" | "mismatch";
-    kompen_respon_students: number;
-    roster_students: number;
-    missing_from_roster: string[];
-    missing_from_kompen_respon: string[];
 };

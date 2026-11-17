@@ -17,6 +17,7 @@ import {
     destroyWarning,
     finalizeCutoff,
     rollbackCutoffFinalization,
+    selectCutoff,
     storeCutoff,
     updateWarning,
 } from "@/actions/App/Http/Controllers/KompenResponHubLifecycleController";
@@ -630,31 +631,42 @@ export function WarningPanel({
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                            {cutoff.is_selected ? (
+                                                <span className="rounded-full bg-[#395886] px-2.5 py-1 text-[11px] font-bold text-white">
+                                                    Periode SP aktif
+                                                </span>
+                                            ) : null}
                                             <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", isElapsed ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700")}>
                                                 {isElapsed
                                                     ? "Cutoff lewat"
                                                     : "Aktif"}
                                             </span>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                disabled={
-                                                    cutoff.periode_semester ===
-                                                    selectedWarningPeriod
-                                                }
-                                                onClick={() =>
-                                                    selectManagedWarningPeriod(
-                                                        cutoff.periode_semester,
-                                                    )
-                                                }
-                                                className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
-                                            >
-                                                {cutoff.periode_semester ===
-                                                selectedWarningPeriod
-                                                    ? "Dipilih"
-                                                    : "Pilih"}
-                                            </Button>
+                                            {cutoff.is_selected ? null : cutoff.is_available ? (
+                                                <Form
+                                                    {...selectCutoff.form(cutoff.id)}
+                                                    onBefore={() =>
+                                                        window.confirm(
+                                                            `Jadikan ${cutoff.periode_semester} sebagai periode SP aktif? Finalisasi dan profil mahasiswa akan menggunakan periode ini.`,
+                                                        )
+                                                    }
+                                                >
+                                                    {({ processing }) => (
+                                                        <Button
+                                                            type="submit"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            disabled={processing}
+                                                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                                                        >
+                                                            {processing ? "Memilih…" : "Jadikan SP aktif"}
+                                                        </Button>
+                                                    )}
+                                                </Form>
+                                            ) : (
+                                                <span className="text-[11px] font-semibold text-[#395886]/70">
+                                                    Hanya riwayat
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -724,6 +736,7 @@ export function WarningPanel({
                                         type="datetime-local"
                                         required
                                         step={60}
+                                        className="text-[#1F2937] [color-scheme:light] [&::-webkit-calendar-picker-indicator]:opacity-75 [&::-webkit-datetime-edit]:text-[#1F2937] [&::-webkit-datetime-edit-ampm-field]:text-[#1F2937] [&::-webkit-datetime-edit-day-field]:text-[#1F2937] [&::-webkit-datetime-edit-fields-wrapper]:text-[#1F2937] [&::-webkit-datetime-edit-hour-field]:text-[#1F2937] [&::-webkit-datetime-edit-minute-field]:text-[#1F2937] [&::-webkit-datetime-edit-month-field]:text-[#1F2937] [&::-webkit-datetime-edit-text]:text-[#1F2937] [&::-webkit-datetime-edit-year-field]:text-[#1F2937]"
                                         defaultValue={
                                             editingCutoff
                                                 ? datetimeLocalValue(

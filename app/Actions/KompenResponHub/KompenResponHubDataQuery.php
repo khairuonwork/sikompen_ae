@@ -11,6 +11,7 @@ use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubWarningLetter;
+use App\Models\KompenResponHubWarningPeriodSelection;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
@@ -164,9 +165,19 @@ class KompenResponHubDataQuery
     public function activeStudentImportReferences(): Builder
     {
         return KompenResponHubActiveStudentImportReference::query()
+            ->where('selection_key', KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey)
             ->with(['importBatch:id,original_filename,periode_semester,student_count,imported_at'])
-            ->orderByDesc('periode_semester')
-            ->orderByDesc('id');
+            ->latest('activated_at');
+    }
+
+    public function selectedWarningPeriod(): ?string
+    {
+        $selection = KompenResponHubWarningPeriodSelection::query()
+            ->with('cutoff:id,periode_semester')
+            ->where('selection_key', KompenResponHubWarningPeriodSelection::ManagedWarningPeriodSelectionKey)
+            ->first();
+
+        return $selection?->cutoff?->periode_semester;
     }
 
     /**
@@ -175,7 +186,8 @@ class KompenResponHubDataQuery
      */
     public function warnings(array $filters, bool $includeCancelled = false): Builder
     {
-        $query = KompenResponHubWarningLetter::query()->with('student');
+        $query = KompenResponHubWarningLetter::query()
+            ->with('student');
 
         if (! $includeCancelled) {
             $query->whereIn('letter_status', [
@@ -286,7 +298,7 @@ class KompenResponHubDataQuery
      */
     public function filterOptions(array $filters = []): array
     {
-        $students = KompenResponHubStudent::query();
+        $students = KompenResponHubStudent::query()->fromActiveImportReference();
 
         if (filled($filters['nim'] ?? null)) {
             $students->where('nim', $filters['nim']);
@@ -345,7 +357,9 @@ class KompenResponHubDataQuery
      */
     public function students(array $filters): Builder
     {
-        $query = KompenResponHubStudent::query()->with(['progress', 'summaryOverride', 'latestWarning', 'cutoff']);
+        $query = KompenResponHubStudent::query()
+            ->fromActiveImportReference()
+            ->with(['progress', 'summaryOverride', 'latestWarning', 'cutoff']);
 
         foreach (['nim', 'kelas', 'periode_semester', 'tingkat'] as $field) {
             if (filled($filters[$field] ?? null)) {
@@ -389,6 +403,7 @@ class KompenResponHubDataQuery
     {
         $query = KompenResponHubDetail::query()
             ->with(['student.progress', 'student.summaryOverride', 'override'])
+            ->whereHas('student', fn (Builder $studentQuery): Builder => $studentQuery->fromActiveImportReference())
             ->where(function (Builder $query): void {
                 $query->where('jam_kompensasi', '>', 0)
                     ->orWhere('jam_responsi', '>', 0);
