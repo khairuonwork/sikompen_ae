@@ -15,6 +15,7 @@ import {
     finalizeCutoff,
     rollbackCutoffFinalization,
     selectWarningPeriod,
+    storeCutoff,
     updateWarning,
 } from "@/actions/App/Http/Controllers/KompenResponHubLifecycleController";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,22 @@ import type {
     Warning,
 } from "../shared/types";
 import { Pager } from "../shared/components/pagination";
+
+function formatJakartaDateTimeInputValue(dateTime: string): string {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Jakarta",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+    }).formatToParts(new Date(dateTime));
+    const value = (type: Intl.DateTimeFormatPartTypes): string =>
+        parts.find((part) => part.type === type)?.value ?? "";
+
+    return `${value("year")}-${value("month")}-${value("day")}T${value("hour")}:${value("minute")}`;
+}
 
 export function WarningStatusBadge({
     warning,
@@ -530,6 +547,68 @@ export function WarningPanel({
                         mengelola Surat Peringatan.
                     </div>
                 )}
+
+                {selectedCutoff && !isSelectedCutoffFinalized ? (
+                    <Form
+                        key={selectedCutoff.id}
+                        {...storeCutoff.form()}
+                        className="grid gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F7FAFF] p-4"
+                    >
+                        {({ errors, processing }) => (
+                            <>
+                                <input
+                                    name="periode_semester"
+                                    type="hidden"
+                                    value={selectedCutoff.periode_semester}
+                                />
+                                <div>
+                                    <p className="text-sm font-extrabold text-[#395886]">
+                                        Batas waktu periode
+                                    </p>
+                                    <p className="mt-1 text-xs leading-relaxed text-[#395886]/70">
+                                        Gunakan waktu WIB (Asia/Jakarta). Batas
+                                        waktu dapat diperbarui selama SP belum
+                                        final, termasuk saat periode sedang
+                                        dikoreksi.
+                                    </p>
+                                </div>
+                                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                                    <div className="grid gap-1.5">
+                                        <Label
+                                            htmlFor={`cutoff-${selectedCutoff.id}`}
+                                            className="text-xs font-bold text-[#395886]"
+                                        >
+                                            Tanggal dan waktu batas cutoff
+                                        </Label>
+                                        <Input
+                                            id={`cutoff-${selectedCutoff.id}`}
+                                            name="deadline_at"
+                                            type="datetime-local"
+                                            required
+                                            defaultValue={formatJakartaDateTimeInputValue(
+                                                selectedCutoff.deadline_at,
+                                            )}
+                                            className="h-10 rounded-xl border-[#8AAEE0] bg-white text-sm font-semibold text-[#1E293B] [color-scheme:light]"
+                                        />
+                                    </div>
+                                    <Button
+                                        disabled={processing}
+                                        type="submit"
+                                        className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
+                                    >
+                                        <Save className="mr-1.5 size-3.5" />
+                                        Simpan cutoff
+                                    </Button>
+                                </div>
+                                {errors.deadline_at ? (
+                                    <p className="text-xs font-bold text-rose-700">
+                                        {errors.deadline_at}
+                                    </p>
+                                ) : null}
+                            </>
+                        )}
+                    </Form>
+                ) : null}
 
                 {selectedCutoff ? (
                     <div className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center">

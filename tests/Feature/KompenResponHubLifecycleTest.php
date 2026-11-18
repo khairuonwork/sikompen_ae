@@ -733,6 +733,42 @@ test('an admin can cancel a period finalization and preserve its audit trail', f
         ->and(KompenResponHubWarningLetterArtifact::query()->where('revision', 2)->sole()->status)->toBe(KompenResponHubWarningLetterArtifact::StatusFinalized);
 });
 
+test('an admin can set a new cutoff after opening a finalized period for correction', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $cutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize")
+        ->assertRedirect();
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalization", [
+            'reason' => 'Batas waktu perlu diperbarui selama koreksi.',
+        ])
+        ->assertRedirect();
+
+    $newDeadline = now('Asia/Jakarta')->addWeek()->startOfMinute();
+
+    $this->actingAs($admin, 'admin')
+        ->put('/admin/kompen-respon/cutoffs', [
+            'periode_semester' => $student->periode_semester,
+            'deadline_at' => $newDeadline->format('Y-m-d\\TH:i'),
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Batas waktu periode berhasil disimpan.');
+
+    expect($cutoff->fresh()->closed_at)->toBeNull()
+        ->and($cutoff->fresh()->deadline_at->toIso8601String())->toBe($newDeadline->toIso8601String())
+        ->and(KompenResponHubWarningLetterArtifact::query()->sole()->status)
+        ->toBe(KompenResponHubWarningLetterArtifact::StatusRevising);
+});
+
 test('the warning list exposes only active fixed SP records with outstanding debt', function () {
     $student = createLifecycleStudent();
     $cutoff = KompenResponHubPeriodCutoff::create([
