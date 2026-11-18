@@ -67,6 +67,7 @@ export default function KompenResponHubIndex({
     importAuditYears,
     activityFilterOptions,
     warningPeriods,
+    selectableWarningPeriods,
     flash,
     students,
     details,
@@ -505,6 +506,7 @@ export default function KompenResponHubIndex({
                                 filterOptions={filterOptions}
                                 filters={filters}
                                 warningPeriods={warningPeriods}
+                                selectableWarningPeriods={selectableWarningPeriods}
                                 warnings={warnings}
                                 warningCandidates={warningCandidates}
                                 rolledBackWarnings={rolledBackWarnings}

@@ -19,6 +19,7 @@ use App\Http\Resources\KompenResponHubStudentResource;
 use App\Http\Resources\KompenResponHubStudentSearchResource;
 use App\Http\Resources\KompenResponHubWarningLetterArtifactResource;
 use App\Http\Resources\KompenResponHubWarningLetterResource;
+use App\Models\KompenResponHubActiveImport;
 use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
@@ -188,10 +189,21 @@ class KompenResponHubController extends Controller
                 ->orderByDesc('deadline_at')
                 ->get(['id', 'periode_semester', 'deadline_at', 'closed_at', 'timezone'])
             : collect();
-        $warningPeriods = array_values($cutoffs
-            ->pluck('periode_semester')
-            ->map(static fn (mixed $period): string => (string) $period)
-            ->all());
+        $activeWarningPeriods = $isAdmin
+            ? KompenResponHubActiveImport::query()
+                ->orderByDesc('activated_at')
+                ->pluck('periode_semester')
+                ->map(static fn (mixed $period): string => (string) $period)
+                ->values()
+                ->all()
+            : [];
+        $warningPeriods = array_values(array_unique([
+            ...$activeWarningPeriods,
+            ...$cutoffs
+                ->pluck('periode_semester')
+                ->map(static fn (mixed $period): string => (string) $period)
+                ->all(),
+        ]));
 
         if ($isAdmin && $activeTab === 'warnings') {
             $filters = $this->filtersForWarningPeriod(
@@ -221,6 +233,9 @@ class KompenResponHubController extends Controller
             'filterOptions' => $filterOptions,
             'warningPeriods' => $isAdmin && $activeTab === 'warnings'
                 ? $warningPeriods
+                : [],
+            'selectableWarningPeriods' => $isAdmin && $activeTab === 'warnings'
+                ? $activeWarningPeriods
                 : [],
             'importAuditPeriods' => $isAdmin && $activeTab === 'imports'
                 ? $this->dataQuery->importAuditPeriods()

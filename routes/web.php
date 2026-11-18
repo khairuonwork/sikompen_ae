@@ -162,6 +162,9 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
     Route::post('kompen-respon/cutoffs/{cutoff}/select', [KompenResponHubLifecycleController::class, 'selectCutoff'])
         ->middleware('throttle:20,1')
         ->name('kompen-respon.cutoffs.select');
+    Route::post('kompen-respon/warning-periods/select', [KompenResponHubLifecycleController::class, 'selectWarningPeriod'])
+        ->middleware('throttle:20,1')
+        ->name('kompen-respon.warning-periods.select');
     Route::post('kompen-respon/cutoffs/{cutoff}/finalize', [KompenResponHubLifecycleController::class, 'finalizeCutoff'])
         ->middleware('throttle:5,15')
         ->name('kompen-respon.cutoffs.finalize');

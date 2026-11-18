@@ -214,8 +214,8 @@ test('the warning page uses the persisted selected SP period and only allows lis
             ->has('warningCandidates.data', 1)
             ->where('warningCandidates.data.0.id', $gasalStudent->id)
             ->has('warningPeriods', 2)
-            ->where('warningPeriods.0', '2026/2027 Genap')
-            ->where('warningPeriods.1', '2026/2027 Gasal'),
+            ->where('warningPeriods.0', '2026/2027 Gasal')
+            ->where('warningPeriods.1', '2026/2027 Genap'),
         );
 
     $this->actingAs($admin, 'admin')
@@ -282,20 +282,58 @@ test('student and detail tables use the managed warning period when opened from 
         );
 });
 
-test('an admin cannot finalize an SP before the cutoff', function () {
+test('an admin can select an active workbook period and finalize its SP immediately', function () {
+    Storage::fake('local');
+
     $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
-    $cutoff = KompenResponHubPeriodCutoff::create([
-        'periode_semester' => $student->periode_semester,
-        'deadline_at' => now()->addWeek(),
-        'timezone' => 'Asia/Jakarta',
-    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post('/admin/kompen-respon/warning-periods/select', [
+            'periode_semester' => $student->periode_semester,
+        ])
+        ->assertRedirect('/admin?tab=warnings')
+        ->assertSessionHas('success');
+
+    $cutoff = KompenResponHubPeriodCutoff::query()->sole();
+
+    expect($cutoff->periode_semester)->toBe($student->periode_semester)
+        ->and(KompenResponHubWarningPeriodSelection::query()->sole()->sikompen_period_cutoff_id)->toBe($cutoff->id);
 
     $this->actingAs($admin, 'admin')
         ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize")
-        ->assertUnprocessable();
+        ->assertRedirect()
+        ->assertSessionHas('success');
 
-    expect(KompenResponHubWarningLetter::query()->doesntExist())->toBeTrue();
+    expect($cutoff->fresh()->closed_at)->not->toBeNull()
+        ->and(KompenResponHubWarningLetterArtifact::query()->where('cutoff_id', $cutoff->id)->exists())->toBeTrue();
+});
+
+test('an admin cannot select an inactive workbook period for SP', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')
+        ->from('/admin?tab=warnings')
+        ->post('/admin/kompen-respon/warning-periods/select', [
+            'periode_semester' => '2025/2026 Genap',
+        ])
+        ->assertRedirect('/admin?tab=warnings')
+        ->assertSessionHas('error', 'Periode SP hanya dapat dipilih ketika workbook Kompen dan Respon periode tersebut masih digunakan.');
+
+    expect(KompenResponHubPeriodCutoff::query()->doesntExist())->toBeTrue();
+});
+
+test('the warning page offers active workbook periods even before SP is initialized', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=warnings')
+        ->assertInertia(fn ($page) => $page
+            ->where('selectableWarningPeriods', [$student->periode_semester])
+            ->where('warningPeriods', [$student->periode_semester])
+            ->has('cutoffs', 0),
+        );
 });
 
 test('updating a cutoff recalculates warning classification without cancelling an existing draft', function () {

@@ -10,6 +10,7 @@ use App\Actions\KompenResponHub\SelectKompenResponHubWarningPeriod;
 use App\Http\Requests\DestroyKompenResponHubWarningLetterRequest;
 use App\Http\Requests\FinalizeKompenResponHubPeriodRequest;
 use App\Http\Requests\RollbackKompenResponHubPeriodFinalizationRequest;
+use App\Http\Requests\SelectKompenResponHubWarningPeriodRequest;
 use App\Http\Requests\StoreKompenResponHubDetailOverrideRequest;
 use App\Http\Requests\StoreKompenResponHubPeriodCutoffRequest;
 use App\Http\Requests\StoreKompenResponHubStudentProgressRequest;
@@ -155,6 +156,37 @@ class KompenResponHubLifecycleController extends Controller
         return back()->with('success', "Periode SP aktif sekarang {$selection['cutoff']->periode_semester}.");
     }
 
+    public function selectWarningPeriod(SelectKompenResponHubWarningPeriodRequest $request): RedirectResponse
+    {
+        $period = $request->string('periode_semester')->toString();
+        $admin = $request->user('admin');
+
+        try {
+            $selection = $this->warningPeriodSelector->executeForActivePeriod(
+                $period,
+                $admin instanceof KompenResponHubAdmin ? $admin->id : null,
+            );
+        } catch (\LogicException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        if ($selection['changed']) {
+            $this->activity->execute(
+                'cutoff.selected',
+                'period_cutoff',
+                (string) $selection['cutoff']->id,
+                $admin instanceof KompenResponHubAdmin ? $admin : null,
+                $request,
+                period: $selection['cutoff']->periode_semester,
+                reason: 'Periode dipilih sebagai periode SP aktif dari workbook Kompen dan Respon.',
+                metadata: ['internal_cutoff_created' => $selection['created']],
+            );
+        }
+
+        return to_route('admin.kompen-respon.index', ['tab' => 'warnings'])
+            ->with('success', "Periode SP aktif sekarang {$selection['cutoff']->periode_semester}. Finalisasi dapat dilakukan langsung tanpa mengatur batas waktu.");
+    }
+
     public function finalizeCutoff(
         FinalizeKompenResponHubPeriodRequest $request,
         KompenResponHubPeriodCutoff $cutoff,
@@ -168,7 +200,6 @@ class KompenResponHubLifecycleController extends Controller
                 $finalizedCutoff = KompenResponHubPeriodCutoff::query()
                     ->lockForUpdate()
                     ->findOrFail($cutoff->id);
-                abort_unless($finalizedCutoff->deadline_at->isPast(), 422, 'Periode hanya dapat difinalisasi setelah batas waktunya terlewati.');
                 abort_if($finalizedCutoff->closed_at !== null, 422, 'Periode SP ini sudah final. Mulai koreksi terlebih dahulu sebelum melakukan finalisasi ulang.');
 
                 $selection = KompenResponHubWarningPeriodSelection::query()
