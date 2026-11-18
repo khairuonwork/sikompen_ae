@@ -15,6 +15,7 @@ type PasswordResetRequestFormProps = {
     submitLabel: string;
     action: { action: string; method: "post" };
     loginHref: string;
+    defaultIdentifier?: string | null;
 };
 
 export function PasswordResetRequestForm({
@@ -27,7 +28,10 @@ export function PasswordResetRequestForm({
     submitLabel,
     action,
     loginHref,
+    defaultIdentifier = null,
 }: PasswordResetRequestFormProps): React.JSX.Element {
+    const isIdentifierLocked = defaultIdentifier !== null;
+
     return (
         <>
             <Head title={title} />
@@ -66,15 +70,17 @@ export function PasswordResetRequestForm({
                                         inputMode={identifierInputMode}
                                         pattern={identifierPattern}
                                         autoComplete={identifierName === "username" ? "username" : "off"}
+                                        defaultValue={defaultIdentifier ?? undefined}
+                                        readOnly={isIdentifierLocked}
                                         required
-                                        className="h-11 rounded-xl border-[#8AAEE0] bg-white text-[#395886]"
+                                        className="h-11 rounded-xl border-[#8AAEE0] bg-white text-[#395886] read-only:cursor-not-allowed read-only:bg-[#F0F3FA]"
                                     />
                                     {errors[identifierName] ? (
                                         <p className="text-xs font-semibold text-rose-600">{errors[identifierName]}</p>
                                     ) : null}
                                 </div>
                                 <p className="rounded-xl bg-[#F0F3FA] px-3 py-2.5 text-xs leading-relaxed text-[#395886]/70">
-                                    Permintaan tidak menunjukkan apakah akun ditemukan. Hubungi admin yang berwenang untuk memperoleh kode reset.
+                                    Permintaan tidak menunjukkan apakah akun dapat direset. Hanya NIM dalam roster mahasiswa aktif dengan password yang pernah diganti yang dapat memperoleh kode. Hubungi admin jurusan untuk memperoleh kode reset.
                                 </p>
                                 <CardFooter className="flex flex-col-reverse gap-3 border-t border-[#F0F3FA] px-0 pt-5 sm:flex-row sm:justify-between">
                                     <Button asChild type="button" variant="outline" className="rounded-xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]">

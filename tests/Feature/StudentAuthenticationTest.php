@@ -340,6 +340,20 @@ test('a student loses access when their NIM is no longer in the active roster', 
         ->assertUnauthorized();
 });
 
+test('an inactive student receives a helpful generic message when trying to sign in', function (): void {
+    $nim = '261000001';
+    KompenResponHubStudentAccount::factory()->create([
+        'nim' => $nim,
+        'password' => $nim,
+        'password_changed_at' => now(),
+    ]);
+
+    $this->post('/mahasiswa/login', ['nim' => $nim, 'password' => $nim])
+        ->assertSessionHasErrors([
+            'nim' => 'NIM atau password tidak dapat digunakan untuk masuk. Pastikan NIM masih terdaftar sebagai mahasiswa aktif atau hubungi admin jurusan.',
+        ]);
+});
+
 test('student login is rate limited after repeated failed attempts', function (): void {
     useStudentRosterForAuthentication(KompenResponHubActiveStudent::factory()->create(['nim' => '261000001']));
 

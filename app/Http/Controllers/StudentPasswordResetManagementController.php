@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Actions\KompenResponHub\SikompenStudentAccess;
 use App\Http\Requests\DestroyStudentPasswordResetRequest;
 use App\Http\Requests\RefreshStudentPasswordResetRequest;
 use App\Models\KompenResponHubActiveStudent;
+use App\Models\KompenResponHubStudentAccount;
 use App\Models\KompenResponHubStudentPasswordResetRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -82,14 +84,31 @@ class StudentPasswordResetManagementController extends Controller
     public function refresh(
         RefreshStudentPasswordResetRequest $request,
         KompenResponHubStudentPasswordResetRequest $studentPasswordReset,
+        SikompenStudentAccess $studentAccess,
     ): RedirectResponse {
-        DB::connection(config('kompen-respon-hub.database_connection'))->transaction(function () use ($request, $studentPasswordReset): void {
+        $wasRefreshed = DB::connection(config('kompen-respon-hub.database_connection'))->transaction(function () use ($request, $studentAccess, $studentPasswordReset): bool {
             $resetRequest = KompenResponHubStudentPasswordResetRequest::query()
                 ->lockForUpdate()
                 ->findOrFail($studentPasswordReset->id);
 
             if ($resetRequest->fulfilled_at !== null) {
-                return;
+                return false;
+            }
+
+            if (! $this->canIssueResetCode($resetRequest->nim, $studentAccess)) {
+                app(RecordKompenResponHubActivity::class)->execute(
+                    'student_reset_request_invalidated',
+                    'student_password_reset',
+                    (string) $resetRequest->id,
+                    $request->user('admin'),
+                    $request,
+                    nim: $resetRequest->nim,
+                    subjectName: $resetRequest->nim,
+                    reason: 'Permintaan reset dihapus karena NIM tidak lagi aktif atau password awal belum pernah diganti.',
+                );
+                $resetRequest->delete();
+
+                return false;
             }
 
             $now = now('Asia/Jakarta');
@@ -112,10 +131,16 @@ class StudentPasswordResetManagementController extends Controller
                 beforeState: ['expires_at' => $previousExpiry->toIso8601String()],
                 afterState: ['expires_at' => $resetRequest->expires_at->toIso8601String()],
             );
+
+            return true;
         });
 
-        return to_route('admin.student-password-resets.index')
-            ->with('success', 'Kode reset mahasiswa telah diperbarui dan berlaku selama 24 jam.');
+        return to_route('admin.student-password-resets.index')->with(
+            $wasRefreshed ? 'success' : 'error',
+            $wasRefreshed
+                ? 'Kode reset mahasiswa telah diperbarui dan berlaku selama 24 jam.'
+                : 'Permintaan reset tidak lagi valid dan telah dihapus.',
+        );
     }
 
     public function destroy(
@@ -170,5 +195,14 @@ class StudentPasswordResetManagementController extends Controller
             ->get($studentColumns)
             ->unique('nim')
             ->keyBy('nim');
+    }
+
+    private function canIssueResetCode(string $nim, SikompenStudentAccess $studentAccess): bool
+    {
+        return $studentAccess->activeStudentExists($nim)
+            && KompenResponHubStudentAccount::query()
+                ->where('nim', $nim)
+                ->whereNotNull('password_changed_at')
+                ->exists();
     }
 }

@@ -42,13 +42,14 @@ Route::middleware('guest:student')->group(function (): void {
     Route::post('mahasiswa/login', [StudentAuthenticationController::class, 'store'])
         ->middleware('throttle:student-login')
         ->name('student.login.store');
-    Route::get('mahasiswa/lupa-password', [StudentPasswordResetController::class, 'createRequest'])->name('student.password-reset.request');
-    Route::post('mahasiswa/lupa-password', [StudentPasswordResetController::class, 'storeRequest'])
-        ->middleware('throttle:student-password-reset-request')->name('student.password-reset.request.store');
-    Route::get('mahasiswa/reset-password', [StudentPasswordResetController::class, 'edit'])->name('student.password-reset.edit');
-    Route::put('mahasiswa/reset-password', [StudentPasswordResetController::class, 'update'])
-        ->middleware('throttle:student-password-reset-confirm')->name('student.password-reset.update');
 });
+
+Route::get('mahasiswa/lupa-password', [StudentPasswordResetController::class, 'createRequest'])->name('student.password-reset.request');
+Route::post('mahasiswa/lupa-password', [StudentPasswordResetController::class, 'storeRequest'])
+    ->middleware('throttle:student-password-reset-request')->name('student.password-reset.request.store');
+Route::get('mahasiswa/reset-password', [StudentPasswordResetController::class, 'edit'])->name('student.password-reset.edit');
+Route::put('mahasiswa/reset-password', [StudentPasswordResetController::class, 'update'])
+    ->middleware('throttle:student-password-reset-confirm')->name('student.password-reset.update');
 
 Route::get('admin/setup', [KompenResponHubAdminSetupController::class, 'create'])->name('admin.setup.create');
 Route::post('admin/setup', [KompenResponHubAdminSetupController::class, 'store'])

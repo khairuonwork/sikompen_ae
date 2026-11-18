@@ -5,12 +5,13 @@ namespace App\Actions\KompenResponHub;
 use App\Models\KompenResponHubActiveStudentImport;
 use App\Models\KompenResponHubActiveStudentImportReference;
 use App\Models\KompenResponHubImportAuditLog;
+use App\Models\KompenResponHubStudentPasswordResetRequest;
 use Illuminate\Support\Facades\DB;
 
 class ReleaseKompenResponHubActiveStudentImport
 {
     /**
-     * @return array{import_id: int, original_filename: string, periode_semester: string, class_count: int, student_count: int}
+     * @return array{import_id: int, original_filename: string, periode_semester: string, class_count: int, student_count: int, invalidated_reset_request_count: int}
      */
     public function execute(
         KompenResponHubActiveStudentImport $import,
@@ -31,6 +32,9 @@ class ReleaseKompenResponHubActiveStudentImport
             }
 
             $reference->delete();
+            $invalidatedResetRequestCount = KompenResponHubStudentPasswordResetRequest::query()
+                ->whereNull('fulfilled_at')
+                ->delete();
 
             KompenResponHubImportAuditLog::query()->create([
                 'event_type' => KompenResponHubImportAuditLog::EVENT_RELEASE,
@@ -43,7 +47,10 @@ class ReleaseKompenResponHubActiveStudentImport
                 'class_count' => $lockedImport->class_count,
                 'student_count' => $lockedImport->student_count,
                 'detail_count' => 0,
-                'metadata' => ['student_login_access_disabled' => true],
+                'metadata' => [
+                    'student_login_access_disabled' => true,
+                    'invalidated_student_reset_request_count' => $invalidatedResetRequestCount,
+                ],
                 'occurred_at' => now(),
             ]);
 
@@ -53,6 +60,7 @@ class ReleaseKompenResponHubActiveStudentImport
                 'periode_semester' => (string) $lockedImport->periode_semester,
                 'class_count' => $lockedImport->class_count,
                 'student_count' => $lockedImport->student_count,
+                'invalidated_reset_request_count' => $invalidatedResetRequestCount,
             ];
         });
     }

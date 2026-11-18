@@ -16,6 +16,7 @@ use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubStudentAccount;
+use App\Models\KompenResponHubStudentPasswordResetRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -237,6 +238,9 @@ test('an administrator can deactivate the roster without deleting student accoun
         'nim' => $student->nim,
         'password_changed_at' => now(),
     ]);
+    $resetRequest = KompenResponHubStudentPasswordResetRequest::factory()->create([
+        'nim' => $student->nim,
+    ]);
     KompenResponHubActiveStudentImportReference::factory()->create([
         'selection_key' => KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey,
         'periode_semester' => $import->periode_semester,
@@ -252,6 +256,7 @@ test('an administrator can deactivate the roster without deleting student accoun
         ->and(KompenResponHubActiveStudentImport::query()->find($import->id))->not->toBeNull()
         ->and(KompenResponHubActiveStudent::query()->find($student->id))->not->toBeNull()
         ->and(KompenResponHubStudentAccount::query()->find($account->id))->not->toBeNull()
+        ->and(KompenResponHubStudentPasswordResetRequest::query()->find($resetRequest->id))->toBeNull()
         ->and(KompenResponHubImportAuditLog::query()
             ->where('event_type', KompenResponHubImportAuditLog::EVENT_RELEASE)
             ->where('source_active_student_import_id', $import->id)
@@ -334,9 +339,14 @@ test('selecting a roster replaces the former login roster across periods', funct
     ]);
     KompenResponHubActiveStudent::factory()->for($gasalImport, 'importBatch')->create([
         'kelas' => '1AEA1',
+        'nim' => '261000001',
     ]);
     KompenResponHubActiveStudent::factory()->for($genapImport, 'importBatch')->create([
         'kelas' => '1AEA1',
+        'nim' => '261000002',
+    ]);
+    $resetRequest = KompenResponHubStudentPasswordResetRequest::factory()->create([
+        'nim' => '261000001',
     ]);
 
     $this->actingAs($admin, 'admin')
@@ -354,7 +364,9 @@ test('selecting a roster replaces the former login roster across periods', funct
         ->toBe('2027/2028 Genap')
         ->and(KompenResponHubActiveStudentImportReference::query()
             ->value('sikompen_active_student_import_id'))
-        ->toBe($genapImport->id);
+        ->toBe($genapImport->id)
+        ->and(KompenResponHubStudentPasswordResetRequest::query()->find($resetRequest->id))
+        ->toBeNull();
 });
 
 test('selecting a new active roster replaces the former roster for the same period', function (): void {

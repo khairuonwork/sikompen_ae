@@ -290,7 +290,12 @@ class KompenResponHubActiveStudentImportController extends Controller
             actor: $admin,
             request: $request,
             reason: "Daftar mahasiswa aktif {$result['periode_semester']} dipilih sebagai satu-satunya roster aktif periode tersebut.",
-            metadata: ['classes' => $result['classes'], 'original_filename' => $result['original_filename'], 'periode_semester' => $result['periode_semester']],
+            metadata: [
+                'classes' => $result['classes'],
+                'original_filename' => $result['original_filename'],
+                'periode_semester' => $result['periode_semester'],
+                'invalidated_student_reset_request_count' => $result['invalidated_reset_request_count'],
+            ],
             subjectName: $result['original_filename'],
             period: $result['periode_semester'],
         );
@@ -328,6 +333,7 @@ class KompenResponHubActiveStudentImportController extends Controller
             metadata: [
                 'original_filename' => $result['original_filename'],
                 'student_login_access_disabled' => true,
+                'invalidated_student_reset_request_count' => $result['invalidated_reset_request_count'],
             ],
             subjectName: $result['original_filename'],
             period: $result['periode_semester'],

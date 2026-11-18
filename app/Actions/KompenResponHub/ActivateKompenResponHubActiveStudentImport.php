@@ -6,12 +6,13 @@ use App\Models\KompenResponHubActiveStudent;
 use App\Models\KompenResponHubActiveStudentImport;
 use App\Models\KompenResponHubActiveStudentImportReference;
 use App\Models\KompenResponHubImportAuditLog;
+use App\Models\KompenResponHubStudentPasswordResetRequest;
 use Illuminate\Support\Facades\DB;
 
 class ActivateKompenResponHubActiveStudentImport
 {
     /**
-     * @return array{import_id: int, original_filename: string, periode_semester: string, classes: list<string>}
+     * @return array{import_id: int, original_filename: string, periode_semester: string, classes: list<string>, invalidated_reset_request_count: int}
      */
     public function execute(
         KompenResponHubActiveStudentImport $import,
@@ -69,6 +70,15 @@ class ActivateKompenResponHubActiveStudentImport
                     ]);
                 }
 
+                $activeNims = KompenResponHubActiveStudent::query()
+                    ->whereBelongsTo($lockedImport, 'importBatch')
+                    ->pluck('nim')
+                    ->all();
+                $invalidatedResetRequestCount = KompenResponHubStudentPasswordResetRequest::query()
+                    ->whereNull('fulfilled_at')
+                    ->whereNotIn('nim', $activeNims)
+                    ->delete();
+
                 KompenResponHubImportAuditLog::create([
                     'event_type' => KompenResponHubImportAuditLog::EVENT_ACTIVATE,
                     'import_type' => KompenResponHubImportAuditLog::ImportTypeActiveStudents,
@@ -80,7 +90,10 @@ class ActivateKompenResponHubActiveStudentImport
                     'class_count' => count($classes),
                     'student_count' => $lockedImport->student_count,
                     'detail_count' => 0,
-                    'metadata' => ['activated_classes' => $classes],
+                    'metadata' => [
+                        'activated_classes' => $classes,
+                        'invalidated_student_reset_request_count' => $invalidatedResetRequestCount,
+                    ],
                     'occurred_at' => now(),
                 ]);
 
@@ -89,6 +102,7 @@ class ActivateKompenResponHubActiveStudentImport
                     'original_filename' => $lockedImport->original_filename,
                     'periode_semester' => $period,
                     'classes' => $classes,
+                    'invalidated_reset_request_count' => $invalidatedResetRequestCount,
                 ];
             });
     }
