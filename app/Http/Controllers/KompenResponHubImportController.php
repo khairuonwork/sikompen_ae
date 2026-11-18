@@ -16,6 +16,7 @@ use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubImportTask;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -249,28 +250,49 @@ class KompenResponHubImportController extends Controller
             ]);
         }
 
-        $storedPath = $file->store('kompen-respon-hub/imports');
-
-        if ($storedPath === false) {
+        $fileHash = hash_file('sha256', $file->getPathname());
+        if (! is_string($fileHash)) {
             throw ValidationException::withMessages([
-                'file' => 'Workbook tidak dapat disimpan. Coba unggah kembali.',
+                'file' => 'Workbook tidak dapat diperiksa. Coba unggah kembali.',
             ]);
         }
 
-        $fullPath = Storage::disk('local')->path($storedPath);
+        $lock = Cache::lock("sikompen:kompen-respon-import:{$fileHash}", 15);
+        if (! $lock->get()) {
+            return to_route('admin.kompen-respon.index', ['tab' => 'upload'])
+                ->with('error', 'Workbook identik sedang diperiksa atau diproses. Tunggu proses sebelumnya selesai.');
+        }
 
-        $importTask = KompenResponHubImportTask::create([
-            'uploaded_by_admin_id' => $actor['id'],
-            'uploader_name' => $request->string('uploader_name')->trim()->toString(),
-            'uploader_username' => $actor['username'],
-            'original_filename' => $file->getClientOriginalName(),
-            'stored_path' => $storedPath,
-            'file_hash' => hash_file('sha256', $fullPath),
-            'status' => KompenResponHubImportTask::STATUS_QUEUED,
-            'progress' => 0,
-            'progress_message' => 'Workbook diterima dan menunggu diproses.',
-            'queued_at' => now(),
-        ]);
+        try {
+            $duplicateMessage = $this->duplicateImportMessage($fileHash);
+            if ($duplicateMessage !== null) {
+                return to_route('admin.kompen-respon.index', ['tab' => 'upload'])
+                    ->with('error', $duplicateMessage);
+            }
+
+            $storedPath = $file->store('kompen-respon-hub/imports');
+
+            if ($storedPath === false) {
+                throw ValidationException::withMessages([
+                    'file' => 'Workbook tidak dapat disimpan. Coba unggah kembali.',
+                ]);
+            }
+
+            $importTask = KompenResponHubImportTask::create([
+                'uploaded_by_admin_id' => $actor['id'],
+                'uploader_name' => $request->string('uploader_name')->trim()->toString(),
+                'uploader_username' => $actor['username'],
+                'original_filename' => $file->getClientOriginalName(),
+                'stored_path' => $storedPath,
+                'file_hash' => $fileHash,
+                'status' => KompenResponHubImportTask::STATUS_QUEUED,
+                'progress' => 0,
+                'progress_message' => 'Workbook diterima dan menunggu diproses.',
+                'queued_at' => now(),
+            ]);
+        } finally {
+            $lock->release();
+        }
 
         ProcessKompenResponHubImport::dispatch($importTask->id)
             ->onQueue(config('kompen-respon-hub.queue.import'));
@@ -298,5 +320,45 @@ class KompenResponHubImportController extends Controller
         return is_int($actorId)
             ? KompenResponHubAdmin::query()->find($actorId)
             : null;
+    }
+
+    private function duplicateImportMessage(string $fileHash): ?string
+    {
+        $activeTask = KompenResponHubImportTask::query()
+            ->where('file_hash', $fileHash)
+            ->whereIn('status', [
+                KompenResponHubImportTask::STATUS_QUEUED,
+                KompenResponHubImportTask::STATUS_PROCESSING,
+            ])
+            ->latest('id')
+            ->first();
+
+        if ($activeTask instanceof KompenResponHubImportTask) {
+            return "Workbook identik sedang diproses sebagai {$activeTask->original_filename}. Tunggu proses tersebut selesai.";
+        }
+
+        $existingImport = KompenResponHubImport::query()
+            ->where('file_hash', $fileHash)
+            ->latest('id')
+            ->first();
+
+        if ($existingImport instanceof KompenResponHubImport) {
+            $filename = $existingImport->display_filename ?? $existingImport->original_filename;
+
+            return "Workbook identik sudah tersimpan sebagai {$filename}. Gunakan versi yang ada di List File.";
+        }
+
+        $trashedImport = KompenResponHubImport::onlyTrashed()
+            ->where('file_hash', $fileHash)
+            ->latest('id')
+            ->first();
+
+        if ($trashedImport instanceof KompenResponHubImport) {
+            $filename = $trashedImport->display_filename ?? $trashedImport->original_filename;
+
+            return "Workbook identik sudah berada di Recycle Bin sebagai {$filename}. Pulihkan versi tersebut, bukan mengunggah ulang.";
+        }
+
+        return null;
     }
 }

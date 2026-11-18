@@ -14,6 +14,15 @@ class PurgeKompenResponHubActivityLogs extends Command
 {
     private const DeleteBatchSize = 500;
 
+    /** @var list<string> */
+    private const PermanentEventTypes = [
+        'period.finalized',
+        'period.finalization_rolled_back',
+        'warning.issued',
+        'warning.classification_fixed',
+        'warning.rolled_back',
+    ];
+
     public function handle(): int
     {
         $retentionDays = KompenResponHubSystemSetting::current()->activity_log_retention_days;
@@ -22,6 +31,7 @@ class PurgeKompenResponHubActivityLogs extends Command
 
         KompenResponHubActivityLog::query()
             ->where('occurred_at', '<', $threshold)
+            ->whereNotIn('event_type', self::PermanentEventTypes)
             ->select('id')
             ->chunkById(self::DeleteBatchSize, function ($logs) use (&$deletedCount): void {
                 $deletedCount += KompenResponHubActivityLog::query()

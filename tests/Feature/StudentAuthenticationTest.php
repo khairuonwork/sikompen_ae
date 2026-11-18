@@ -1,10 +1,13 @@
 <?php
 
+use App\Models\KompenResponHubActiveImport;
 use App\Models\KompenResponHubActiveStudent;
+use App\Models\KompenResponHubActiveStudentImportReference;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubStudentAccount;
+use App\Models\KompenResponHubWarningPeriodSelection;
 use Illuminate\Support\Facades\Hash;
 
 test('student pages require authentication', function (): void {
@@ -14,7 +17,7 @@ test('student pages require authentication', function (): void {
 });
 
 test('an active student signs in with the initial NIM password and must change it', function (): void {
-    KompenResponHubActiveStudent::factory()->create(['nim' => '261000001']);
+    useStudentRosterForAuthentication(KompenResponHubActiveStudent::factory()->create(['nim' => '261000001']));
 
     $this->post('/mahasiswa/login', [
         'nim' => '261000001',
@@ -35,7 +38,7 @@ test('an active student signs in with the initial NIM password and must change i
 test('a student can only view their own records after changing the initial password', function (): void {
     $ownNim = '261000001';
     $otherNim = '261000002';
-    KompenResponHubActiveStudent::factory()->create(['nim' => $ownNim]);
+    useStudentRosterForAuthentication(KompenResponHubActiveStudent::factory()->create(['nim' => $ownNim]));
     KompenResponHubActiveStudent::factory()->create(['nim' => $otherNim]);
     $import = KompenResponHubImport::create([
         'periode_semester' => '2026/2027 Ganjil',
@@ -47,13 +50,15 @@ test('a student can only view their own records after changing the initial passw
         'detail_count' => 0,
         'imported_at' => now(),
     ]);
+    useWorkbookForAuthentication($import);
     $ownStudent = studentForAuthenticationTest($import->id, $ownNim, 'Rina Utami');
     $otherStudent = studentForAuthenticationTest($import->id, $otherNim, 'Dani Pratama');
-    KompenResponHubPeriodCutoff::create([
+    $cutoff = KompenResponHubPeriodCutoff::create([
         'periode_semester' => '2026/2027 Ganjil',
         'deadline_at' => now(),
         'timezone' => 'Asia/Jakarta',
     ]);
+    useWarningPeriodForAuthentication($cutoff);
 
     $this->post('/mahasiswa/login', ['nim' => $ownNim, 'password' => $ownNim])
         ->assertRedirect('/mahasiswa/ganti-password');
@@ -99,7 +104,7 @@ test('a student cannot keep using the initial NIM as their password', function (
         'password' => '261000001',
         'password_changed_at' => null,
     ]);
-    KompenResponHubActiveStudent::factory()->create(['nim' => $account->nim]);
+    useStudentRosterForAuthentication(KompenResponHubActiveStudent::factory()->create(['nim' => $account->nim]));
 
     $this->actingAs($account, 'student')
         ->put('/mahasiswa/ganti-password', [
@@ -116,11 +121,11 @@ test('a signed-in student profile only shows their own Kompen records for the ac
         'nim' => $ownNim,
         'password_changed_at' => now(),
     ]);
-    KompenResponHubActiveStudent::factory()->create([
+    useStudentRosterForAuthentication(KompenResponHubActiveStudent::factory()->create([
         'nim' => $ownNim,
         'nama_mahasiswa' => 'Rina Utami',
         'kelas' => '1AEA1',
-    ]);
+    ]));
     KompenResponHubActiveStudent::factory()->create([
         'nim' => $otherNim,
         'nama_mahasiswa' => 'Dani Pratama',
@@ -136,13 +141,15 @@ test('a signed-in student profile only shows their own Kompen records for the ac
         'detail_count' => 0,
         'imported_at' => now(),
     ]);
+    useWorkbookForAuthentication($import);
     studentForAuthenticationTest($import->id, $ownNim, 'Rina Utami');
     studentForAuthenticationTest($import->id, $otherNim, 'Dani Pratama');
-    KompenResponHubPeriodCutoff::create([
+    $cutoff = KompenResponHubPeriodCutoff::create([
         'periode_semester' => '2026/2027 Ganjil',
         'deadline_at' => now(),
         'timezone' => 'Asia/Jakarta',
     ]);
+    useWarningPeriodForAuthentication($cutoff);
 
     $this->actingAs($account, 'student')
         ->get('/mahasiswa/profil')
@@ -161,22 +168,23 @@ test('a student profile identifies a missing Kompen and Respon record', function
         'nim' => '261000001',
         'password_changed_at' => now(),
     ]);
-    KompenResponHubActiveStudent::factory()->create([
+    useStudentRosterForAuthentication(KompenResponHubActiveStudent::factory()->create([
         'nim' => $account->nim,
         'nama_mahasiswa' => 'Rina Utami',
         'kelas' => '1AEA1',
-    ]);
-    KompenResponHubPeriodCutoff::create([
+    ]));
+    $cutoff = KompenResponHubPeriodCutoff::create([
         'periode_semester' => '2026/2027 Ganjil',
         'deadline_at' => now(),
         'timezone' => 'Asia/Jakarta',
     ]);
+    useWarningPeriodForAuthentication($cutoff);
 
     $this->actingAs($account, 'student')
         ->get('/mahasiswa/profil')
         ->assertInertia(fn ($page) => $page
             ->where('profile.missing_data', [
-                'Data Kompen dan Respon belum tersedia untuk 2026/2027 Ganjil.',
+                'Belum ada catatan Kompen dan Respon untuk NIM ini pada periode SP 2026/2027 Ganjil.',
             ]),
         );
 });
@@ -187,7 +195,7 @@ test('a student profile does not include records outside the active warning peri
         'nim' => $nim,
         'password_changed_at' => now(),
     ]);
-    KompenResponHubActiveStudent::factory()->create(['nim' => $nim]);
+    useStudentRosterForAuthentication(KompenResponHubActiveStudent::factory()->create(['nim' => $nim]));
     $gasalImport = KompenResponHubImport::create([
         'periode_semester' => '2026/2027 Ganjil',
         'original_filename' => 'gasal.xlsx',
@@ -208,6 +216,8 @@ test('a student profile does not include records outside the active warning peri
         'detail_count' => 0,
         'imported_at' => now(),
     ]);
+    useWorkbookForAuthentication($gasalImport);
+    useWorkbookForAuthentication($genapImport);
     studentForAuthenticationTest($gasalImport->id, $nim, 'Rina Utami');
     KompenResponHubStudent::create([
         'kompen_respon_hub_import_id' => $genapImport->id,
@@ -231,11 +241,12 @@ test('a student profile does not include records outside the active warning peri
         'deadline_at' => now()->subDay(),
         'timezone' => 'Asia/Jakarta',
     ]);
-    KompenResponHubPeriodCutoff::create([
+    $selectedCutoff = KompenResponHubPeriodCutoff::create([
         'periode_semester' => '2026/2027 Genap',
         'deadline_at' => now(),
         'timezone' => 'Asia/Jakarta',
     ]);
+    useWarningPeriodForAuthentication($selectedCutoff);
 
     $this->actingAs($account, 'student')
         ->get('/mahasiswa/profil')
@@ -246,13 +257,35 @@ test('a student profile does not include records outside the active warning peri
         );
 });
 
+test('a student profile explains when an SP period has not been selected', function (): void {
+    $account = KompenResponHubStudentAccount::factory()->create([
+        'nim' => '261000001',
+        'password_changed_at' => now(),
+    ]);
+    useStudentRosterForAuthentication(KompenResponHubActiveStudent::factory()->create([
+        'nim' => $account->nim,
+        'nama_mahasiswa' => 'Rina Utami',
+        'kelas' => '1AEA1',
+    ]));
+
+    $this->actingAs($account, 'student')
+        ->get('/mahasiswa/profil')
+        ->assertInertia(fn ($page) => $page
+            ->where('profile.warning_period', null)
+            ->where('profile.records', [])
+            ->where('profile.missing_data', [
+                'Admin belum memilih periode Surat Peringatan aktif.',
+            ]),
+        );
+});
+
 test('a student must verify their current password before changing it after first login', function (): void {
     $account = KompenResponHubStudentAccount::factory()->create([
         'nim' => '261000001',
         'password' => 'Password-Lama#2026',
         'password_changed_at' => now(),
     ]);
-    KompenResponHubActiveStudent::factory()->create(['nim' => $account->nim]);
+    useStudentRosterForAuthentication(KompenResponHubActiveStudent::factory()->create(['nim' => $account->nim]));
     $newPassword = 'Password-Baru#2026';
 
     $this->actingAs($account, 'student')
@@ -286,7 +319,7 @@ test('a signed-in student can log out and must authenticate again', function ():
         'nim' => '261000001',
         'password_changed_at' => now(),
     ]);
-    KompenResponHubActiveStudent::factory()->create(['nim' => $account->nim]);
+    useStudentRosterForAuthentication(KompenResponHubActiveStudent::factory()->create(['nim' => $account->nim]));
 
     $this->actingAs($account, 'student')
         ->post('/mahasiswa/logout')
@@ -307,8 +340,22 @@ test('a student loses access when their NIM is no longer in the active roster', 
         ->assertUnauthorized();
 });
 
+test('an inactive student receives a helpful generic message when trying to sign in', function (): void {
+    $nim = '261000001';
+    KompenResponHubStudentAccount::factory()->create([
+        'nim' => $nim,
+        'password' => $nim,
+        'password_changed_at' => now(),
+    ]);
+
+    $this->post('/mahasiswa/login', ['nim' => $nim, 'password' => $nim])
+        ->assertSessionHasErrors([
+            'nim' => 'NIM atau password tidak dapat digunakan untuk masuk. Pastikan NIM masih terdaftar sebagai mahasiswa aktif atau hubungi admin jurusan.',
+        ]);
+});
+
 test('student login is rate limited after repeated failed attempts', function (): void {
-    KompenResponHubActiveStudent::factory()->create(['nim' => '261000001']);
+    useStudentRosterForAuthentication(KompenResponHubActiveStudent::factory()->create(['nim' => '261000001']));
 
     foreach (range(1, 5) as $attempt) {
         $this->post('/mahasiswa/login', [
@@ -325,7 +372,7 @@ test('student login is rate limited after repeated failed attempts', function ()
 
 test('an incorrect initial password does not provision a student account', function (): void {
     $nim = '261000001';
-    KompenResponHubActiveStudent::factory()->create(['nim' => $nim]);
+    useStudentRosterForAuthentication(KompenResponHubActiveStudent::factory()->create(['nim' => $nim]));
 
     $this->post('/mahasiswa/login', [
         'nim' => $nim,
@@ -354,4 +401,40 @@ function studentForAuthenticationTest(int $importId, string $nim, string $name):
         'kompensasi_dikerjakan_jam' => 0,
         'sisa_hutang_jam' => 1.5,
     ]);
+}
+
+function useStudentRosterForAuthentication(KompenResponHubActiveStudent $student): void
+{
+    $import = $student->importBatch()->sole();
+
+    KompenResponHubActiveStudentImportReference::query()->updateOrCreate(
+        ['selection_key' => KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey],
+        [
+            'periode_semester' => $import->periode_semester,
+            'sikompen_active_student_import_id' => $student->sikompen_active_student_import_id,
+            'activated_at' => now(),
+        ],
+    );
+}
+
+function useWorkbookForAuthentication(KompenResponHubImport $import): void
+{
+    KompenResponHubActiveImport::query()->updateOrCreate(
+        ['periode_semester' => $import->periode_semester],
+        [
+            'kompen_respon_hub_import_id' => $import->id,
+            'activated_at' => now(),
+        ],
+    );
+}
+
+function useWarningPeriodForAuthentication(KompenResponHubPeriodCutoff $cutoff): void
+{
+    KompenResponHubWarningPeriodSelection::query()->updateOrCreate(
+        ['selection_key' => KompenResponHubWarningPeriodSelection::ManagedWarningPeriodSelectionKey],
+        [
+            'sikompen_period_cutoff_id' => $cutoff->id,
+            'selected_at' => now(),
+        ],
+    );
 }

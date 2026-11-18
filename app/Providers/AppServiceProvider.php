@@ -93,13 +93,20 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('student-password-reset-confirm', function (Request $request): Limit {
-            return Limit::perMinute(5)->by(Str::transliterate("student-reset-confirm|{$request->string('nim')->toString()}|{$request->ip()}"));
+            return Limit::perMinute(30)->by(Str::transliterate("student-reset-confirm|{$request->string('nim')->toString()}|{$request->ip()}"));
         });
 
         RateLimiter::for('sikompen-data', function (Request $request): Limit {
             $sessionId = $request->hasSession() ? $request->session()->getId() : 'no-session';
 
             return Limit::perMinute(30)->by(Str::transliterate("{$sessionId}|{$request->ip()}"));
+        });
+
+        RateLimiter::for('sikompen-workbook-activation', function (Request $request): Limit {
+            $admin = $request->user('admin');
+            $adminKey = $admin instanceof KompenResponHubAdmin ? (string) $admin->id : 'unknown';
+
+            return Limit::perMinute(10)->by(Str::transliterate("sikompen-workbook-activation|{$adminKey}|{$request->ip()}"));
         });
 
         RateLimiter::for('sikompen-api', function (Request $request): Limit {

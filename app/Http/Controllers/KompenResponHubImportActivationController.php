@@ -63,11 +63,17 @@ class KompenResponHubImportActivationController extends Controller
             ],
             metadata: [
                 'previous_import' => $activatedVersion['previous_import'],
+                'class_moves' => $activatedVersion['class_moves'],
+                'detail_override_reconciliation' => $activatedVersion['detail_override_reconciliation'],
             ],
         );
 
+        $classMoveSummary = $activatedVersion['class_moves'] === []
+            ? ''
+            : ' '.count($activatedVersion['class_moves']).' mahasiswa dipindahkan ke kelas terbaru sambil mempertahankan progres dan riwayat SP.';
+
         return to_route('admin.kompen-respon.index', ['tab' => 'files'])
-            ->with('success', "Versi {$activatedVersion['original_filename']} kini menjadi sumber data aktif untuk periode {$activatedVersion['periode_semester']}.");
+            ->with('success', "Versi {$activatedVersion['original_filename']} kini menjadi sumber data aktif untuk periode {$activatedVersion['periode_semester']}.{$classMoveSummary}");
     }
 
     public function destroy(
@@ -103,12 +109,12 @@ class KompenResponHubImportActivationController extends Controller
             $admin,
             $request,
             period: $releasedVersion['periode_semester'],
-            reason: 'Workbook dilepas dari sumber data aktif. Data SP final tidak diubah.',
+            reason: 'Workbook dilepas dari sumber data aktif dan data operasional periode ini tidak lagi ditampilkan.',
             afterState: ['active_reference_removed' => true],
         );
 
         return to_route('admin.kompen-respon.index', ['tab' => 'files'])
-            ->with('success', "Versi {$releasedVersion['display_filename']} tidak lagi digunakan. Workbook dan data SP final tetap tersimpan.");
+            ->with('success', "Versi {$releasedVersion['display_filename']} tidak lagi digunakan. Data operasional periode ini disembunyikan, sementara versi workbook dan riwayat audit tetap tersimpan.");
     }
 
     private function hasActiveImportTask(): bool

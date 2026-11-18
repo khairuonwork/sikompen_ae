@@ -39,7 +39,7 @@ class StudentAuthenticationController extends Controller
             RateLimiter::hit($throttleKey, 60);
 
             throw ValidationException::withMessages([
-                'nim' => 'NIM atau password tidak tepat.',
+                'nim' => 'NIM atau password tidak dapat digunakan untuk masuk. Pastikan NIM masih terdaftar sebagai mahasiswa aktif atau hubungi admin jurusan.',
             ]);
         }
 
@@ -52,7 +52,7 @@ class StudentAuthenticationController extends Controller
                 RateLimiter::hit($throttleKey, 60);
 
                 throw ValidationException::withMessages([
-                    'nim' => 'NIM atau password tidak tepat.',
+                    'nim' => 'NIM atau password tidak dapat digunakan untuk masuk. Pastikan NIM masih terdaftar sebagai mahasiswa aktif atau hubungi admin jurusan.',
                 ]);
             }
 
@@ -69,7 +69,7 @@ class StudentAuthenticationController extends Controller
             RateLimiter::hit($throttleKey, 60);
 
             throw ValidationException::withMessages([
-                'nim' => 'NIM atau password tidak tepat.',
+                'nim' => 'NIM atau password tidak dapat digunakan untuk masuk. Pastikan NIM masih terdaftar sebagai mahasiswa aktif atau hubungi admin jurusan.',
             ]);
         }
 

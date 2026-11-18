@@ -15,6 +15,7 @@ type ResetFormProps = {
     codeName: "otp" | "reset_code";
     action: { action: string; method: "post" };
     loginHref: string;
+    defaultIdentifier?: string | null;
 };
 
 export function PasswordResetForm({
@@ -26,9 +27,11 @@ export function PasswordResetForm({
     codeName,
     action,
     loginHref,
+    defaultIdentifier = null,
 }: ResetFormProps): React.JSX.Element {
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [isConfirmationVisible, setIsConfirmationVisible] = useState(false);
+    const isIdentifierLocked = defaultIdentifier !== null;
 
     return (
         <>
@@ -68,7 +71,7 @@ export function PasswordResetForm({
                                         <Label htmlFor={identifierName} className="text-xs font-bold text-[#395886]">
                                             {identifierLabel}
                                         </Label>
-                                        <Input id={identifierName} name={identifierName} type="text" autoComplete={identifierName === "username" ? "username" : "off"} maxLength={identifierName === "nim" ? 20 : 64} required className="h-11 rounded-xl border-[#8AAEE0] bg-white text-[#395886]" />
+                                        <Input id={identifierName} name={identifierName} type="text" autoComplete={identifierName === "username" ? "username" : "off"} defaultValue={defaultIdentifier ?? undefined} readOnly={isIdentifierLocked} maxLength={identifierName === "nim" ? 20 : 64} required className="h-11 rounded-xl border-[#8AAEE0] bg-white text-[#395886] read-only:cursor-not-allowed read-only:bg-[#F0F3FA]" />
                                         {errors[identifierName] ? <p className="text-xs font-semibold text-rose-600">{errors[identifierName]}</p> : null}
                                     </div>
                                     <div className="grid gap-2">

@@ -53,6 +53,7 @@ class KompenResponHubActiveStudent extends Model
         return $query->whereExists(function (\Illuminate\Database\Query\Builder $referenceQuery) use ($referenceTable, $studentTable): void {
             $referenceQuery->selectRaw('1')
                 ->from($referenceTable)
+                ->where("{$referenceTable}.selection_key", KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey)
                 ->whereColumn(
                     "{$referenceTable}.sikompen_active_student_import_id",
                     "{$studentTable}.sikompen_active_student_import_id",

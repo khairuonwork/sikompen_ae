@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -118,6 +119,15 @@ class KompenResponHubStudent extends Model
     public function cutoff(): HasOne
     {
         return $this->hasOne(KompenResponHubPeriodCutoff::class, 'periode_semester', 'periode_semester');
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeFromActiveImportReference(Builder $query): Builder
+    {
+        return $query->whereHas('importBatch.activeReference');
     }
 
     public function getEffectiveTotalKompensasiJamAttribute(): string

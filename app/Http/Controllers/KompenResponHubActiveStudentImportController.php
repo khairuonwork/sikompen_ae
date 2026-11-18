@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\ActivateKompenResponHubActiveStudentImport;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
+use App\Actions\KompenResponHub\ReleaseKompenResponHubActiveStudentImport;
 use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Actions\KompenResponHub\ValidateKompenResponHubWorkbookArchive;
 use App\Http\Requests\DestroyKompenResponHubActiveStudentImportRequest;
+use App\Http\Requests\ReleaseKompenResponHubActiveStudentImportRequest;
 use App\Http\Requests\RestoreKompenResponHubActiveStudentImportRequest;
 use App\Http\Requests\StoreKompenResponHubActiveStudentImportRequest;
 use App\Http\Resources\KompenResponHubActiveStudentImportTaskResource;
@@ -19,6 +21,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -77,26 +80,49 @@ class KompenResponHubActiveStudentImportController extends Controller
             ]);
         }
 
-        $storedPath = $file->store('kompen-respon-hub/imports/active-students');
-
-        if ($storedPath === false) {
+        $fileHash = hash_file('sha256', $file->getPathname());
+        if (! is_string($fileHash)) {
             throw ValidationException::withMessages([
-                'file' => 'Daftar mahasiswa aktif tidak dapat disimpan. Coba unggah kembali.',
+                'file' => 'Daftar mahasiswa aktif tidak dapat diperiksa. Coba unggah kembali.',
             ]);
         }
 
-        $task = KompenResponHubActiveStudentImportTask::create([
-            'uploaded_by_admin_id' => $actor['id'],
-            'uploader_name' => $request->string('uploader_name')->trim()->toString(),
-            'uploader_username' => $actor['username'],
-            'original_filename' => $file->getClientOriginalName(),
-            'stored_path' => $storedPath,
-            'file_hash' => hash_file('sha256', Storage::disk('local')->path($storedPath)),
-            'status' => KompenResponHubActiveStudentImportTask::StatusQueued,
-            'progress' => 0,
-            'progress_message' => 'Daftar mahasiswa aktif diterima dan menunggu diproses.',
-            'queued_at' => now(),
-        ]);
+        $lock = Cache::lock("sikompen:active-student-import:{$fileHash}", 15);
+        if (! $lock->get()) {
+            return to_route('admin.kompen-respon.index', ['tab' => 'upload'])
+                ->with('error', 'Daftar mahasiswa aktif identik sedang diperiksa atau diproses. Tunggu proses sebelumnya selesai.');
+        }
+
+        try {
+            $duplicateMessage = $this->duplicateImportMessage($fileHash);
+            if ($duplicateMessage !== null) {
+                return to_route('admin.kompen-respon.index', ['tab' => 'upload'])
+                    ->with('error', $duplicateMessage);
+            }
+
+            $storedPath = $file->store('kompen-respon-hub/imports/active-students');
+
+            if ($storedPath === false) {
+                throw ValidationException::withMessages([
+                    'file' => 'Daftar mahasiswa aktif tidak dapat disimpan. Coba unggah kembali.',
+                ]);
+            }
+
+            $task = KompenResponHubActiveStudentImportTask::create([
+                'uploaded_by_admin_id' => $actor['id'],
+                'uploader_name' => $request->string('uploader_name')->trim()->toString(),
+                'uploader_username' => $actor['username'],
+                'original_filename' => $file->getClientOriginalName(),
+                'stored_path' => $storedPath,
+                'file_hash' => $fileHash,
+                'status' => KompenResponHubActiveStudentImportTask::StatusQueued,
+                'progress' => 0,
+                'progress_message' => 'Daftar mahasiswa aktif diterima dan menunggu diproses.',
+                'queued_at' => now(),
+            ]);
+        } finally {
+            $lock->release();
+        }
 
         ProcessKompenResponHubActiveStudentImport::dispatch($task->id)
             ->onQueue(config('kompen-respon-hub.queue.import'));
@@ -264,12 +290,56 @@ class KompenResponHubActiveStudentImportController extends Controller
             actor: $admin,
             request: $request,
             reason: "Daftar mahasiswa aktif {$result['periode_semester']} dipilih sebagai satu-satunya roster aktif periode tersebut.",
-            metadata: ['classes' => $result['classes'], 'original_filename' => $result['original_filename'], 'periode_semester' => $result['periode_semester']],
+            metadata: [
+                'classes' => $result['classes'],
+                'original_filename' => $result['original_filename'],
+                'periode_semester' => $result['periode_semester'],
+                'invalidated_student_reset_request_count' => $result['invalidated_reset_request_count'],
+            ],
             subjectName: $result['original_filename'],
             period: $result['periode_semester'],
         );
 
         return back()->with('success', "Daftar mahasiswa aktif {$result['periode_semester']} sekarang digunakan untuk seluruh kelas di dalam file.");
+    }
+
+    public function release(
+        ReleaseKompenResponHubActiveStudentImportRequest $request,
+        KompenResponHubActiveStudentImport $import,
+        SikompenAdminAccess $access,
+        ReleaseKompenResponHubActiveStudentImport $releaser,
+        RecordKompenResponHubActivity $activity,
+    ): RedirectResponse {
+        $actor = $access->actor($request);
+        $admin = $this->adminForActor($actor['id']);
+
+        try {
+            $result = $releaser->execute(
+                $import,
+                $admin instanceof KompenResponHubAdmin ? $admin->username : $actor['username'],
+                $actor['username'],
+            );
+        } catch (\LogicException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        $activity->execute(
+            eventType: 'active_students.deactivated',
+            subjectType: 'active_student_import',
+            subjectReference: (string) $result['import_id'],
+            actor: $admin,
+            request: $request,
+            reason: 'Roster mahasiswa aktif dinonaktifkan. Akun mahasiswa tetap tersimpan, tetapi seluruh akses mahasiswa ditutup sampai roster baru dipilih.',
+            metadata: [
+                'original_filename' => $result['original_filename'],
+                'student_login_access_disabled' => true,
+                'invalidated_student_reset_request_count' => $result['invalidated_reset_request_count'],
+            ],
+            subjectName: $result['original_filename'],
+            period: $result['periode_semester'],
+        );
+
+        return back()->with('success', 'Akses mahasiswa dinonaktifkan. Akun dan riwayat tetap tersimpan, tetapi tidak ada mahasiswa yang dapat masuk sampai roster baru dipilih.');
     }
 
     private function safeDownloadFilename(KompenResponHubActiveStudentImport $import): string
@@ -286,5 +356,41 @@ class KompenResponHubActiveStudentImportController extends Controller
         return is_int($actorId)
             ? KompenResponHubAdmin::query()->find($actorId)
             : null;
+    }
+
+    private function duplicateImportMessage(string $fileHash): ?string
+    {
+        $activeTask = KompenResponHubActiveStudentImportTask::query()
+            ->where('file_hash', $fileHash)
+            ->whereIn('status', [
+                KompenResponHubActiveStudentImportTask::StatusQueued,
+                KompenResponHubActiveStudentImportTask::StatusProcessing,
+            ])
+            ->latest('id')
+            ->first();
+
+        if ($activeTask instanceof KompenResponHubActiveStudentImportTask) {
+            return "Daftar mahasiswa aktif identik sedang diproses sebagai {$activeTask->original_filename}. Tunggu proses tersebut selesai.";
+        }
+
+        $existingImport = KompenResponHubActiveStudentImport::query()
+            ->where('file_hash', $fileHash)
+            ->latest('id')
+            ->first();
+
+        if ($existingImport instanceof KompenResponHubActiveStudentImport) {
+            return "Daftar mahasiswa aktif identik sudah tersimpan sebagai {$existingImport->original_filename}. Gunakan versi yang ada di List File.";
+        }
+
+        $trashedImport = KompenResponHubActiveStudentImport::onlyTrashed()
+            ->where('file_hash', $fileHash)
+            ->latest('id')
+            ->first();
+
+        if ($trashedImport instanceof KompenResponHubActiveStudentImport) {
+            return "Daftar mahasiswa aktif identik sudah berada di Recycle Bin sebagai {$trashedImport->original_filename}. Pulihkan versi tersebut, bukan mengunggah ulang.";
+        }
+
+        return null;
     }
 }

@@ -19,6 +19,8 @@ Dokumen dalam folder ini menjelaskan aplikasi pada branch saat ini. Kode dan tes
 | [Docker lokal](docker-local-guide.md) | Menjalankan, memeriksa, dan mendiagnosis stack lokal. |
 | [Kontrak API outbound](api-outbound-integration-proposal.md) | API v1 yang telah diimplementasikan untuk sistem eksternal. |
 | [Deployment](deployment-guide.md) | Referensi teknis deployment dan operasi Docker. |
+| [Deployment sebelum presentasi](pre-presentation-deployment.md) | Urutan command deployment demo, konfigurasi, verifikasi, dan diagnosis. |
+| [Backlog hardening keamanan](security-hardening-backlog.md) | Temuan P0/P1, syarat rilis publik, urutan perbaikan, dan bahan presentasi. |
 
 ## Panduan PDF per peran
 

@@ -84,7 +84,8 @@ class KompenResponHubActiveStudentImport extends Model
     /** @return HasOne<KompenResponHubActiveStudentImportReference, $this> */
     public function activeReference(): HasOne
     {
-        return $this->hasOne(KompenResponHubActiveStudentImportReference::class, 'sikompen_active_student_import_id');
+        return $this->hasOne(KompenResponHubActiveStudentImportReference::class, 'sikompen_active_student_import_id')
+            ->where('selection_key', KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey);
     }
 
     /** @return HasMany<KompenResponHubImportAuditLog, $this> */

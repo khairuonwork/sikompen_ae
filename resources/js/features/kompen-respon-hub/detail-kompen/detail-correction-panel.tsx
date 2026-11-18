@@ -1,6 +1,9 @@
-import { Form } from "@inertiajs/react";
-import { Save, X } from "lucide-react";
-import { storeDetailOverride } from "@/actions/App/Http/Controllers/KompenResponHubLifecycleController";
+import { Form, router } from "@inertiajs/react";
+import { Save, Trash2, X } from "lucide-react";
+import {
+    destroyDetailOverride,
+    storeDetailOverride,
+} from "@/actions/App/Http/Controllers/KompenResponHubLifecycleController";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Detail } from "../shared/types";
@@ -117,6 +120,25 @@ export function DetailCorrectionPanel({
                         <Save className="mr-2 size-4" />
                         Simpan koreksi detail
                     </Button>
+                    {detail.has_override ? (
+                        <Button
+                            disabled={processing}
+                            type="button"
+                            variant="outline"
+                            className="w-fit rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
+                            onClick={() => {
+                                if (window.confirm("Hapus koreksi detail ini? Nilai akan kembali mengikuti workbook aktif.")) {
+                                    router.delete(destroyDetailOverride.url(detail.id), {
+                                        preserveScroll: true,
+                                        onSuccess: onClose,
+                                    });
+                                }
+                            }}
+                        >
+                            <Trash2 className="mr-2 size-4" />
+                            Hapus koreksi
+                        </Button>
+                    ) : null}
                 </>
             )}
         </Form>
