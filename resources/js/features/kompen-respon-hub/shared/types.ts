@@ -331,6 +331,7 @@ export type KompenResponHubPageProps = {
     importAuditYears: number[];
     activityFilterOptions: { event_types: string[]; actor_usernames: string[] };
     warningPeriods: string[];
+    selectableWarningPeriods: string[];
     flash: { success: string | null; error: string | null };
     students: Pagination<Student> | null;
     details: Pagination<Detail> | null;
