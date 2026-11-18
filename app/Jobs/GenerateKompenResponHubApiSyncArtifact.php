@@ -66,6 +66,10 @@ class GenerateKompenResponHubApiSyncArtifact implements ShouldBeUnique, ShouldQu
             gzclose($handle);
             $handle = null;
 
+            if ($count === 0) {
+                throw new RuntimeException('source_not_active: Data sumber sync tidak lagi digunakan.');
+            }
+
             $checksum = hash_file('sha256', $absolutePath);
             $size = filesize($absolutePath);
 
@@ -121,9 +125,11 @@ class GenerateKompenResponHubApiSyncArtifact implements ShouldBeUnique, ShouldQu
 
         $run->forceFill([
             'status' => 'failed',
-            'failure_code' => str_starts_with($exception->getMessage(), 'artifact_size_limit')
-                ? 'artifact_too_large'
-                : 'artifact_generation_failed',
+            'failure_code' => match (true) {
+                str_starts_with($exception->getMessage(), 'artifact_size_limit') => 'artifact_too_large',
+                str_starts_with($exception->getMessage(), 'source_not_active') => 'source_no_longer_active',
+                default => 'artifact_generation_failed',
+            },
             'completed_at' => now(),
         ])->save();
 
@@ -146,6 +152,7 @@ class GenerateKompenResponHubApiSyncArtifact implements ShouldBeUnique, ShouldQu
 
         DB::connection($run->getConnectionName())->transaction(function () use ($run, $handle, $request, &$count): void {
             $query = KompenResponHubStudent::query()
+                ->fromActiveImportReference()
                 ->with(['progress', 'summaryOverride'])
                 ->where('periode_semester', $run->periode_semester)
                 ->orderBy('id');

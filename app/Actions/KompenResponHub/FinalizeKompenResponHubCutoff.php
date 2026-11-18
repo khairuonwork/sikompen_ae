@@ -13,8 +13,10 @@ class FinalizeKompenResponHubCutoff
     public function __construct(private RecordKompenResponHubActivity $activity) {}
 
     /**
-     * Finalize the current outstanding debt as issued warning letters without
-     * locking future corrections, imports, or cutoff changes.
+     * Issue warning letters from the current outstanding debt snapshot.
+     *
+     * The caller owns the transaction and marks the cutoff as final only after
+     * its official artifact has been stored successfully.
      *
      * @return array{issued_warning_count: int, synchronized_warning_count: int}
      */
@@ -74,6 +76,7 @@ class FinalizeKompenResponHubCutoff
             });
 
         KompenResponHubStudent::query()
+            ->fromActiveImportReference()
             ->where('periode_semester', $cutoff->periode_semester)
             ->with(['progress', 'summaryOverride'])
             ->chunkById(200, function ($students) use ($cutoff, $actor, $request, &$issuedWarningCount): void {

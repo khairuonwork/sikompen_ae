@@ -84,7 +84,7 @@ class ImportKompenResponHubWorkbook
 
     /**
      * Replace live rows for the supplied workbook classes and retain lifecycle
-     * references for matching student identities.
+     * references by NIM and period, including when a student changes class.
      *
      * @param  array{preview: array{periode_semester: ?string, classes: list<string>, class_count: int, student_count: int, detail_count: int}, students: list<array<string, mixed>>, details: list<array<string, mixed>>}  $payload
      * @param  array<string, int>  $importIdsByClass
@@ -122,7 +122,7 @@ class ImportKompenResponHubWorkbook
 
         foreach ($payload['details'] as $detailAttributes) {
             $studentKey = "{$detailAttributes['kelas']}:{$detailAttributes['nim']}";
-            $sourceKey = hash('sha256', json_encode($detailAttributes, JSON_THROW_ON_ERROR));
+            $sourceKey = self::detailSourceKey($detailAttributes);
 
             DB::connection(config('kompen-respon-hub.database_connection'))
                 ->table('sikompen_detail_kompen')
@@ -148,14 +148,31 @@ class ImportKompenResponHubWorkbook
             $identity = [
                 'nim' => $studentAttributes['nim'],
                 'periode_semester' => $period,
-                'kelas' => $studentAttributes['kelas'],
             ];
             $currentStudentId = $studentIds[$studentKey];
+            $currentClass = (string) $studentAttributes['kelas'];
+            $currentName = (string) $studentAttributes['nama_mahasiswa'];
 
-            KompenResponHubStudentProgress::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
-            KompenResponHubStudentSummaryOverride::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
-            KompenResponHubWarningLetter::query()->where($identity)->update(['current_student_id' => $currentStudentId]);
+            KompenResponHubStudentProgress::query()->where($identity)->update([
+                'current_student_id' => $currentStudentId,
+                'kelas' => $currentClass,
+            ]);
+            KompenResponHubStudentSummaryOverride::query()->where($identity)->update([
+                'current_student_id' => $currentStudentId,
+                'kelas' => $currentClass,
+            ]);
+            KompenResponHubWarningLetter::query()->where($identity)->update([
+                'current_student_id' => $currentStudentId,
+                'kelas' => $currentClass,
+                'nama_mahasiswa' => $currentName,
+            ]);
         }
+    }
+
+    /** @param array<string, mixed> $detailAttributes */
+    public static function detailSourceKey(array $detailAttributes): string
+    {
+        return hash('sha256', json_encode($detailAttributes, JSON_THROW_ON_ERROR));
     }
 
     /**

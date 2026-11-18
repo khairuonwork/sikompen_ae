@@ -1,0 +1,136 @@
+import { Download, FileSpreadsheet, History, PencilLine } from "lucide-react";
+import { download } from "@/actions/App/Http/Controllers/KompenResponHubWarningLetterArtifactController";
+import { Button } from "@/components/ui/button";
+import { Pager } from "../shared/components/pagination";
+import type { Pagination, WarningLetterArtifact } from "../shared/types";
+
+function formatJakartaDateTime(value: string | null): string {
+    if (value === null) {
+        return "—";
+    }
+
+    return new Intl.DateTimeFormat("id-ID", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: "Asia/Jakarta",
+    }).format(new Date(value));
+}
+
+export function WarningLetterArtifactList({
+    data,
+}: {
+    data: Pagination<WarningLetterArtifact>;
+}): React.JSX.Element {
+    return (
+        <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl">
+            <div className="flex flex-col justify-between gap-3 border-b border-[#F0F3FA] px-5 py-4 sm:flex-row sm:items-center">
+                <div>
+                    <h3 className="text-sm font-extrabold text-[#395886]">
+                        Artifact Surat Peringatan
+                    </h3>
+                    <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
+                        Hasil XLSX resmi setiap periode. Saat koreksi dibuka, file sebelumnya tetap tersimpan tetapi belum menjadi hasil final.
+                    </p>
+                </div>
+            </div>
+            {data.data.length > 0 ? (
+                <>
+                    <div className="data-table-scroll">
+                        <table className="data-table min-w-[1180px]">
+                            <colgroup>
+                                {["16rem", "24rem", "11rem", "18rem", "12rem", "16rem", "14rem"].map((width, index) => (
+                                    <col key={`${width}-${index}`} style={{ width }} />
+                                ))}
+                            </colgroup>
+                            <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
+                                <tr>
+                                    <th className="px-5 py-4">Periode</th>
+                                    <th className="px-5 py-4">Artifact XLSX</th>
+                                    <th className="px-5 py-4">Isi</th>
+                                    <th className="px-5 py-4">Sumber saat final</th>
+                                    <th className="px-5 py-4">Status</th>
+                                    <th className="px-5 py-4">Finalisasi</th>
+                                    <th className="px-5 py-4 text-right">Tindakan</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#F0F3FA]">
+                                {data.data.map((artifact) => {
+                                    const isRevising = artifact.status === "revising";
+                                    const isSuperseded = artifact.status === "superseded";
+
+                                    return (
+                                        <tr key={artifact.id} className="hover:bg-[#B1C9EF]/10">
+                                            <td className="px-5 py-4 text-xs font-bold text-[#395886]">
+                                                {artifact.periode_semester ?? "Periode tidak tersedia"}
+                                            </td>
+                                            <td className="px-5 py-4">
+                                                <div className="flex items-start gap-2">
+                                                    <FileSpreadsheet className="mt-0.5 size-4 shrink-0 text-emerald-700" />
+                                                    <div>
+                                                        <p className="break-words font-mono text-xs font-bold text-[#395886]">
+                                                            {artifact.display_filename}
+                                                        </p>
+                                                        <p className="mt-1 text-[11px] text-[#395886]/60">
+                                                            Revisi {artifact.revision}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-5 py-4 text-xs font-semibold text-[#395886]">
+                                                {artifact.row_count} mahasiswa
+                                            </td>
+                                            <td className="px-5 py-4 text-[11px] leading-relaxed text-[#395886]/75">
+                                                {artifact.source_provenance ? (
+                                                    <>
+                                                        <p className="break-words font-semibold text-[#395886]">
+                                                            Workbook: {artifact.source_provenance.kompen_respon_workbook.display_filename}
+                                                        </p>
+                                                        <p className="mt-1 break-words">
+                                                            Roster: {artifact.source_provenance.active_student_roster?.original_filename ?? "Tidak ada roster aktif"}
+                                                        </p>
+                                                    </>
+                                                ) : (
+                                                    <p>Jejak sumber belum tersedia untuk artifact lama.</p>
+                                                )}
+                                            </td>
+                                            <td className="px-5 py-4">
+                                                <span className={isRevising
+                                                    ? "inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black tracking-wider text-amber-800 uppercase"
+                                                    : isSuperseded
+                                                        ? "inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black tracking-wider text-slate-700 uppercase"
+                                                    : "inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-black tracking-wider text-emerald-800 uppercase"}>
+                                                    {isRevising ? <PencilLine className="size-3" /> : isSuperseded ? <History className="size-3" /> : <FileSpreadsheet className="size-3" />}
+                                                    {isRevising ? "Sedang dibenarkan" : isSuperseded ? "Digantikan revisi baru" : "Final"}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-4 text-xs text-[#395886]">
+                                                <p>{formatJakartaDateTime(artifact.finalized_at)}</p>
+                                                {artifact.correction_started_at ? (
+                                                    <p className="mt-1 text-[11px] text-amber-800">
+                                                        Koreksi sejak {formatJakartaDateTime(artifact.correction_started_at)}
+                                                    </p>
+                                                ) : null}
+                                            </td>
+                                            <td className="px-5 py-4 text-right">
+                                                <Button asChild size="sm" variant="outline" className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                                    <a href={download.url(artifact.id)}>
+                                                        <Download className="mr-1.5 size-3.5" /> Unduh
+                                                    </a>
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    <Pager data={data} />
+                </>
+            ) : (
+                <p className="m-5 rounded-2xl border border-dashed border-[#8AAEE0] bg-[#F0F3FA]/45 px-4 py-3 text-xs font-semibold text-[#395886]/70">
+                    Belum ada artifact Surat Peringatan. Finalisasi periode setelah cutoff untuk membuat XLSX resmi.
+                </p>
+            )}
+        </section>
+    );
+}

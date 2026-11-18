@@ -19,6 +19,8 @@ class FinalizeKompenResponHubPeriodRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [];
+        return [
+            'confirm_empty_finalization' => ['nullable', 'boolean'],
+        ];
     }
 }

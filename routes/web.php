@@ -14,6 +14,7 @@ use App\Http\Controllers\KompenResponHubImportController;
 use App\Http\Controllers\KompenResponHubImportTaskController;
 use App\Http\Controllers\KompenResponHubLandingController;
 use App\Http\Controllers\KompenResponHubLifecycleController;
+use App\Http\Controllers\KompenResponHubWarningLetterArtifactController;
 use App\Http\Controllers\StudentAuthenticationController;
 use App\Http\Controllers\StudentPasswordController;
 use App\Http\Controllers\StudentPasswordResetController;
@@ -42,13 +43,14 @@ Route::middleware('guest:student')->group(function (): void {
     Route::post('mahasiswa/login', [StudentAuthenticationController::class, 'store'])
         ->middleware('throttle:student-login')
         ->name('student.login.store');
-    Route::get('mahasiswa/lupa-password', [StudentPasswordResetController::class, 'createRequest'])->name('student.password-reset.request');
-    Route::post('mahasiswa/lupa-password', [StudentPasswordResetController::class, 'storeRequest'])
-        ->middleware('throttle:student-password-reset-request')->name('student.password-reset.request.store');
-    Route::get('mahasiswa/reset-password', [StudentPasswordResetController::class, 'edit'])->name('student.password-reset.edit');
-    Route::put('mahasiswa/reset-password', [StudentPasswordResetController::class, 'update'])
-        ->middleware('throttle:student-password-reset-confirm')->name('student.password-reset.update');
 });
+
+Route::get('mahasiswa/lupa-password', [StudentPasswordResetController::class, 'createRequest'])->name('student.password-reset.request');
+Route::post('mahasiswa/lupa-password', [StudentPasswordResetController::class, 'storeRequest'])
+    ->middleware('throttle:student-password-reset-request')->name('student.password-reset.request.store');
+Route::get('mahasiswa/reset-password', [StudentPasswordResetController::class, 'edit'])->name('student.password-reset.edit');
+Route::put('mahasiswa/reset-password', [StudentPasswordResetController::class, 'update'])
+    ->middleware('throttle:student-password-reset-confirm')->name('student.password-reset.update');
 
 Route::get('admin/setup', [KompenResponHubAdminSetupController::class, 'create'])->name('admin.setup.create');
 Route::post('admin/setup', [KompenResponHubAdminSetupController::class, 'store'])
@@ -127,6 +129,9 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
     Route::post('kompen-respon/active-students/imports/{import}/activate', [KompenResponHubActiveStudentImportController::class, 'activate'])
         ->middleware('throttle:20,1')
         ->name('kompen-respon.active-students.imports.activate');
+    Route::delete('kompen-respon/active-students/imports/{import}/activation', [KompenResponHubActiveStudentImportController::class, 'release'])
+        ->middleware('throttle:10,1')
+        ->name('kompen-respon.active-students.imports.activation.destroy');
     Route::delete('kompen-respon/active-students/imports/{import}', [KompenResponHubActiveStudentImportController::class, 'destroy'])
         ->middleware('throttle:10,1')
         ->name('kompen-respon.active-students.imports.destroy');
@@ -144,22 +149,27 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
         ->middleware('throttle:10,15')
         ->name('kompen-respon.imports.destroy');
     Route::post('kompen-respon/imports/{import}/activate', [KompenResponHubImportActivationController::class, 'store'])
-        ->middleware('throttle:5,15')
+        ->middleware('throttle:sikompen-workbook-activation')
         ->name('kompen-respon.imports.activate');
     Route::delete('kompen-respon/imports/{import}/activation', [KompenResponHubImportActivationController::class, 'destroy'])
-        ->middleware('throttle:5,15')
+        ->middleware('throttle:sikompen-workbook-activation')
         ->name('kompen-respon.imports.activation.destroy');
     Route::get('kompen-respon/import-tasks/{importTask}', [KompenResponHubImportTaskController::class, 'show'])
         ->name('kompen-respon.import-tasks.show');
     Route::put('kompen-respon/cutoffs', [KompenResponHubLifecycleController::class, 'storeCutoff'])
         ->middleware('throttle:20,1')
         ->name('kompen-respon.cutoffs.store');
+    Route::post('kompen-respon/cutoffs/{cutoff}/select', [KompenResponHubLifecycleController::class, 'selectCutoff'])
+        ->middleware('throttle:20,1')
+        ->name('kompen-respon.cutoffs.select');
     Route::post('kompen-respon/cutoffs/{cutoff}/finalize', [KompenResponHubLifecycleController::class, 'finalizeCutoff'])
         ->middleware('throttle:5,15')
         ->name('kompen-respon.cutoffs.finalize');
     Route::delete('kompen-respon/cutoffs/{cutoff}/finalization', [KompenResponHubLifecycleController::class, 'rollbackCutoffFinalization'])
         ->middleware('throttle:5,15')
         ->name('kompen-respon.cutoffs.finalization.destroy');
+    Route::get('kompen-respon/warning-artifacts/{artifact}/download', [KompenResponHubWarningLetterArtifactController::class, 'download'])
+        ->name('kompen-respon.warning-artifacts.download');
     Route::put('kompen-respon/students/{student}/progress', [KompenResponHubLifecycleController::class, 'storeProgress'])
         ->middleware('throttle:30,1')
         ->name('kompen-respon.students.progress.store');
@@ -169,6 +179,9 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
     Route::put('kompen-respon/details/{detail}/override', [KompenResponHubLifecycleController::class, 'storeDetailOverride'])
         ->middleware('throttle:30,1')
         ->name('kompen-respon.details.override.store');
+    Route::delete('kompen-respon/details/{detail}/override', [KompenResponHubLifecycleController::class, 'destroyDetailOverride'])
+        ->middleware('throttle:20,1')
+        ->name('kompen-respon.details.override.destroy');
     Route::put('kompen-respon/warnings/{warning}', [KompenResponHubLifecycleController::class, 'updateWarning'])
         ->middleware('throttle:20,1')
         ->name('kompen-respon.warnings.update');

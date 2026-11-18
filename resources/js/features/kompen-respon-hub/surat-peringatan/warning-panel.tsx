@@ -17,6 +17,7 @@ import {
     destroyWarning,
     finalizeCutoff,
     rollbackCutoffFinalization,
+    selectCutoff,
     storeCutoff,
     updateWarning,
 } from "@/actions/App/Http/Controllers/KompenResponHubLifecycleController";
@@ -211,7 +212,6 @@ export function WarningPanel({
     warnings,
     warningCandidates,
     rolledBackWarnings,
-    managedPeriodHasActiveWarnings,
     selectedWarning,
     onSelectWarning,
     onCloseWarning,
@@ -223,7 +223,6 @@ export function WarningPanel({
     warnings: Pagination<Warning> | null;
     warningCandidates: Pagination<Student> | null;
     rolledBackWarnings: Pagination<Warning> | null;
-    managedPeriodHasActiveWarnings: boolean;
     selectedWarning: Warning | null;
     onSelectWarning: (warning: Warning) => void;
     onCloseWarning: () => void;
@@ -231,6 +230,7 @@ export function WarningPanel({
     const selectedWarningPeriod = filters.warning_period ?? "";
     const selectedListPeriod = filters.list_period ?? selectedWarningPeriod;
     const isInspectionMode = selectedListPeriod !== selectedWarningPeriod;
+    const hasNoWarningCandidates = warningCandidates?.meta.total === 0;
     const [editingCutoffPeriod, setEditingCutoffPeriod] = useState(
         selectedWarningPeriod,
     );
@@ -262,6 +262,12 @@ export function WarningPanel({
     const isEditingCutoffElapsed =
         editingCutoff !== undefined &&
         new Date(editingCutoff.deadline_at).getTime() <= Date.now();
+    const isSelectedCutoffFinalized =
+        selectedCutoff?.finalization_status === "finalized";
+    const isSelectedCutoffRevising =
+        selectedCutoff?.finalization_status === "revising";
+    const isEditingCutoffFinalized =
+        editingCutoff?.finalization_status === "finalized";
 
     useEffect(() => {
         setSelectedFilterClass(filters.kelas ?? "");
@@ -483,14 +489,22 @@ export function WarningPanel({
                         <span
                             className={cn(
                                 "w-fit rounded-full px-3 py-1 text-xs font-bold",
-                                isSelectedCutoffElapsed
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-emerald-100 text-emerald-700",
+                                isSelectedCutoffFinalized
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : isSelectedCutoffRevising
+                                      ? "bg-amber-100 text-amber-800"
+                                      : isSelectedCutoffElapsed
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-emerald-100 text-emerald-700",
                             )}
                         >
-                            {isSelectedCutoffElapsed
-                                ? "Cutoff telah lewat"
-                                : "Cutoff aktif"}
+                            {isSelectedCutoffFinalized
+                                ? "SP final"
+                                : isSelectedCutoffRevising
+                                  ? "Sedang dibenarkan"
+                                  : isSelectedCutoffElapsed
+                                    ? "Cutoff telah lewat"
+                                    : "Cutoff aktif"}
                         </span>
                     ) : null}
                 </div>
@@ -555,8 +569,11 @@ export function WarningPanel({
                                 openCutoffEditor(selectedCutoff.periode_semester)
                             }
                             className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                            disabled={isSelectedCutoffFinalized}
                         >
-                            Ubah batas waktu
+                            {isSelectedCutoffFinalized
+                                ? "Finalisasi terkunci"
+                                : "Ubah batas waktu"}
                         </Button>
                     </div>
                 ) : (
@@ -630,31 +647,46 @@ export function WarningPanel({
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", isElapsed ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700")}>
-                                                {isElapsed
-                                                    ? "Cutoff lewat"
-                                                    : "Aktif"}
+                                            {cutoff.is_selected ? (
+                                                <span className="rounded-full bg-[#395886] px-2.5 py-1 text-[11px] font-bold text-white">
+                                                    Periode SP aktif
+                                                </span>
+                                            ) : null}
+                                            <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", cutoff.finalization_status === "finalized" ? "bg-emerald-100 text-emerald-800" : cutoff.finalization_status === "revising" ? "bg-amber-100 text-amber-800" : isElapsed ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700")}>
+                                                {cutoff.finalization_status === "finalized"
+                                                    ? "SP final"
+                                                    : cutoff.finalization_status === "revising"
+                                                      ? "Sedang dibenarkan"
+                                                      : isElapsed
+                                                        ? "Cutoff lewat"
+                                                        : "Aktif"}
                                             </span>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                disabled={
-                                                    cutoff.periode_semester ===
-                                                    selectedWarningPeriod
-                                                }
-                                                onClick={() =>
-                                                    selectManagedWarningPeriod(
-                                                        cutoff.periode_semester,
-                                                    )
-                                                }
-                                                className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
-                                            >
-                                                {cutoff.periode_semester ===
-                                                selectedWarningPeriod
-                                                    ? "Dipilih"
-                                                    : "Pilih"}
-                                            </Button>
+                                            {cutoff.is_selected ? null : cutoff.is_available ? (
+                                                <Form
+                                                    {...selectCutoff.form(cutoff.id)}
+                                                    onBefore={() =>
+                                                        window.confirm(
+                                                            `Jadikan ${cutoff.periode_semester} sebagai periode SP aktif? Finalisasi dan profil mahasiswa akan menggunakan periode ini.`,
+                                                        )
+                                                    }
+                                                >
+                                                    {({ processing }) => (
+                                                        <Button
+                                                            type="submit"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            disabled={processing}
+                                                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                                                        >
+                                                            {processing ? "Memilih…" : "Jadikan SP aktif"}
+                                                        </Button>
+                                                    )}
+                                                </Form>
+                                            ) : (
+                                                <span className="text-[11px] font-semibold text-[#395886]/70">
+                                                    Hanya riwayat
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -664,7 +696,7 @@ export function WarningPanel({
                     </section>
                 ) : null}
 
-                {isCutoffEditorOpen ? (
+                {isCutoffEditorOpen && !isEditingCutoffFinalized ? (
                     <Form
                         {...storeCutoff.form()}
                         className="grid gap-3 rounded-2xl border border-[#8AAEE0]/70 bg-white p-4 md:grid-cols-[minmax(180px,0.8fr)_minmax(220px,1fr)_auto] md:items-end"
@@ -724,6 +756,7 @@ export function WarningPanel({
                                         type="datetime-local"
                                         required
                                         step={60}
+                                        className="text-[#1F2937] [color-scheme:light] [&::-webkit-calendar-picker-indicator]:opacity-75 [&::-webkit-datetime-edit]:text-[#1F2937] [&::-webkit-datetime-edit-ampm-field]:text-[#1F2937] [&::-webkit-datetime-edit-day-field]:text-[#1F2937] [&::-webkit-datetime-edit-fields-wrapper]:text-[#1F2937] [&::-webkit-datetime-edit-hour-field]:text-[#1F2937] [&::-webkit-datetime-edit-minute-field]:text-[#1F2937] [&::-webkit-datetime-edit-month-field]:text-[#1F2937] [&::-webkit-datetime-edit-text]:text-[#1F2937] [&::-webkit-datetime-edit-year-field]:text-[#1F2937]"
                                         defaultValue={
                                             editingCutoff
                                                 ? datetimeLocalValue(
@@ -768,18 +801,19 @@ export function WarningPanel({
                     <div className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center">
                         <div>
                             <p className="text-xs leading-relaxed font-medium text-amber-900">
-                                {managedPeriodHasActiveWarnings
-                                    ? `SP ${selectedCutoff.periode_semester} sudah difinalisasi dan sedang tersedia pada API.`
-                                    : `Cutoff ${selectedCutoff.periode_semester} telah lewat. Perpanjang bila masa pengerjaan dibuka kembali, atau finalisasi untuk menerbitkan SP bagi seluruh kandidat yang masih memiliki sisa jam.`}
+                                {isSelectedCutoffFinalized
+                                    ? `SP ${selectedCutoff.periode_semester} sudah final. Data, catatan SP, dan batas waktu dikunci agar sesuai dengan artifact XLSX resmi.`
+                                    : isSelectedCutoffRevising
+                                      ? `Koreksi untuk ${selectedCutoff.periode_semester} sedang dibuka. Finalisasi ulang saat data sudah benar untuk mengganti artifact resmi.`
+                                      : `Cutoff ${selectedCutoff.periode_semester} telah lewat. Perpanjang bila masa pengerjaan dibuka kembali, atau finalisasi untuk menerbitkan SP bagi seluruh kandidat yang masih memiliki sisa jam.`}
                             </p>
-                            {managedPeriodHasActiveWarnings ? (
+                            {isSelectedCutoffFinalized ? (
                                 <p className="mt-1 text-xs text-amber-800/80">
-                                    Pembatalan finalisasi menarik seluruh SP aktif
-                                    periode ini dari API tanpa menghapus riwayat.
+                                    Mulai koreksi akan menarik SP periode ini dari API. Artifact sebelumnya dan seluruh riwayat audit tetap tersimpan.
                                 </p>
                             ) : null}
                         </div>
-                        {managedPeriodHasActiveWarnings ? (
+                        {isSelectedCutoffFinalized ? (
                             <Form
                                 {...rollbackCutoffFinalization.form(
                                     selectedCutoff.id,
@@ -787,7 +821,7 @@ export function WarningPanel({
                                 className="flex shrink-0 flex-wrap items-center gap-2"
                                 onBefore={() =>
                                     window.confirm(
-                                        "Batalkan seluruh SP aktif pada periode ini? Mahasiswa akan segera hilang dari API SP, tetapi riwayat tetap tersimpan.",
+                                        "Mulai koreksi seluruh SP pada periode ini? Mahasiswa akan segera hilang dari API SP. Artifact dan riwayat audit tetap tersimpan.",
                                     )
                                 }
                             >
@@ -798,7 +832,7 @@ export function WarningPanel({
                                             required
                                             minLength={5}
                                             maxLength={1000}
-                                            placeholder="Alasan pembatalan"
+                                            placeholder="Alasan membuka koreksi"
                                             className="h-9 min-w-52 bg-white text-xs"
                                         />
                                         <Button
@@ -808,7 +842,7 @@ export function WarningPanel({
                                             className="rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
                                         >
                                             <Undo2 className="mr-1.5 size-3.5" />
-                                            Batalkan finalisasi
+                                            Mulai koreksi
                                         </Button>
                                     </>
                                 )}
@@ -817,26 +851,36 @@ export function WarningPanel({
                             <Button
                                 type="button"
                                 onClick={() => {
+                                    const confirmationMessage = hasNoWarningCandidates
+                                        ? "Tidak ada mahasiswa yang akan menerima SP. Finalisasi tetap akan membuat artifact XLSX resmi tanpa penerima. Lanjutkan?"
+                                        : isSelectedCutoffRevising
+                                            ? "Finalisasi ulang periode ini? Artifact XLSX resmi akan diperbarui berdasarkan hasil koreksi terbaru."
+                                            : "Finalisasi SP periode ini? Setiap kandidat dengan sisa jam akan menerima status SP aktif, tersedia pada API, dan dicatat dalam artifact XLSX resmi.";
+
                                     if (
-                                        window.confirm(
-                                            "Finalisasi SP periode ini? Setiap kandidat dengan sisa jam akan menerima status SP aktif dan mulai tersedia pada API. Data serta cutoff tetap dapat diperbaiki setelahnya.",
-                                        )
+                                        window.confirm(confirmationMessage)
                                     ) {
                                         router.post(
                                             finalizeCutoff.url(selectedCutoff.id),
+                                            {
+                                                confirm_empty_finalization:
+                                                    hasNoWarningCandidates,
+                                            },
                                         );
                                     }
                                 }}
                                 className="shrink-0 rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
                             >
                                 <Archive className="mr-1.5 size-3.5" />
-                                Finalisasi SP
+                                {isSelectedCutoffRevising
+                                    ? "Finalisasi ulang SP"
+                                    : "Finalisasi SP"}
                             </Button>
                         )}
                     </div>
                 ) : null}
             </section>
-            {selectedWarning && !isInspectionMode ? (
+            {selectedWarning && !isInspectionMode && !isSelectedCutoffFinalized ? (
                 <section className="order-4 grid gap-4 rounded-3xl border border-[#8AAEE0]/60 bg-white p-5 shadow-sm">
                     <div className="flex items-start justify-between gap-4">
                         <div>

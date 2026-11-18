@@ -7,6 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { login as studentLogin } from "@/routes/student";
+import { createRequest as studentPasswordResetRequest } from "@/actions/App/Http/Controllers/StudentPasswordResetController";
 import { show as studentProfile } from "@/routes/student/profile";
 
 type StudentPasswordProps = {
@@ -86,12 +87,19 @@ export default function StudentPassword({
                                     </div>
                                 </CardContent>
                                 <CardFooter className="flex flex-col-reverse gap-3 border-t border-[#F0F3FA] bg-[#F0F3FA]/40 px-6 py-6 sm:flex-row sm:justify-between">
-                                    <Button asChild type="button" variant="outline" className="rounded-2xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]">
-                                        <Link href={backHref}>
-                                            <ArrowLeft className="size-4" />
-                                            {requiresCurrentPassword ? "Kembali ke profil" : "Kembali ke login"}
-                                        </Link>
-                                    </Button>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Button asChild type="button" variant="outline" className="rounded-2xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#F0F3FA]">
+                                            <Link href={backHref}>
+                                                <ArrowLeft className="size-4" />
+                                                {requiresCurrentPassword ? "Kembali ke profil" : "Kembali ke login"}
+                                            </Link>
+                                        </Button>
+                                        {requiresCurrentPassword ? (
+                                            <Button asChild type="button" variant="ghost" className="rounded-2xl text-[#395886] hover:bg-[#D5DEEF] hover:text-[#1E293B]">
+                                                <Link href={studentPasswordResetRequest.url()}>Lupa password?</Link>
+                                            </Button>
+                                        ) : null}
+                                    </div>
                                     <Button type="submit" disabled={processing} className="rounded-2xl bg-[#395886] px-5 py-3 text-sm font-bold text-white shadow-md hover:bg-[#1E293B] hover:text-white">
                                         <KeyRound className="mr-2 size-4" />
                                         {processing ? "Menyimpan…" : "Simpan Password Baru"}
