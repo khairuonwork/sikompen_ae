@@ -20,7 +20,15 @@ export type Student = {
     effective_kompensasi_dikerjakan_jam: string;
     effective_responsi_dikerjakan_jam: string;
     effective_sisa_hutang_jam: string;
-    progress_status: "none" | "completed" | "warning_active";
+    progress_status:
+        | "no_obligation"
+        | "completed"
+        | "cutoff_unset"
+        | "in_progress"
+        | "awaiting_finalization"
+        | "revising"
+        | "warning_active"
+        | "needs_review";
     last_worked_at: string | null;
     has_summary_override: boolean;
     has_active_warning: boolean;
@@ -93,6 +101,36 @@ export type Cutoff = {
     timezone: string;
     is_available: boolean;
     is_selected: boolean;
+    finalization_status: "editable" | "finalized" | "revising";
+    finalized_at: string | null;
+    artifact_revision: number | null;
+};
+
+export type WarningLetterArtifact = {
+    id: number;
+    cutoff_id: number;
+    periode_semester: string | null;
+    status: "finalized" | "revising" | "superseded";
+    revision: number;
+    display_filename: string;
+    row_count: number;
+    source_provenance: {
+        kompen_respon_workbook: {
+            import_id: number;
+            display_filename: string;
+            file_hash: string;
+            periode_semester: string;
+        };
+        active_student_roster: {
+            import_id: number;
+            original_filename: string;
+            file_hash: string;
+            periode_semester: string | null;
+        } | null;
+    } | null;
+    finalized_at: string;
+    finalized_by_admin_id: number | null;
+    correction_started_at: string | null;
 };
 
 export type ImportAuditLog = {
@@ -301,6 +339,7 @@ export type KompenResponHubPageProps = {
     activeImportVersions: Pagination<ImportVersion> | null;
     activeStudentImportVersions: Pagination<ActiveStudentImportVersion> | null;
     activeStudentImportReferences: Pagination<ActiveStudentImportReference> | null;
+    warningLetterArtifacts: Pagination<WarningLetterArtifact> | null;
     recycledImportVersions: Pagination<ImportVersion> | null;
     recycledActiveStudentImportVersions: Pagination<ActiveStudentImportVersion> | null;
     warnings: Pagination<Warning> | null;
@@ -314,5 +353,4 @@ export type KompenResponHubPageProps = {
     activeImportTasks: ImportTask[];
     exportTasks: ExportTask[];
     exportStalledAfterMinutes: number;
-    managedPeriodHasActiveWarnings: boolean;
 };

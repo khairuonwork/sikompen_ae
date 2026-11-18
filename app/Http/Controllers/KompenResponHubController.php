@@ -17,6 +17,7 @@ use App\Http\Resources\KompenResponHubImportTaskResource;
 use App\Http\Resources\KompenResponHubImportVersionResource;
 use App\Http\Resources\KompenResponHubStudentResource;
 use App\Http\Resources\KompenResponHubStudentSearchResource;
+use App\Http\Resources\KompenResponHubWarningLetterArtifactResource;
 use App\Http\Resources\KompenResponHubWarningLetterResource;
 use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubActivityLog;
@@ -29,7 +30,7 @@ use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubStudentAccount;
 use App\Models\KompenResponHubSystemSetting;
-use App\Models\KompenResponHubWarningLetter;
+use App\Models\KompenResponHubWarningLetterArtifact;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
@@ -183,12 +184,14 @@ class KompenResponHubController extends Controller
             : null;
         $cutoffs = $isAdmin
             ? KompenResponHubPeriodCutoff::query()
+                ->with('warningLetterArtifact')
                 ->orderByDesc('deadline_at')
-                ->get(['id', 'periode_semester', 'deadline_at', 'timezone'])
+                ->get(['id', 'periode_semester', 'deadline_at', 'closed_at', 'timezone'])
             : collect();
-        $warningPeriods = $cutoffs
+        $warningPeriods = array_values($cutoffs
             ->pluck('periode_semester')
-            ->all();
+            ->map(static fn (mixed $period): string => (string) $period)
+            ->all());
 
         if ($isAdmin && $activeTab === 'warnings') {
             $filters = $this->filtersForWarningPeriod(
@@ -238,17 +241,16 @@ class KompenResponHubController extends Controller
                     'timezone' => $cutoff->timezone,
                     'is_available' => in_array($cutoff->periode_semester, $filterOptions['periode_semester'], true),
                     'is_selected' => $cutoff->periode_semester === $selectedWarningPeriod,
+                    'finalization_status' => $cutoff->closed_at !== null
+                        ? KompenResponHubWarningLetterArtifact::StatusFinalized
+                        : ($cutoff->warningLetterArtifact?->status === KompenResponHubWarningLetterArtifact::StatusRevising
+                            ? KompenResponHubWarningLetterArtifact::StatusRevising
+                            : 'editable'),
+                    'finalized_at' => $cutoff->warningLetterArtifact?->finalized_at?->toIso8601String(),
+                    'artifact_revision' => $cutoff->warningLetterArtifact?->revision,
                 ])
                     ->all()
                 : [],
-            'managedPeriodHasActiveWarnings' => $isAdmin && $activeTab === 'warnings'
-                ? KompenResponHubWarningLetter::query()
-                    ->where('periode_semester', $filters['warning_period'] ?? null)
-                    ->where('classification', 'fixed')
-                    ->where('letter_status', KompenResponHubWarningLetter::LetterStatusIssued)
-                    ->where('resolution', 'outstanding')
-                    ->exists()
-                : false,
             'activeImportTasks' => $isAdmin
                 ? $this->activeImportTasks()
                 : [],
@@ -310,6 +312,9 @@ class KompenResponHubController extends Controller
                 : null,
             'activeStudentImportReferences' => $isAdmin && $activeTab === 'files'
                 ? $this->activeStudentImportReferencePaginator($filters)
+                : null,
+            'warningLetterArtifacts' => $isAdmin && $activeTab === 'files'
+                ? $this->warningLetterArtifactPaginator($filters)
                 : null,
             'recycledImportVersions' => $isAdmin && $activeTab === 'files'
                 ? $this->recycledImportVersionPaginator($filters)
@@ -425,6 +430,35 @@ class KompenResponHubController extends Controller
         return $this->resourcePaginator(
             $paginator,
             KompenResponHubActiveStudentImportReferenceResource::class,
+            $pageName,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function warningLetterArtifactPaginator(array $filters): array
+    {
+        $pageName = 'warning_artifact_page';
+        $requestedPage = max(1, (int) ($filters[$pageName] ?? 1));
+        $paginator = KompenResponHubWarningLetterArtifact::query()
+            ->with('cutoff')
+            ->latest('updated_at')
+            ->paginate($this->perPage($filters), ['*'], $pageName, $requestedPage)
+            ->withQueryString();
+
+        if ($paginator->isEmpty() && $paginator->total() > 0 && $paginator->currentPage() > $paginator->lastPage()) {
+            $paginator = KompenResponHubWarningLetterArtifact::query()
+                ->with('cutoff')
+                ->latest('updated_at')
+                ->paginate($this->perPage($filters), ['*'], $pageName, $paginator->lastPage())
+                ->withQueryString();
+        }
+
+        return $this->resourcePaginator(
+            $paginator,
+            KompenResponHubWarningLetterArtifactResource::class,
             $pageName,
         );
     }
@@ -592,10 +626,10 @@ class KompenResponHubController extends Controller
     }
 
     /**
-     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog|KompenResponHubImport|\App\Models\KompenResponHubActiveStudentImport|\App\Models\KompenResponHubActiveStudentImportReference|\App\Models\KompenResponHubWarningLetter|\App\Models\KompenResponHubActivityLog
+     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog|KompenResponHubImport|\App\Models\KompenResponHubActiveStudentImport|\App\Models\KompenResponHubActiveStudentImportReference|\App\Models\KompenResponHubWarningLetter|\App\Models\KompenResponHubWarningLetterArtifact|\App\Models\KompenResponHubActivityLog
      *
      * @param  LengthAwarePaginator<int, TModel>  $paginator
-     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource|KompenResponHubImportVersionResource|KompenResponHubActiveStudentImportResource|KompenResponHubActiveStudentImportReferenceResource|KompenResponHubWarningLetterResource|KompenResponHubActivityLogResource>  $resource
+     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource|KompenResponHubImportVersionResource|KompenResponHubActiveStudentImportResource|KompenResponHubActiveStudentImportReferenceResource|KompenResponHubWarningLetterArtifactResource|KompenResponHubWarningLetterResource|KompenResponHubActivityLogResource>  $resource
      * @return array<string, mixed>
      */
     private function resourcePaginator(LengthAwarePaginator $paginator, string $resource, string $pageName): array

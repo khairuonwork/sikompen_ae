@@ -38,6 +38,7 @@ import { ImportAuditLogTable } from "@/features/kompen-respon-hub/log-upload/imp
 import { ImportAuditFilterPanel } from "@/features/kompen-respon-hub/log-upload/import-audit-filter-panel";
 import { ImportAuditRetentionPanel } from "@/features/kompen-respon-hub/log-upload/import-audit-retention-panel";
 import { ImportVersionList } from "@/features/kompen-respon-hub/list-file/import-version-list";
+import { WarningLetterArtifactList } from "@/features/kompen-respon-hub/list-file/warning-letter-artifact-list";
 import { ActiveStudentImportList } from "@/features/kompen-respon-hub/list-file/active-student-import-list";
 import { RecycleBinPanel } from "@/features/kompen-respon-hub/list-file/recycle-bin-panel";
 import { ActivityFilterPanel, ActivityLogTable, ActivityRetentionPanel } from "@/features/kompen-respon-hub/riwayat-aktivitas/activity-panel";
@@ -74,6 +75,7 @@ export default function KompenResponHubIndex({
     activeImportVersions,
     activeStudentImportVersions,
     activeStudentImportReferences,
+    warningLetterArtifacts,
     recycledImportVersions,
     recycledActiveStudentImportVersions,
     warnings,
@@ -84,7 +86,6 @@ export default function KompenResponHubIndex({
     importAuditRetentionDays,
     workbookRecycleBinRetentionDays,
     cutoffs,
-    managedPeriodHasActiveWarnings,
     activeImportTasks,
     exportTasks,
     exportStalledAfterMinutes,
@@ -458,6 +459,7 @@ export default function KompenResponHubIndex({
                                     "Pilih satu workbook Kompen dan Respon untuk setiap periode yang ingin ditampilkan; beberapa periode dapat digunakan bersamaan.",
                                     "Saat roster diganti, mahasiswa pada roster sebelumnya tidak lagi dapat masuk.",
                                     "Roster login dan workbook Kompen dan Respon dikelola mandiri. Sistem tidak memasangkan atau membandingkan periode maupun NIM di antara keduanya.",
+                                    "Finalisasi Surat Peringatan menghasilkan artifact XLSX resmi. Mulai koreksi mempertahankan file sebelumnya dengan status sedang dibenarkan sampai finalisasi ulang.",
                                 ]}
                             />
                             {activeStudentImportVersions !== null && activeStudentImportReferences !== null ? (
@@ -476,6 +478,9 @@ export default function KompenResponHubIndex({
                                     Belum ada workbook yang siap dipilih. Upload dokumen terlebih dahulu.
                                 </div>
                             )}
+                            {warningLetterArtifacts !== null ? (
+                                <WarningLetterArtifactList data={warningLetterArtifacts} />
+                            ) : null}
                             {recycledImportVersions !== null &&
                             recycledActiveStudentImportVersions !== null &&
                             workbookRecycleBinRetentionDays !== null ? (
@@ -503,9 +508,6 @@ export default function KompenResponHubIndex({
                                 warnings={warnings}
                                 warningCandidates={warningCandidates}
                                 rolledBackWarnings={rolledBackWarnings}
-                                managedPeriodHasActiveWarnings={
-                                    managedPeriodHasActiveWarnings
-                                }
                                 selectedWarning={selectedWarning}
                                 onSelectWarning={setSelectedWarning}
                                 onCloseWarning={() => setSelectedWarning(null)}

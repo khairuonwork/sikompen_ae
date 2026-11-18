@@ -47,11 +47,11 @@ class KompenResponHubActivityLogResource extends JsonResource
         }
 
         if (in_array($this->subject_type, ['import', 'import_task'], true)) {
-            return 'Workbook: '.($this->subject_name ?? $this->metadataFilename() ?? 'Tidak diketahui');
+            return 'Workbook: '.$this->workbookLabel();
         }
 
         if (in_array($this->subject_type, ['active_student_import', 'active_student_import_task'], true)) {
-            return 'Daftar mahasiswa aktif: '.($this->subject_name ?? $this->metadataFilename() ?? 'Tidak diketahui');
+            return 'Daftar mahasiswa aktif: '.$this->workbookLabel();
         }
 
         if ($this->subject_type === 'export') {
@@ -140,7 +140,36 @@ class KompenResponHubActivityLogResource extends JsonResource
 
     private function metadataFilename(): ?string
     {
-        return $this->metadataValue('original_filename');
+        return $this->metadataValue('original_filename') ?? $this->metadataValue('display_filename');
+    }
+
+    private function workbookLabel(): string
+    {
+        return $this->subject_name
+            ?? $this->metadataFilename()
+            ?? $this->stateFilename()
+            ?? ($this->subject_reference === null
+                ? 'Arsip workbook'
+                : "Arsip workbook #{$this->subject_reference}");
+    }
+
+    private function stateFilename(): ?string
+    {
+        foreach ([$this->after_state, $this->before_state] as $state) {
+            if (! is_array($state)) {
+                continue;
+            }
+
+            foreach (['display_filename', 'original_filename'] as $key) {
+                $value = $state[$key] ?? null;
+
+                if (is_scalar($value) && filled((string) $value)) {
+                    return (string) $value;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function metadataValue(string $key): ?string

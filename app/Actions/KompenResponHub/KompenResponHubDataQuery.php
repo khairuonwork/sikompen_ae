@@ -359,7 +359,7 @@ class KompenResponHubDataQuery
     {
         $query = KompenResponHubStudent::query()
             ->fromActiveImportReference()
-            ->with(['progress', 'summaryOverride', 'latestWarning', 'cutoff']);
+            ->with(['progress', 'summaryOverride', 'latestWarning', 'cutoff.warningLetterArtifact']);
 
         foreach (['nim', 'kelas', 'periode_semester', 'tingkat'] as $field) {
             if (filled($filters[$field] ?? null)) {
@@ -403,7 +403,9 @@ class KompenResponHubDataQuery
     {
         $query = KompenResponHubDetail::query()
             ->with(['student.progress', 'student.summaryOverride', 'override'])
-            ->whereHas('student', fn (Builder $studentQuery): Builder => $studentQuery->fromActiveImportReference())
+            ->whereHas('student', function (Builder $studentQuery): void {
+                $studentQuery->whereHas('importBatch.activeReference');
+            })
             ->where(function (Builder $query): void {
                 $query->where('jam_kompensasi', '>', 0)
                     ->orWhere('jam_responsi', '>', 0);

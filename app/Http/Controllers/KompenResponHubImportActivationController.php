@@ -63,11 +63,17 @@ class KompenResponHubImportActivationController extends Controller
             ],
             metadata: [
                 'previous_import' => $activatedVersion['previous_import'],
+                'class_moves' => $activatedVersion['class_moves'],
+                'detail_override_reconciliation' => $activatedVersion['detail_override_reconciliation'],
             ],
         );
 
+        $classMoveSummary = $activatedVersion['class_moves'] === []
+            ? ''
+            : ' '.count($activatedVersion['class_moves']).' mahasiswa dipindahkan ke kelas terbaru sambil mempertahankan progres dan riwayat SP.';
+
         return to_route('admin.kompen-respon.index', ['tab' => 'files'])
-            ->with('success', "Versi {$activatedVersion['original_filename']} kini menjadi sumber data aktif untuk periode {$activatedVersion['periode_semester']}.");
+            ->with('success', "Versi {$activatedVersion['original_filename']} kini menjadi sumber data aktif untuk periode {$activatedVersion['periode_semester']}.{$classMoveSummary}");
     }
 
     public function destroy(

@@ -1,17 +1,24 @@
 <?php
 
+use App\Actions\KompenResponHub\ImportKompenResponHubWorkbook;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
+use App\Http\Resources\KompenResponHubActivityLogResource;
 use App\Models\KompenResponHubActiveImport;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
+use App\Models\KompenResponHubDetailOverride;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubStudentProgress;
+use App\Models\KompenResponHubStudentSummaryOverride;
 use App\Models\KompenResponHubWarningLetter;
+use App\Models\KompenResponHubWarningLetterArtifact;
 use App\Models\KompenResponHubWarningPeriodSelection;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Storage;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 test('an admin can set a cutoff five minutes from the current Asia Jakarta time', function () {
     $this->travelTo(CarbonImmutable::create(2026, 10, 5, 10, 0, 0, 'Asia/Jakarta'));
@@ -124,7 +131,7 @@ test('a passed cutoff shows outstanding students as candidates without exposing 
 
     $this->getJson('/api/kompen-respon/students')
         ->assertOk()
-        ->assertJsonPath('data.0.progress_status', 'none')
+        ->assertJsonPath('data.0.progress_status', 'awaiting_finalization')
         ->assertJsonPath('data.0.has_active_warning', false);
 });
 
@@ -330,7 +337,7 @@ test('updating a cutoff recalculates warning classification without cancelling a
             ->exists())->toBeTrue();
 });
 
-test('completed progress resolves an existing warning without deleting its trace', function () {
+test('an admin cannot change progress while the SP period is final', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
     $cutoff = KompenResponHubPeriodCutoff::create([
@@ -348,21 +355,20 @@ test('completed progress resolves an existing warning without deleting its trace
             'kompensasi_dikerjakan_jam' => 1.5,
             'responsi_dikerjakan_jam' => 2,
             'last_worked_at' => now('Asia/Jakarta')->format('Y-m-d\\TH:i'),
-            'reason' => 'Seluruh jam Kompen dan Responsi telah diselesaikan.',
+            'reason' => 'Perubahan setelah finalisasi harus ditolak.',
         ])
-        ->assertRedirect();
+        ->assertUnprocessable();
 
     expect(KompenResponHubWarningLetter::query()->sole())
-        ->resolution->toBe('completed')
-        ->and(KompenResponHubWarningLetter::query()->sole()->snapshot['sisa_hutang_jam'])->toBe(0)
-        ->and(KompenResponHubActivityLog::query()->where('event_type', 'warning.resolution_updated')->exists())->toBeTrue();
+        ->resolution->toBe('outstanding')
+        ->and(KompenResponHubStudentProgress::query()->doesntExist())->toBeTrue();
 
     $this->getJson('/api/kompen-respon/students')
         ->assertOk()
-        ->assertJsonPath('data.0.progress_status', 'completed');
+        ->assertJsonPath('data.0.progress_status', 'warning_active');
 });
 
-test('students have no status before the cutoff has passed', function () {
+test('students with outstanding debt show the in-progress status before the cutoff has passed', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
     $cutoff = KompenResponHubPeriodCutoff::create([
@@ -373,10 +379,69 @@ test('students have no status before the cutoff has passed', function () {
 
     $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/students')
         ->assertOk()
-        ->assertJsonPath('data.0.progress_status', 'none');
+        ->assertJsonPath('data.0.progress_status', 'in_progress');
+});
+
+test('students with outstanding debt show that their cutoff has not been configured', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    createLifecycleStudent();
+
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/students')
+        ->assertOk()
+        ->assertJsonPath('data.0.progress_status', 'cutoff_unset');
+});
+
+test('a student with no Kompen or Responsi obligation is marked as having no obligation', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $student->update([
+        'total_kompensasi_jam' => 0,
+        'total_responsi_jam' => 0,
+        'total_hutang_jam' => 0,
+        'sisa_hutang_jam' => 0,
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->getJson('/api/kompen-respon/students')
+        ->assertOk()
+        ->assertJsonPath('data.0.progress_status', 'no_obligation');
+});
+
+test('a student with completed work is marked as complete before the cutoff', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    KompenResponHubStudentProgress::create([
+        'current_student_id' => $student->id,
+        'nim' => $student->nim,
+        'periode_semester' => $student->periode_semester,
+        'kelas' => $student->kelas,
+        'kompensasi_dikerjakan_jam' => 1.5,
+        'responsi_dikerjakan_jam' => 2,
+        'reason' => 'Seluruh kewajiban telah selesai.',
+    ]);
+
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/students')
+        ->assertOk()
+        ->assertJsonPath('data.0.progress_status', 'completed');
+});
+
+test('a finalized period with outstanding debt but no active SP is marked for review', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+        'closed_at' => now(),
+    ]);
+
+    $this->actingAs($admin, 'admin')->getJson('/api/kompen-respon/students')
+        ->assertOk()
+        ->assertJsonPath('data.0.progress_status', 'needs_review');
 });
 
 test('an admin can finalize a passed cutoff into an issued SP', function () {
+    Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
     $cutoff = KompenResponHubPeriodCutoff::create([
@@ -394,9 +459,144 @@ test('an admin can finalize a passed cutoff into an issued SP', function () {
         ->and(KompenResponHubWarningLetter::query()->sole()->issued_at)->not->toBeNull()
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'warning.issued')->exists())->toBeTrue()
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'period.finalized')->exists())->toBeTrue();
+
+    $artifact = KompenResponHubWarningLetterArtifact::query()->sole();
+    Storage::disk('local')->assertExists($artifact->stored_path);
+
+    expect($artifact)
+        ->status->toBe(KompenResponHubWarningLetterArtifact::StatusFinalized)
+        ->revision->toBe(1)
+        ->display_filename->toBe('2026-2027_Gasal_list_surat_peringatan.xlsx')
+        ->row_count->toBe(1)
+        ->and($artifact->source_provenance['kompen_respon_workbook']['import_id'])->toBe($student->kompen_respon_hub_import_id)
+        ->and($artifact->source_provenance['kompen_respon_workbook']['display_filename'])->toBe('source.xlsx')
+        ->and($cutoff->fresh()->closed_at)->not->toBeNull();
+
+    $worksheet = IOFactory::load(Storage::disk('local')->path($artifact->stored_path))->getActiveSheet();
+    expect($worksheet->getCell('A5')->getValue())
+        ->toBe($student->nim)
+        ->and($worksheet->getCell('B5')->getValue())->toBe($student->nama_mahasiswa);
 });
 
-test('an admin can roll back an SP without exposing it through the student API', function () {
+test('an admin cannot finalize a period that is not the selected warning period', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $selectedCutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+    $otherCutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => '2026/2027 Genap',
+        'deadline_at' => now()->addWeek(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+    KompenResponHubWarningPeriodSelection::query()->create([
+        'selection_key' => KompenResponHubWarningPeriodSelection::ManagedWarningPeriodSelectionKey,
+        'sikompen_period_cutoff_id' => $otherCutoff->id,
+        'selected_at' => now(),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/cutoffs/{$selectedCutoff->id}/finalize")
+        ->assertUnprocessable();
+
+    expect($selectedCutoff->fresh()->closed_at)->toBeNull()
+        ->and(KompenResponHubWarningLetterArtifact::query()->doesntExist())->toBeTrue();
+});
+
+test('an admin must explicitly confirm a finalization with no recipients', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $student->update([
+        'total_kompensasi_jam' => 0,
+        'total_responsi_jam' => 0,
+        'total_hutang_jam' => 0,
+        'sisa_hutang_jam' => 0,
+    ]);
+    $cutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize")
+        ->assertUnprocessable();
+
+    expect(KompenResponHubWarningLetterArtifact::query()->doesntExist())->toBeTrue()
+        ->and($cutoff->fresh()->closed_at)->toBeNull();
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize", [
+            'confirm_empty_finalization' => true,
+        ])
+        ->assertRedirect();
+
+    expect(KompenResponHubWarningLetterArtifact::query()->sole()->row_count)->toBe(0)
+        ->and($cutoff->fresh()->closed_at)->not->toBeNull();
+});
+
+test('an activity log falls back to an archive workbook label instead of unknown', function () {
+    $activity = KompenResponHubActivityLog::query()->create([
+        'event_type' => 'import.completed',
+        'subject_type' => 'import',
+        'subject_reference' => '91',
+        'actor_type' => 'system',
+        'metadata' => [],
+        'occurred_at' => now(),
+    ]);
+
+    expect(KompenResponHubActivityLogResource::make($activity)->resolve(request())['subject_label'])
+        ->toBe('Workbook: Arsip workbook #91');
+});
+
+test('an admin can download a finalized SP artifact from List File', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $cutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize")
+        ->assertRedirect();
+
+    $artifact = KompenResponHubWarningLetterArtifact::query()->sole();
+
+    $this->actingAs($admin, 'admin')
+        ->get("/admin/kompen-respon/warning-artifacts/{$artifact->id}/download")
+        ->assertOk()
+        ->assertDownload('2026-2027_Gasal_list_surat_peringatan.xlsx');
+});
+
+test('a corrupted SP artifact is not downloaded', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $cutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize")
+        ->assertRedirect();
+
+    $artifact = KompenResponHubWarningLetterArtifact::query()->sole();
+    Storage::disk('local')->put($artifact->stored_path, 'bukan file artifact asli');
+
+    $this->actingAs($admin, 'admin')
+        ->get("/admin/kompen-respon/warning-artifacts/{$artifact->id}/download")
+        ->assertConflict();
+});
+
+test('an admin cannot roll back one SP while the period is final', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
     $cutoff = KompenResponHubPeriodCutoff::create([
@@ -415,36 +615,16 @@ test('an admin can roll back an SP without exposing it through the student API',
         ->delete("/admin/kompen-respon/warnings/{$warning->id}", [
             'reason' => 'Data surat perlu diperbaiki sebelum diterbitkan.',
         ])
-        ->assertRedirect();
+        ->assertUnprocessable();
 
     expect($warning->fresh()->letter_status)
-        ->toBe(KompenResponHubWarningLetter::LetterStatusCancelled)
-        ->and(app(KompenResponHubDataQuery::class)->warnings([])->count())
-        ->toBe(0)
-        ->and(app(KompenResponHubDataQuery::class)->rolledBackWarnings([])->sole()->id)
-        ->toBe($warning->id)
-        ->and(KompenResponHubActivityLog::query()
-            ->where('event_type', 'warning.rolled_back')
-            ->where('subject_name', $student->nama_mahasiswa)
-            ->exists())
-        ->toBeTrue();
+        ->toBe(KompenResponHubWarningLetter::LetterStatusIssued)
+        ->and(app(KompenResponHubDataQuery::class)->warnings([])->count())->toBe(1);
 
     $this->getJson('/api/kompen-respon/students')
         ->assertOk()
-        ->assertJsonPath('data.0.progress_status', 'none')
-        ->assertJsonPath('data.0.has_active_warning', false)
-        ->assertJsonPath('data.0.warning', null);
-
-    $this->actingAs($admin, 'admin')
-        ->delete("/admin/kompen-respon/warnings/{$warning->id}", [
-            'reason' => 'Tidak boleh melakukan rollback dua kali.',
-        ])
-        ->assertUnprocessable();
-
-    expect(KompenResponHubWarningLetter::query()->count())->toBe(1)
-        ->and($warning->fresh()->letter_status)
-        ->toBe(KompenResponHubWarningLetter::LetterStatusCancelled)
-        ->and($warning->fresh()->cancelled_at)->not->toBeNull();
+        ->assertJsonPath('data.0.progress_status', 'warning_active')
+        ->assertJsonPath('data.0.has_active_warning', true);
 });
 
 test('an admin can cancel a period finalization and preserve its audit trail', function () {
@@ -478,7 +658,7 @@ test('an admin can cancel a period finalization and preserve its audit trail', f
             'reason' => 'Data workbook periode ini perlu diperbaiki.',
         ])
         ->assertRedirect()
-        ->assertSessionHas('success', 'Finalisasi SP dibatalkan untuk 1 mahasiswa. Riwayat tetap tersimpan dan data tidak lagi tersedia sebagai SP aktif pada API.');
+        ->assertSessionHas('success', 'Koreksi dibuka untuk 1 mahasiswa. Artifact sebelumnya tetap tersimpan di List File dengan status sedang dibenarkan dan tidak lagi tersedia pada API.');
 
     expect($warning->fresh()->letter_status)
         ->toBe(KompenResponHubWarningLetter::LetterStatusCancelled)
@@ -494,9 +674,14 @@ test('an admin can cancel a period finalization and preserve its audit trail', f
             ->exists())
         ->toBeTrue();
 
+    expect(KompenResponHubWarningLetterArtifact::query()->sole())
+        ->status->toBe(KompenResponHubWarningLetterArtifact::StatusRevising)
+        ->and($cutoff->fresh()->closed_at)->toBeNull();
+
     $this->getJson('/api/kompen-respon/students')
         ->assertOk()
-        ->assertJsonPath('data.0.has_active_warning', false);
+        ->assertJsonPath('data.0.has_active_warning', false)
+        ->assertJsonPath('data.0.progress_status', 'revising');
 
     $this->actingAs($admin, 'admin')
         ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize")
@@ -504,7 +689,10 @@ test('an admin can cancel a period finalization and preserve its audit trail', f
 
     expect($warning->fresh()->letter_status)
         ->toBe(KompenResponHubWarningLetter::LetterStatusIssued)
-        ->and($warning->fresh()->cancellation_source)->toBeNull();
+        ->and($warning->fresh()->cancellation_source)->toBeNull()
+        ->and(KompenResponHubWarningLetterArtifact::query()->count())->toBe(2)
+        ->and(KompenResponHubWarningLetterArtifact::query()->where('revision', 1)->sole()->status)->toBe(KompenResponHubWarningLetterArtifact::StatusSuperseded)
+        ->and(KompenResponHubWarningLetterArtifact::query()->where('revision', 2)->sole()->status)->toBe(KompenResponHubWarningLetterArtifact::StatusFinalized);
 });
 
 test('the warning list exposes only active fixed SP records with outstanding debt', function () {
@@ -544,6 +732,7 @@ test('an outstanding fixed issued SP is exposed as an active SP student status',
         'periode_semester' => $student->periode_semester,
         'deadline_at' => now()->subMinute(),
         'timezone' => 'Asia/Jakarta',
+        'closed_at' => now(),
     ]);
 
     KompenResponHubWarningLetter::create([
@@ -567,7 +756,7 @@ test('an outstanding fixed issued SP is exposed as an active SP student status',
         ->assertJsonMissing(['classification' => 'fixed']);
 });
 
-test('an admin can finalize an elapsed period and still correct its progress', function () {
+test('an admin can correct progress after starting a period correction', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     $student = createLifecycleStudent();
     $cutoff = KompenResponHubPeriodCutoff::create([
@@ -587,11 +776,145 @@ test('an admin can finalize an elapsed period and still correct its progress', f
             'kompensasi_dikerjakan_jam' => 1,
             'responsi_dikerjakan_jam' => 0,
             'last_worked_at' => now('Asia/Jakarta')->format('Y-m-d\\TH:i'),
-            'reason' => 'Koreksi diperbolehkan setelah periode difiksasi.',
+            'reason' => 'Koreksi sebelum membuka periode harus ditolak.',
+        ])
+        ->assertUnprocessable();
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalization", [
+            'reason' => 'Data progres mahasiswa perlu diperbaiki.',
+        ])
+        ->assertRedirect();
+
+    $this->actingAs($admin, 'admin')
+        ->put("/admin/kompen-respon/students/{$student->id}/progress", [
+            'kompensasi_dikerjakan_jam' => 1,
+            'responsi_dikerjakan_jam' => 0,
+            'last_worked_at' => now('Asia/Jakarta')->format('Y-m-d\\TH:i'),
+            'reason' => 'Koreksi diperbolehkan setelah periode dibuka kembali.',
         ])
         ->assertRedirect();
 
     expect(KompenResponHubStudentProgress::query()->sole()->kompensasi_dikerjakan_jam)->toBe('1.0000');
+});
+
+test('replacing a workbook carries lifecycle data when a student changes class', function () {
+    $student = createLifecycleStudent();
+    $progress = KompenResponHubStudentProgress::query()->create([
+        'current_student_id' => $student->id,
+        'nim' => $student->nim,
+        'periode_semester' => $student->periode_semester,
+        'kelas' => $student->kelas,
+        'kompensasi_dikerjakan_jam' => 1,
+        'responsi_dikerjakan_jam' => 0,
+        'reason' => 'Progres tetap dibawa saat pindah kelas.',
+    ]);
+    $summaryOverride = KompenResponHubStudentSummaryOverride::query()->create([
+        'current_student_id' => $student->id,
+        'nim' => $student->nim,
+        'periode_semester' => $student->periode_semester,
+        'kelas' => $student->kelas,
+        'total_kompensasi_jam' => 2,
+        'total_responsi_jam' => 2,
+        'reason' => 'Koreksi total tetap dibawa saat pindah kelas.',
+    ]);
+    $warning = KompenResponHubWarningLetter::query()->create([
+        'current_student_id' => $student->id,
+        'nim' => $student->nim,
+        'periode_semester' => $student->periode_semester,
+        'kelas' => $student->kelas,
+        'nama_mahasiswa' => $student->nama_mahasiswa,
+        'classification' => 'temporary',
+        'letter_status' => KompenResponHubWarningLetter::LetterStatusDraft,
+        'resolution' => 'outstanding',
+        'snapshot' => ['sisa_hutang_jam' => 3.5],
+    ]);
+    $replacementImport = KompenResponHubImport::query()->create([
+        'periode_semester' => $student->periode_semester,
+        'original_filename' => 'replacement.xlsx',
+        'stored_path' => 'kompen-respon-hub/imports/replacement.xlsx',
+        'file_hash' => str_repeat('b', 64),
+        'class_count' => 1,
+        'student_count' => 1,
+        'detail_count' => 0,
+        'imported_at' => now(),
+    ]);
+    $attributes = $student->only([
+        'nim',
+        'nama_mahasiswa',
+        'tingkat',
+        'total_jam_terlambat',
+        'total_jam_sakit',
+        'total_jam_izin',
+        'total_jam_bolos',
+        'total_kompensasi_jam',
+        'total_responsi_jam',
+        'total_hutang_jam',
+        'kompensasi_dikerjakan_jam',
+        'sisa_hutang_jam',
+    ]);
+    $attributes['kelas'] = '1AEB1';
+
+    KompenResponHubStudent::query()
+        ->where('periode_semester', $student->periode_semester)
+        ->delete();
+
+    app(ImportKompenResponHubWorkbook::class)->replaceActiveData(
+        [
+            'preview' => [
+                'periode_semester' => $student->periode_semester,
+                'classes' => ['1AEB1'],
+                'class_count' => 1,
+                'student_count' => 1,
+                'detail_count' => 0,
+            ],
+            'students' => [$attributes],
+            'details' => [],
+        ],
+        $student->periode_semester,
+        ['1AEB1' => $replacementImport->id],
+    );
+
+    $replacementStudent = KompenResponHubStudent::query()->sole();
+
+    expect($replacementStudent->kelas)->toBe('1AEB1')
+        ->and($progress->fresh()->kelas)->toBe('1AEB1')
+        ->and($progress->fresh()->current_student_id)->toBe($replacementStudent->id)
+        ->and($summaryOverride->fresh()->kelas)->toBe('1AEB1')
+        ->and($summaryOverride->fresh()->current_student_id)->toBe($replacementStudent->id)
+        ->and($warning->fresh()->kelas)->toBe('1AEB1')
+        ->and($warning->fresh()->current_student_id)->toBe($replacementStudent->id);
+});
+
+test('an admin can remove a detail correction before replacing a workbook', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $detail = KompenResponHubDetail::query()->create([
+        'kompen_respon_hub_student_id' => $student->id,
+        'source_key' => 'detail-source-key',
+        'tanggal' => now()->toDateString(),
+        'mata_kuliah' => 'Pemrograman Web',
+        'nama_dosen' => 'Dosen Pengampu',
+        'jenis_pertemuan' => 'Teori',
+        'presensi' => 'Terlambat',
+        'menit_keterlambatan' => 20,
+        'jam_kompensasi' => 0.5,
+        'jam_responsi' => 0,
+    ]);
+    KompenResponHubDetailOverride::query()->create([
+        'source_key' => $detail->source_key,
+        'override_values' => ['menit_keterlambatan' => 10],
+        'reason' => 'Koreksi hasil verifikasi.',
+        'updated_by_admin_id' => $admin->id,
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/details/{$detail->id}/override")
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Koreksi Detail Kompen dihapus. Nilai kembali mengikuti workbook aktif.');
+
+    expect(KompenResponHubDetailOverride::query()->doesntExist())->toBeTrue()
+        ->and(KompenResponHubActivityLog::query()->where('event_type', 'detail.override_removed')->exists())->toBeTrue();
 });
 
 function createLifecycleStudent(): KompenResponHubStudent

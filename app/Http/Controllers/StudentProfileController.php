@@ -73,9 +73,14 @@ class StudentProfileController extends Controller
             $missing[] = "Belum ada catatan Kompen dan Respon untuk NIM ini pada periode SP {$warningPeriod}.";
         }
 
-        $student = $studentRecords->first();
-        $studentName = $student?->nama_mahasiswa ?? $rosterStudent?->nama_mahasiswa;
-        $studentClass = $student?->kelas ?? $rosterStudent?->kelas;
+        if ($studentRecords->isNotEmpty()) {
+            $student = $studentRecords->firstOrFail();
+            $studentName = $student->nama_mahasiswa;
+            $studentClass = $student->kelas;
+        } else {
+            $studentName = $rosterStudent?->nama_mahasiswa;
+            $studentClass = $rosterStudent?->kelas;
+        }
 
         if (blank($studentName)) {
             $missing[] = 'Nama mahasiswa belum tersedia pada roster aktif maupun catatan Kompen dan Respon.';

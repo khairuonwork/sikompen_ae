@@ -102,7 +102,7 @@ test('an admin cannot release an active workbook while its period has an active 
     $this->actingAs($admin, 'admin')
         ->delete("/admin/kompen-respon/imports/{$import->id}/activation")
         ->assertRedirect('/admin?tab=files')
-        ->assertSessionHas('error', 'Workbook tidak dapat dilepas karena periode ini masih memiliki SP aktif. Rollback atau selesaikan SP terlebih dahulu.');
+        ->assertSessionHas('error', 'Workbook tidak dapat dilepas karena periode ini masih memiliki SP aktif. Mulai koreksi periode SP terlebih dahulu.');
 
     expect(KompenResponHubActiveImport::query()
         ->where('periode_semester', $import->periode_semester)
@@ -111,6 +111,26 @@ test('an admin cannot release an active workbook while its period has an active 
         ->and(KompenResponHubImportAuditLog::query()
             ->where('event_type', KompenResponHubImportAuditLog::EVENT_RELEASE)
             ->doesntExist())->toBeTrue();
+});
+
+test('an admin cannot release an active workbook after its SP period is finalized', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $import = activeWorkbookImport();
+    KompenResponHubPeriodCutoff::query()->create([
+        'periode_semester' => $import->periode_semester,
+        'deadline_at' => now()->subDay(),
+        'timezone' => 'Asia/Jakarta',
+        'closed_at' => now(),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/imports/{$import->id}/activation")
+        ->assertRedirect('/admin?tab=files')
+        ->assertSessionHas('error', 'Workbook tidak dapat dilepas karena periode SP sudah difinalisasi. Mulai koreksi periode SP terlebih dahulu.');
+
+    expect(KompenResponHubActiveImport::query()
+        ->where('kompen_respon_hub_import_id', $import->id)
+        ->exists())->toBeTrue();
 });
 
 test('releasing a workbook hides its operational records while preserving the historical rows', function (): void {

@@ -12,6 +12,7 @@ use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubDetail;
+use App\Models\KompenResponHubDetailOverride;
 use App\Models\KompenResponHubExportTask;
 use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
@@ -531,6 +532,27 @@ test('an admin can configure activity log retention and expired logs are purged'
 
     $this->assertModelMissing($expiredLog);
     $this->assertModelExists($retainedLog);
+});
+
+test('the activity log purge preserves permanent SP lifecycle audit records', function () {
+    $expiredLifecycleLog = KompenResponHubActivityLog::create([
+        'event_type' => 'period.finalized',
+        'subject_type' => 'period_cutoff',
+        'actor_type' => 'admin',
+        'occurred_at' => now()->subDays(31),
+    ]);
+    $expiredOperationalLog = KompenResponHubActivityLog::create([
+        'event_type' => 'progress.updated',
+        'subject_type' => 'student_progress',
+        'actor_type' => 'admin',
+        'occurred_at' => now()->subDays(31),
+    ]);
+    KompenResponHubSystemSetting::current()->update(['activity_log_retention_days' => 30]);
+
+    $this->artisan('sikompen:purge-activity-logs')->assertSuccessful();
+
+    $this->assertModelExists($expiredLifecycleLog);
+    $this->assertModelMissing($expiredOperationalLog);
 });
 
 test('an admin can configure upload log retention and expired upload logs are purged', function () {
@@ -1131,6 +1153,46 @@ test('an admin can switch the active source to a chosen prior workbook version',
         ->and(KompenResponHubActiveImport::query()->sole()->kompen_respon_hub_import_id)->toBe($incorrectImport->id)
         ->and(KompenResponHubImportAuditLog::query()->latest('id')->value('event_type'))->toBe(KompenResponHubImportAuditLog::EVENT_ACTIVATE)
         ->and(KompenResponHubActivityLog::query()->where('event_type', 'import.version_activated')->exists())->toBeTrue();
+});
+
+test('an admin must resolve an unmatched detail correction before activating a changed workbook', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent('versi-awal.xlsx', workbookContents()),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $initialImport = KompenResponHubImport::query()->sole();
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/imports/{$initialImport->id}/activate")
+        ->assertRedirect('/admin?tab=files');
+
+    $detail = KompenResponHubDetail::query()->sole();
+    KompenResponHubDetailOverride::query()->create([
+        'source_key' => $detail->source_key,
+        'override_values' => ['menit_keterlambatan' => 10],
+        'reason' => 'Koreksi sebelum sumber diperbarui.',
+        'updated_by_admin_id' => $admin->id,
+    ]);
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent(
+            'versi-berubah.xlsx',
+            workbookContents(compensationHours: 1.75, detailCompensationHours: 1.75),
+        ),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $changedImport = KompenResponHubImport::query()->latest('id')->firstOrFail();
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/imports/{$changedImport->id}/activate")
+        ->assertRedirect('/admin?tab=files')
+        ->assertSessionHas('error', 'Aktivasi dibatalkan karena 1 koreksi Detail Kompen tidak lagi cocok dengan workbook baru. Hapus atau selesaikan koreksi tersebut pada workbook aktif, lalu terapkan ulang setelah workbook baru digunakan.');
+
+    expect(KompenResponHubActiveImport::query()->sole()->kompen_respon_hub_import_id)
+        ->toBe($initialImport->id);
 });
 
 test('an administrator can retry selecting a workbook without hitting the activation rate limit', function () {

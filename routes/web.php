@@ -14,6 +14,7 @@ use App\Http\Controllers\KompenResponHubImportController;
 use App\Http\Controllers\KompenResponHubImportTaskController;
 use App\Http\Controllers\KompenResponHubLandingController;
 use App\Http\Controllers\KompenResponHubLifecycleController;
+use App\Http\Controllers\KompenResponHubWarningLetterArtifactController;
 use App\Http\Controllers\StudentAuthenticationController;
 use App\Http\Controllers\StudentPasswordController;
 use App\Http\Controllers\StudentPasswordResetController;
@@ -167,6 +168,8 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
     Route::delete('kompen-respon/cutoffs/{cutoff}/finalization', [KompenResponHubLifecycleController::class, 'rollbackCutoffFinalization'])
         ->middleware('throttle:5,15')
         ->name('kompen-respon.cutoffs.finalization.destroy');
+    Route::get('kompen-respon/warning-artifacts/{artifact}/download', [KompenResponHubWarningLetterArtifactController::class, 'download'])
+        ->name('kompen-respon.warning-artifacts.download');
     Route::put('kompen-respon/students/{student}/progress', [KompenResponHubLifecycleController::class, 'storeProgress'])
         ->middleware('throttle:30,1')
         ->name('kompen-respon.students.progress.store');
@@ -176,6 +179,9 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
     Route::put('kompen-respon/details/{detail}/override', [KompenResponHubLifecycleController::class, 'storeDetailOverride'])
         ->middleware('throttle:30,1')
         ->name('kompen-respon.details.override.store');
+    Route::delete('kompen-respon/details/{detail}/override', [KompenResponHubLifecycleController::class, 'destroyDetailOverride'])
+        ->middleware('throttle:20,1')
+        ->name('kompen-respon.details.override.destroy');
     Route::put('kompen-respon/warnings/{warning}', [KompenResponHubLifecycleController::class, 'updateWarning'])
         ->middleware('throttle:20,1')
         ->name('kompen-respon.warnings.update');
