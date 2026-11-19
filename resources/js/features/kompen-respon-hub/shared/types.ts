@@ -26,7 +26,6 @@ export type Student = {
         | "cutoff_unset"
         | "in_progress"
         | "awaiting_finalization"
-        | "revising"
         | "warning_active"
         | "needs_review";
     last_worked_at: string | null;

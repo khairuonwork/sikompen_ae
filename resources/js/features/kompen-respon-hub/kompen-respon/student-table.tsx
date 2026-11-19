@@ -152,7 +152,6 @@ export function ProgressStatusBadge({
         cutoff_unset: "Cutoff belum diatur",
         in_progress: "Masa pengerjaan",
         awaiting_finalization: "Menunggu finalisasi",
-        revising: "Sedang dikoreksi",
         warning_active: "SP aktif",
         needs_review: "Perlu ditinjau",
     };
@@ -162,7 +161,6 @@ export function ProgressStatusBadge({
         cutoff_unset: "bg-slate-100 text-slate-700",
         in_progress: "bg-sky-100 text-sky-800",
         awaiting_finalization: "bg-amber-100 text-amber-800",
-        revising: "bg-amber-100 text-amber-800",
         warning_active: "bg-rose-100 text-rose-800",
         needs_review: "bg-violet-100 text-violet-800",
     };

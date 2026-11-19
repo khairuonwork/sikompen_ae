@@ -66,10 +66,6 @@ class KompenResponHubStudentResource extends JsonResource
             return 'in_progress';
         }
 
-        if ($this->cutoff->warningLetterArtifact?->status === 'revising') {
-            return 'revising';
-        }
-
         if ($this->cutoff->closed_at === null) {
             return 'awaiting_finalization';
         }

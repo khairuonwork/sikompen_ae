@@ -232,24 +232,6 @@ class KompenResponHubLifecycleController extends Controller
                 $sourceImport = KompenResponHubImport::query()->find($activeImport->kompen_respon_hub_import_id);
                 abort_unless($sourceImport instanceof KompenResponHubImport, 422, 'Periode tidak dapat difinalisasi karena workbook sumber tidak tersedia.');
 
-                $candidateCount = $this->dataQuery
-                    ->warningCandidates(['periode_semester' => $finalizedCutoff->periode_semester])
-                    ->count();
-                $pendingWarningCount = KompenResponHubWarningLetter::query()
-                    ->where('cutoff_id', $finalizedCutoff->id)
-                    ->where('classification', '!=', 'fixed')
-                    ->whereIn('letter_status', [
-                        KompenResponHubWarningLetter::LetterStatusDraft,
-                        KompenResponHubWarningLetter::LetterStatusIssued,
-                    ])
-                    ->count();
-                $recipientCount = $candidateCount + $pendingWarningCount;
-                abort_if(
-                    $recipientCount === 0 && ! $request->boolean('confirm_empty_finalization'),
-                    422,
-                    'Tidak ada mahasiswa yang akan menerima SP. Konfirmasikan finalisasi tanpa penerima untuk membuat artifact resmi kosong.',
-                );
-
                 $rosterReference = KompenResponHubActiveStudentImportReference::query()
                     ->with('importBatch')
                     ->where('selection_key', KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey)
@@ -279,6 +261,12 @@ class KompenResponHubLifecycleController extends Controller
                     ->orderBy('kelas')
                     ->orderBy('nim')
                     ->get();
+                $recipientCount = $warnings->count();
+                abort_if(
+                    $recipientCount === 0 && ! $request->boolean('confirm_empty_finalization'),
+                    422,
+                    'Tidak ada mahasiswa yang akan menerima SP. Konfirmasikan finalisasi tanpa penerima untuk membuat artifact resmi kosong.',
+                );
                 $latestArtifact = KompenResponHubWarningLetterArtifact::query()
                     ->where('cutoff_id', $finalizedCutoff->id)
                     ->lockForUpdate()
@@ -344,7 +332,7 @@ class KompenResponHubLifecycleController extends Controller
                         'row_count' => $artifact->row_count,
                         'display_filename' => $artifact->display_filename,
                     ],
-                    'candidate_count' => $recipientCount,
+                    'recipient_count' => $recipientCount,
                     'selection_was_initialized' => $selectionWasInitialized,
                 ];
             });
@@ -378,7 +366,7 @@ class KompenResponHubLifecycleController extends Controller
             report($exception);
         }
 
-        $emptyFinalizationSummary = $result['candidate_count'] === 0
+        $emptyFinalizationSummary = $result['recipient_count'] === 0
             ? ' Tidak ada penerima SP; artifact XLSX resmi kosong dibuat sesuai konfirmasi.'
             : '';
 

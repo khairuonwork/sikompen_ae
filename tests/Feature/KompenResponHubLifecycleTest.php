@@ -719,7 +719,7 @@ test('an admin can cancel a period finalization and preserve its audit trail', f
     $this->getJson('/api/kompen-respon/students')
         ->assertOk()
         ->assertJsonPath('data.0.has_active_warning', false)
-        ->assertJsonPath('data.0.progress_status', 'revising');
+        ->assertJsonPath('data.0.progress_status', 'awaiting_finalization');
 
     $this->actingAs($admin, 'admin')
         ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize")
@@ -767,6 +767,13 @@ test('an admin can set a new cutoff after opening a finalized period for correct
         ->and($cutoff->fresh()->deadline_at->toIso8601String())->toBe($newDeadline->toIso8601String())
         ->and(KompenResponHubWarningLetterArtifact::query()->sole()->status)
         ->toBe(KompenResponHubWarningLetterArtifact::StatusRevising);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize")
+        ->assertRedirect();
+
+    expect(KompenResponHubWarningLetterArtifact::query()->where('revision', 2)->sole())
+        ->row_count->toBe(1);
 });
 
 test('the warning list exposes only active fixed SP records with outstanding debt', function () {
