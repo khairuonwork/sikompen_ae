@@ -62,12 +62,8 @@ class KompenResponHubStudentResource extends JsonResource
             return 'cutoff_unset';
         }
 
-        if (! $this->cutoff->deadline_at->isPast()) {
-            return 'in_progress';
-        }
-
         if ($this->cutoff->closed_at === null) {
-            return 'awaiting_finalization';
+            return $this->cutoff->deadline_at->isFuture() ? 'in_progress' : 'awaiting_finalization';
         }
 
         if ($this->hasActiveWarning()) {

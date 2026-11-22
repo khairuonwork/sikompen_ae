@@ -45,6 +45,12 @@ class KompenResponHubWarningLetter extends Model
 
     public const LetterStatusCancelled = 'cancelled';
 
+    public const ArtifactRecipientAttributes = [
+        'classification' => 'fixed',
+        'letter_status' => self::LetterStatusIssued,
+        'resolution' => 'outstanding',
+    ];
+
     public const CancellationSourceFinalizationRollback = 'period_finalization_rollback';
 
     public const CancellationSourceManualRollback = 'manual_rollback';

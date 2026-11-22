@@ -68,6 +68,7 @@ export default function KompenResponHubIndex({
     activityFilterOptions,
     warningPeriods,
     selectableWarningPeriods,
+    warningPeriodOptions,
     flash,
     students,
     details,
@@ -81,6 +82,7 @@ export default function KompenResponHubIndex({
     recycledActiveStudentImportVersions,
     warnings,
     warningCandidates,
+    warningPreview,
     rolledBackWarnings,
     activityLogs,
     activityRetentionDays,
@@ -449,7 +451,7 @@ export default function KompenResponHubIndex({
                                     List File
                                 </h2>
                                 <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
-                                    Tentukan satu workbook yang digunakan untuk setiap periode. Mengganti versi hanya mengganti data sumber periode tersebut; koreksi manual, progres, SP, dan riwayat tetap dipertahankan.
+                                    Pilih satu roster untuk akses login dan satu workbook Kompen dan Responsi untuk setiap semester yang ingin ditampilkan.
                                 </p>
                             </div>
                             <TableGuide
@@ -458,7 +460,7 @@ export default function KompenResponHubIndex({
                                     "Daftar Mahasiswa Aktif menentukan akses login dan hanya satu roster yang dapat digunakan secara global.",
                                     "Periode dibaca otomatis dari isi setiap file. Tidak ada pemetaan periode manual.",
                                     "Pilih satu workbook Kompen dan Respon untuk setiap periode yang ingin ditampilkan; beberapa periode dapat digunakan bersamaan.",
-                                    "Saat roster diganti, mahasiswa pada roster sebelumnya tidak lagi dapat masuk.",
+                                    "Saat roster diganti, hanya NIM yang tercantum pada roster baru yang dapat masuk.",
                                     "Roster login dan workbook Kompen dan Respon dikelola mandiri. Sistem tidak memasangkan atau membandingkan periode maupun NIM di antara keduanya.",
                                     "Finalisasi Surat Peringatan menghasilkan artifact XLSX resmi. Mulai koreksi mempertahankan file sebelumnya dengan status sedang dibenarkan sampai finalisasi ulang.",
                                 ]}
@@ -507,8 +509,10 @@ export default function KompenResponHubIndex({
                                 filters={filters}
                                 warningPeriods={warningPeriods}
                                 selectableWarningPeriods={selectableWarningPeriods}
+                                warningPeriodOptions={warningPeriodOptions}
                                 warnings={warnings}
                                 warningCandidates={warningCandidates}
+                                warningPreview={warningPreview}
                                 rolledBackWarnings={rolledBackWarnings}
                                 selectedWarning={selectedWarning}
                                 onSelectWarning={setSelectedWarning}

@@ -1,3 +1,4 @@
+import { ConfirmForm } from "../shared/components/confirm-action";
 import { Form } from "@inertiajs/react";
 import { FilePenLine, CheckCircle2, Download, FileSpreadsheet, Pencil, Trash2, Unlink, UploadCloud } from "lucide-react";
 import { useState } from "react";
@@ -222,9 +223,9 @@ export function ImportVersionList({
                                                     Digunakan
                                                 </Button>
                                             ) : (
-                                                <Form
+                                                <ConfirmForm
                                                     {...activate.form(version.id)}
-                                                    onBefore={() => window.confirm(`Gunakan ${version.display_filename} sebagai sumber data aktif untuk periode ${version.periode_semester}? Data sumber periode tersebut akan diganti, sedangkan koreksi manual dan riwayat tetap dipertahankan.`)}
+                                                    title="Gunakan workbook" description={`Gunakan ${version.display_filename} sebagai sumber data aktif untuk periode ${version.periode_semester}? Data sumber periode tersebut akan diganti, sedangkan koreksi manual dan riwayat tetap dipertahankan.`}
                                                 >
                                                     {({ processing }) => (
                                                         <Button type="submit" size="sm" disabled={processing} className="shrink-0 rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
@@ -232,7 +233,7 @@ export function ImportVersionList({
                                                         {processing ? "Memilih…" : "Gunakan untuk periode ini"}
                                                         </Button>
                                                     )}
-                                                </Form>
+                                                </ConfirmForm>
                                             )}
                                         </div>
                                     </td>
@@ -314,7 +315,7 @@ export function ImportVersionList({
                                     <DialogHeader>
                                         <DialogTitle className="text-[#395886]">Hapus versi file?</DialogTitle>
                                         <DialogDescription className="text-[#395886]/70">
-                                            {selectedVersion.display_filename} akan dihapus dari penyimpanan. Riwayat audit tetap ada, tetapi workbook tidak dapat dipulihkan dari aplikasi.
+                                            {selectedVersion.display_filename} akan dipindahkan ke Recycle Bin. File dapat dipulihkan selama masa retensi.
                                         </DialogDescription>
                                     </DialogHeader>
                                     <DialogFooter className="gap-3 sm:gap-3">

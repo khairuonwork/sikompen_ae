@@ -1,5 +1,5 @@
 import { Form, Head, Link } from "@inertiajs/react";
-import { ArrowLeft, Eye, EyeOff, GraduationCap, LockKeyhole } from "lucide-react";
+import { ArrowLeft, BookOpen, Eye, EyeOff, GraduationCap, LockKeyhole } from "lucide-react";
 import { useState } from "react";
 import { store } from "@/actions/App/Http/Controllers/StudentAuthenticationController";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { home } from "@/routes";
+import { student as studentGuide } from "@/routes/guides";
 import { createRequest as passwordResetRequest } from "@/actions/App/Http/Controllers/StudentPasswordResetController";
 
 export default function StudentLogin(): React.JSX.Element {
@@ -96,6 +97,15 @@ export default function StudentLogin(): React.JSX.Element {
                                     <Link href={passwordResetRequest.url()} className="text-xs font-bold text-[#395886] underline">
                                         Lupa password?
                                     </Link>
+                                    <a
+                                        href={studentGuide.url()}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[#395886] underline hover:text-[#1E293B]"
+                                    >
+                                        <BookOpen className="size-3.5" />
+                                        Lihat panduan mahasiswa
+                                    </a>
                                     <Link href={home.url()} className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[#395886]/70 hover:text-[#395886]">
                                         <ArrowLeft className="size-3.5" />
                                         Kembali ke pilihan akses

@@ -80,7 +80,7 @@ class SelectKompenResponHubWarningPeriod
                 if (! $cutoff instanceof KompenResponHubPeriodCutoff) {
                     $cutoff = KompenResponHubPeriodCutoff::query()->create([
                         'periode_semester' => $period,
-                        'deadline_at' => now('Asia/Jakarta'),
+                        'deadline_at' => now('Asia/Jakarta')->startOfMinute()->addMinutes(5),
                         'timezone' => 'Asia/Jakarta',
                         'updated_by_admin_id' => $adminId,
                     ]);

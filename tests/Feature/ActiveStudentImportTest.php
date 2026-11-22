@@ -369,6 +369,24 @@ test('selecting a roster replaces the former login roster across periods', funct
         ->toBeNull();
 });
 
+test('a roster without period provenance can still be selected globally for login access', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $import = KompenResponHubActiveStudentImport::factory()->create([
+        'periode_semester' => null,
+    ]);
+    KompenResponHubActiveStudent::factory()->for($import, 'importBatch')->create([
+        'kelas' => '1AEA1',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/active-students/imports/{$import->id}/activate")
+        ->assertSessionHas('success', 'Daftar mahasiswa aktif sekarang digunakan untuk seluruh kelas di dalam file.');
+
+    expect(KompenResponHubActiveStudentImportReference::query()
+        ->value('sikompen_active_student_import_id'))
+        ->toBe($import->id);
+});
+
 test('selecting a new active roster replaces the former roster for the same period', function (): void {
     $admin = KompenResponHubAdmin::factory()->create();
     $period = '2027/2028 Gasal';

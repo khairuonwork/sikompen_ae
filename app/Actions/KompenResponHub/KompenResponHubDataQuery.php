@@ -241,6 +241,7 @@ class KompenResponHubDataQuery
                 $query->selectRaw('1')
                     ->from($cutoffTable)
                     ->whereColumn("{$cutoffTable}.periode_semester", "{$studentTable}.periode_semester")
+                    ->whereNull('closed_at')
                     ->where('deadline_at', '<=', now());
             })
             ->whereRaw($this->effectiveDebtExpression())

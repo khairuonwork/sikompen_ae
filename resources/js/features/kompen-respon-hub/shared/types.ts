@@ -103,6 +103,21 @@ export type Cutoff = {
     finalization_status: "editable" | "finalized" | "revising";
     finalized_at: string | null;
     artifact_revision: number | null;
+    projected_recipient_count: number | null;
+};
+
+export type WarningRecipient = Pick<Student, "nim" | "nama_mahasiswa" | "kelas" | "periode_semester" | "effective_sisa_hutang_jam"> & { id: string | number };
+
+export type WarningPeriodOption = {
+    periode_semester: string;
+    status:
+        | "unconfigured"
+        | "cutoff_active"
+        | "ready_to_finalize"
+        | "finalized"
+        | "revising";
+    is_active_workbook: boolean;
+    is_selected: boolean;
 };
 
 export type WarningLetterArtifact = {
@@ -331,6 +346,7 @@ export type KompenResponHubPageProps = {
     activityFilterOptions: { event_types: string[]; actor_usernames: string[] };
     warningPeriods: string[];
     selectableWarningPeriods: string[];
+    warningPeriodOptions: WarningPeriodOption[];
     flash: { success: string | null; error: string | null };
     students: Pagination<Student> | null;
     details: Pagination<Detail> | null;
@@ -343,6 +359,7 @@ export type KompenResponHubPageProps = {
     recycledImportVersions: Pagination<ImportVersion> | null;
     recycledActiveStudentImportVersions: Pagination<ActiveStudentImportVersion> | null;
     warnings: Pagination<Warning> | null;
+    warningPreview: Pagination<WarningRecipient> | null;
     warningCandidates: Pagination<Student> | null;
     rolledBackWarnings: Pagination<Warning> | null;
     activityLogs: Pagination<ActivityLog> | null;

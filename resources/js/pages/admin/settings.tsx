@@ -15,6 +15,7 @@ import {
     KeyRound,
     RotateCcw,
     UserRound,
+    BookOpen,
 } from 'lucide-react';
 import { storeRequest as storeAdminPasswordResetRequest } from '@/actions/App/Http/Controllers/AdminPasswordResetController';
 import {
@@ -48,6 +49,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { index as adminIndex } from '@/routes/admin/kompen-respon';
+import { admin as adminGuide } from '@/routes/admin/guides';
 
 type AdminSettingsProps = {
     currentAdmin: {
@@ -153,47 +155,48 @@ export default function AdminSettings({
         <>
             <Head title="Pengaturan Admin" />
 
-            {/* Background Container dengan Efek Ambient Mesh Blur */}
-            <main className="relative min-h-screen bg-[#F0F3FA] text-[#395886] p-4 md:p-10 flex justify-center items-start selection:bg-[#B1C9EF] selection:text-[#395886] overflow-hidden">
-                {/* Visual Ambient Background Orbs */}
-                <div className="pointer-events-none absolute -top-40 -left-40 size-96 rounded-full bg-[#8AAEE0]/30 blur-3xl" />
-                <div className="pointer-events-none absolute top-1/2 -right-40 size-96 rounded-full bg-[#B1C9EF]/40 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-20 left-1/3 size-80 rounded-full bg-[#628ECB]/20 blur-3xl" />
-
-                <section className="relative z-10 w-full max-w-3xl space-y-6 animate-in fade-in zoom-in-95 duration-500">
-                    {/* Header Section */}
-                    <header className="group flex flex-wrap items-center justify-between gap-4 bg-white/70 backdrop-blur-xl p-6 rounded-3xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 hover:shadow-[0_12px_40px_rgba(98,142,203,0.2)] hover:-translate-y-0.5">
+            <main className="min-h-screen bg-[#F0F3FA] px-4 py-6 text-[#395886] md:px-8">
+                <section className="mx-auto grid w-full max-w-4xl gap-4">
+                    <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/80 bg-white/90 p-5 shadow-sm">
                         <div className="flex items-center gap-4">
-                            <div className="bg-gradient-to-br from-[#395886] to-[#628ECB] text-white flex size-14 items-center justify-center rounded-2xl shadow-md group-hover:scale-105 group-hover:rotate-6 transition-all duration-300">
-                                <Settings className="size-7 group-hover:rotate-180 transition-transform duration-700 ease-in-out" />
+                            <div className="bg-[#395886] text-white flex size-14 items-center justify-center rounded-2xl shadow-md transition-colors">
+                                <Settings className="size-7" />
                             </div>
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#628ECB]">
-                                    System Control • Administration
-                                </p>
                                 <h1 className="text-2xl md:text-3xl font-black tracking-tight text-[#395886]">
                                     Pengaturan Admin
                                 </h1>
                             </div>
                         </div>
-                        <Button
-                            asChild
-                            variant="outline"
-                            className="border-[#8AAEE0] text-[#395886] bg-white/80 hover:bg-[#395886] hover:text-white hover:border-[#395886] transition-all duration-300 rounded-2xl font-bold text-xs px-4 py-2.5 active:scale-95 shadow-2xs"
-                        >
-                            <Link href={adminIndex.url()} className="flex items-center gap-2">
-                                <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-1" />
-                                Kembali ke panel
-                            </Link>
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                asChild
+                                variant="outline"
+                                className="border-[#8AAEE0] text-[#395886] bg-white/80 hover:bg-[#395886] hover:text-white hover:border-[#395886] transition-colors rounded-2xl font-bold text-xs px-4 py-2.5 shadow-2xs"
+                            >
+                                <a href={adminGuide.url()} target="_blank" rel="noreferrer" className="flex items-center gap-2">
+                                    <BookOpen className="size-4" />
+                                    Panduan admin
+                                </a>
+                            </Button>
+                            <Button
+                                asChild
+                                variant="outline"
+                                className="border-[#8AAEE0] text-[#395886] bg-white/80 hover:bg-[#395886] hover:text-white hover:border-[#395886] transition-colors rounded-2xl font-bold text-xs px-4 py-2.5 shadow-2xs"
+                            >
+                                <Link href={adminIndex.url()} className="flex items-center gap-2">
+                                    <ArrowLeft className="size-4" />
+                                    Kembali ke panel
+                                </Link>
+                            </Button>
+                        </div>
                     </header>
 
                     {/* Alert Setup Code */}
                     {flash.adminSetupCode && (
-                        <Alert className="relative overflow-hidden bg-white/80 border-2 border-[#8AAEE0] text-[#395886] rounded-3xl shadow-[0_12px_40px_-10px_rgba(57,88,134,0.15)] p-6 backdrop-blur-xl animate-in fade-in slide-in-from-top-4 duration-500">
-                            <div className="absolute top-0 left-0 w-2 h-full bg-[#395886] animate-pulse" />
+                        <Alert className="relative rounded-3xl border border-[#8AAEE0] bg-white p-5 text-[#395886] shadow-sm">
                             <AlertTitle className="font-black text-xl flex items-center gap-2 text-[#395886]">
-                                <AlertCircle className="size-6 text-[#628ECB] animate-spin-slow" />
+                                <AlertCircle className="size-6 text-[#628ECB]" />
                                 Simpan Kode Ini Sekarang
                             </AlertTitle>
                             <AlertDescription className="space-y-4 mt-2">
@@ -208,7 +211,7 @@ export default function AdminSettings({
                                         type="button"
                                         size="icon"
                                         onClick={() => void handleCopy(flash.adminSetupCode!)}
-                                        className="bg-[#395886] hover:bg-[#1E293B] text-white rounded-2xl size-12 shadow-md hover:shadow-xl active:scale-90 transition-all duration-300"
+                                        className="bg-[#395886] hover:bg-[#1E293B] text-white rounded-2xl size-12 shadow-md transition-colors"
                                         title="Salin Kode"
                                     >
                                         {copiedCode === flash.adminSetupCode ? <Check className="size-5 text-emerald-400" /> : <Copy className="size-5" />}
@@ -219,21 +222,21 @@ export default function AdminSettings({
                     )}
 
                     {/* Main Card */}
-                    <Card className="group bg-white/80 border border-white/80 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(57,88,134,0.15)] transition-all duration-500 overflow-hidden backdrop-blur-xl hover:-translate-y-1">
+                    <Card className="overflow-hidden rounded-3xl border border-white/80 bg-white/90 text-[#395886] shadow-sm">
                         <CardHeader className="border-b border-[#F0F3FA] pb-6">
                             <CardTitle className="text-xl md:text-2xl font-black text-[#395886] tracking-tight">
                                 Pendaftaran Akun Admin
                             </CardTitle>
                             <CardDescription className="text-[#395886]/70 text-xs md:text-sm leading-relaxed mt-1 font-normal">
-                                Pendaftaran selalu tertutup secara default. Saat dibuka, satu akun baru dapat dibuat melalui halaman setup dengan kode aktivasi khusus.
+                                Pendaftaran ditutup secara bawaan. Saat dibuka, satu akun baru dapat dibuat melalui halaman pendaftaran dengan kode aktivasi khusus.
                             </CardDescription>
                         </CardHeader>
 
                         <CardContent className="pt-6">
                             {setupWindow.isOpen && setupWindow.expiresAt ? (
-                                <div className="bg-gradient-to-r from-[#B1C9EF]/30 via-[#D5DEEF]/40 to-white border border-[#8AAEE0]/50 rounded-2xl p-5 flex items-start gap-4 transition-all duration-300 shadow-2xs">
+                                <div className="bg-[#F0F3FA] border border-[#8AAEE0]/50 rounded-2xl p-5 flex items-start gap-4 transition-colors shadow-2xs">
                                     <div className="bg-[#395886] text-white p-3 rounded-xl shrink-0 shadow-md">
-                                        <Clock3 className="size-5 animate-spin-slow" />
+                                        <Clock3 className="size-5" />
                                     </div>
                                     <div>
                                         <p className="font-extrabold text-[#395886] text-sm md:text-base">
@@ -262,7 +265,7 @@ export default function AdminSettings({
                                             type="submit"
                                             variant="outline"
                                             disabled={processing}
-                                            className="border-[#8AAEE0] text-[#395886] hover:bg-rose-600 hover:text-white hover:border-rose-600 rounded-2xl transition-all duration-300 font-bold text-xs px-5 py-2.5 active:scale-95 shadow-2xs"
+                                            className="border-[#8AAEE0] bg-white text-[#395886] hover:bg-rose-600 hover:text-white hover:border-rose-600 rounded-2xl transition-colors font-bold text-xs px-5 py-2.5 shadow-2xs"
                                         >
                                             <LockKeyhole className="size-4 mr-2" />
                                             Tutup pendaftaran
@@ -279,9 +282,9 @@ export default function AdminSettings({
                                     <Button
                                         type="submit"
                                         disabled={processing}
-                                        className="bg-[#395886] hover:bg-[#1E293B] text-white rounded-2xl shadow-md hover:shadow-xl active:scale-95 transition-all duration-300 font-bold text-xs px-6 py-2.5"
+                                        className="bg-[#395886] hover:bg-[#1E293B] text-white rounded-2xl shadow-md transition-colors font-bold text-xs px-6 py-2.5"
                                     >
-                                        <UserPlus className="size-4 mr-2 group-hover:scale-110 transition-transform" />
+                                        <UserPlus className="size-4 mr-2" />
                                         {setupWindow.isOpen
                                             ? 'Buat kode baru'
                                             : 'Buka pendaftaran admin'}
@@ -406,11 +409,11 @@ export default function AdminSettings({
                     <Card className="overflow-hidden rounded-3xl border border-white/80 bg-white/90 text-[#395886] shadow-sm">
                         <CardHeader>
                             <CardTitle className="text-xl font-black text-[#395886]">Akun Darurat Reset Admin</CardTitle>
-                            <CardDescription className="text-sm font-medium leading-relaxed text-[#395886]/80">Akun fallback hanya mengelola permintaan reset admin dan tidak dapat membuka data operasional. Password tidak pernah ditampilkan aplikasi.</CardDescription>
+                            <CardDescription className="text-sm font-medium leading-relaxed text-[#395886]/80">Akun darurat hanya mengelola permintaan reset admin dan tidak dapat membuka data operasional. Password tidak pernah ditampilkan aplikasi.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="overflow-x-auto rounded-xl border border-[#D5DEEF]">
-                                <table className="w-full min-w-[480px] text-left text-sm"><thead className="bg-[#D5DEEF]/70 text-xs font-black uppercase tracking-wider text-[#395886]"><tr><th className="p-3">Username</th><th className="p-3">Status</th></tr></thead><tbody>{emergencyAdmins.length === 0 ? <tr><td className="p-3 font-medium text-[#395886]" colSpan={2}>Akun darurat belum di-seed.</td></tr> : emergencyAdmins.map((admin) => <tr key={admin.id} className="border-t border-[#D5DEEF] bg-white"><td className="p-3 font-bold text-[#1E293B]">{admin.username}</td><td className="p-3 font-semibold text-emerald-800">Dapat menerbitkan kode</td></tr>)}</tbody></table>
+                                <table className="w-full min-w-[480px] text-left text-sm"><thead className="bg-[#D5DEEF]/70 text-xs font-black uppercase tracking-wider text-[#395886]"><tr><th className="p-3">Username</th><th className="p-3">Status</th></tr></thead><tbody>{emergencyAdmins.length === 0 ? <tr><td className="p-3 font-medium text-[#395886]" colSpan={2}>Belum ada akun darurat yang disiapkan.</td></tr> : emergencyAdmins.map((admin) => <tr key={admin.id} className="border-t border-[#D5DEEF] bg-white"><td className="p-3 font-bold text-[#1E293B]">{admin.username}</td><td className="p-3 font-semibold text-emerald-800">Dapat menerbitkan kode</td></tr>)}</tbody></table>
                             </div>
                         </CardContent>
                     </Card>

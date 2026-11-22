@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 class ActivateKompenResponHubActiveStudentImport
 {
     /**
-     * @return array{import_id: int, original_filename: string, periode_semester: string, classes: list<string>, invalidated_reset_request_count: int}
+     * @return array{import_id: int, original_filename: string, periode_semester: string|null, classes: list<string>, invalidated_reset_request_count: int}
      */
     public function execute(
         KompenResponHubActiveStudentImport $import,
@@ -27,9 +27,7 @@ class ActivateKompenResponHubActiveStudentImport
                     ->findOrFail($import->id);
 
                 $period = $lockedImport->periode_semester;
-                if (! is_string($period) || $period === '') {
-                    throw new \LogicException('Versi daftar mahasiswa aktif lama belum memiliki periode. Unggah ulang menggunakan template terbaru.');
-                }
+                $referencePeriod = filled($period) ? $period : 'Tidak diketahui';
 
                 $classes = KompenResponHubActiveStudent::query()
                     ->whereBelongsTo($lockedImport, 'importBatch')
@@ -56,14 +54,14 @@ class ActivateKompenResponHubActiveStudentImport
                 if ($activeReference === null) {
                     KompenResponHubActiveStudentImportReference::query()->create([
                         'selection_key' => KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey,
-                        'periode_semester' => $period,
+                        'periode_semester' => $referencePeriod,
                         'sikompen_active_student_import_id' => $lockedImport->id,
                         'activated_by_admin_id' => $actorAdminId,
                         'activated_at' => now(),
                     ]);
                 } else {
                     $activeReference->update([
-                        'periode_semester' => $period,
+                        'periode_semester' => $referencePeriod,
                         'sikompen_active_student_import_id' => $lockedImport->id,
                         'activated_by_admin_id' => $actorAdminId,
                         'activated_at' => now(),

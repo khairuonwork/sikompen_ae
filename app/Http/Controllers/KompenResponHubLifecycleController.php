@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Actions\KompenResponHub\BuildKompenResponHubWarningLetterArtifact;
 use App\Actions\KompenResponHub\FinalizeKompenResponHubCutoff;
-use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Actions\KompenResponHub\SelectKompenResponHubWarningPeriod;
 use App\Http\Requests\DestroyKompenResponHubWarningLetterRequest;
@@ -34,13 +33,13 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class KompenResponHubLifecycleController extends Controller
 {
     public function __construct(
         private RecordKompenResponHubActivity $activity,
-        private KompenResponHubDataQuery $dataQuery,
         private BuildKompenResponHubWarningLetterArtifact $warningArtifactBuilder,
         private FinalizeKompenResponHubCutoff $finalizeCutoff,
         private SelectKompenResponHubWarningPeriod $warningPeriodSelector,
@@ -55,7 +54,7 @@ class KompenResponHubLifecycleController extends Controller
                 ->where('periode_semester', $validated['periode_semester'])
                 ->exists(),
             422,
-            'Periode belum memiliki data mahasiswa aktif.',
+            'Belum ada mahasiswa pada workbook Kompen dan Responsi yang digunakan untuk semester ini.',
         );
 
         /** @var array{cutoff: KompenResponHubPeriodCutoff, synchronized_warning_count: int} $result */
@@ -254,9 +253,7 @@ class KompenResponHubLifecycleController extends Controller
                 $result = $this->finalizeCutoff->execute($finalizedCutoff, $request->user('admin'), $request);
                 $warnings = KompenResponHubWarningLetter::query()
                     ->where('cutoff_id', $finalizedCutoff->id)
-                    ->where('classification', 'fixed')
-                    ->where('letter_status', KompenResponHubWarningLetter::LetterStatusIssued)
-                    ->where('resolution', 'outstanding')
+                    ->where(KompenResponHubWarningLetter::ArtifactRecipientAttributes)
                     ->lockForUpdate()
                     ->orderBy('kelas')
                     ->orderBy('nim')
@@ -456,7 +453,7 @@ class KompenResponHubLifecycleController extends Controller
             return $warnings->count();
         });
 
-        return back()->with('success', "Koreksi dibuka untuk {$rolledBackWarningCount} mahasiswa. Artifact sebelumnya tetap tersimpan di List File dengan status sedang dibenarkan dan tidak lagi tersedia pada API.");
+        return back()->with('success', "Koreksi dibuka untuk {$rolledBackWarningCount} mahasiswa. SP semester ini ditarik dari API. XLSX sebelumnya tetap tersimpan di List File dengan status sedang dibenarkan.");
     }
 
     public function storeProgress(StoreKompenResponHubStudentProgressRequest $request, KompenResponHubStudent $student): RedirectResponse
@@ -472,8 +469,19 @@ class KompenResponHubLifecycleController extends Controller
                 ? (float) $override->total_responsi_jam
                 : (float) $student->total_responsi_jam;
 
-            abort_if((float) $validated['kompensasi_dikerjakan_jam'] > $totalKompen || (float) $validated['responsi_dikerjakan_jam'] > $totalResponsi, 422, 'Jam yang dikerjakan tidak boleh melebihi total hutang efektif.');
-            abort_if(((float) $validated['kompensasi_dikerjakan_jam'] + (float) $validated['responsi_dikerjakan_jam']) > 0 && empty($validated['last_worked_at']), 422, 'Tanggal terakhir dikerjakan wajib diisi ketika ada jam yang dikerjakan.');
+            $errors = [];
+            if ((float) $validated['kompensasi_dikerjakan_jam'] > $totalKompen) {
+                $errors['kompensasi_dikerjakan_jam'] = 'Jam pengerjaan melebihi total Kompen.';
+            }
+            if ((float) $validated['responsi_dikerjakan_jam'] > $totalResponsi) {
+                $errors['responsi_dikerjakan_jam'] = 'Jam pengerjaan melebihi total Responsi.';
+            }
+            if (((float) $validated['kompensasi_dikerjakan_jam'] + (float) $validated['responsi_dikerjakan_jam']) > 0 && empty($validated['last_worked_at'])) {
+                $errors['last_worked_at'] = 'Isi tanggal pengerjaan untuk mencatat jam.';
+            }
+            if ($errors !== []) {
+                throw ValidationException::withMessages($errors);
+            }
 
             $progress = KompenResponHubStudentProgress::query()->firstOrNew($this->studentIdentity($student));
             $before = $progress->exists ? $progress->only(['kompensasi_dikerjakan_jam', 'responsi_dikerjakan_jam', 'last_worked_at', 'reason']) : null;
@@ -482,7 +490,7 @@ class KompenResponHubLifecycleController extends Controller
                 'current_student_id' => $student->id,
                 'kompensasi_dikerjakan_jam' => $validated['kompensasi_dikerjakan_jam'],
                 'responsi_dikerjakan_jam' => $validated['responsi_dikerjakan_jam'],
-                'last_worked_at' => filled($validated['last_worked_at']) ? CarbonImmutable::createFromFormat('Y-m-d\\TH:i', $validated['last_worked_at'], 'Asia/Jakarta')->utc() : null,
+                'last_worked_at' => filled($validated['last_worked_at'] ?? null) ? CarbonImmutable::createFromFormat('Y-m-d\\TH:i', $validated['last_worked_at'], 'Asia/Jakarta')->utc() : null,
                 'reason' => $validated['reason'],
                 'updated_by_admin_id' => $request->user('admin')?->id,
             ])->save();
@@ -507,7 +515,16 @@ class KompenResponHubLifecycleController extends Controller
                 ? (float) $progress->responsi_dikerjakan_jam
                 : 0.0;
 
-            abort_if((float) $validated['total_kompensasi_jam'] < $workedKompen || (float) $validated['total_responsi_jam'] < $workedResponsi, 422, 'Total hutang tidak boleh lebih kecil dari jam yang sudah dikerjakan.');
+            $errors = [];
+            if ((float) $validated['total_kompensasi_jam'] < $workedKompen) {
+                $errors['total_kompensasi_jam'] = 'Total Kompen lebih kecil dari jam yang sudah dikerjakan.';
+            }
+            if ((float) $validated['total_responsi_jam'] < $workedResponsi) {
+                $errors['total_responsi_jam'] = 'Total Responsi lebih kecil dari jam yang sudah dikerjakan.';
+            }
+            if ($errors !== []) {
+                throw ValidationException::withMessages($errors);
+            }
 
             $override = KompenResponHubStudentSummaryOverride::query()->firstOrNew($this->studentIdentity($student));
             $before = $override->exists ? $override->only(['total_kompensasi_jam', 'total_responsi_jam', 'reason']) : null;

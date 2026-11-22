@@ -289,7 +289,7 @@ class KompenResponHubActiveStudentImportController extends Controller
             subjectReference: (string) $result['import_id'],
             actor: $admin,
             request: $request,
-            reason: "Daftar mahasiswa aktif {$result['periode_semester']} dipilih sebagai satu-satunya roster aktif periode tersebut.",
+            reason: 'Daftar mahasiswa aktif dipilih sebagai satu-satunya roster aktif untuk akses mahasiswa.',
             metadata: [
                 'classes' => $result['classes'],
                 'original_filename' => $result['original_filename'],
@@ -300,7 +300,7 @@ class KompenResponHubActiveStudentImportController extends Controller
             period: $result['periode_semester'],
         );
 
-        return back()->with('success', "Daftar mahasiswa aktif {$result['periode_semester']} sekarang digunakan untuk seluruh kelas di dalam file.");
+        return back()->with('success', 'Daftar mahasiswa aktif sekarang digunakan untuk seluruh kelas di dalam file.');
     }
 
     public function release(

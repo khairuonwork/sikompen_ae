@@ -1,8 +1,9 @@
+import { datetimeLocalValue } from "../shared/lib/formatters";
+import { CorrectionField } from "../shared/components/correction-field";
 import { Form } from "@inertiajs/react";
 import { Save, X } from "lucide-react";
 import { storeProgress, storeSummaryOverride } from "@/actions/App/Http/Controllers/KompenResponHubLifecycleController";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import type { Student } from "../shared/types";
 
 export function StudentCorrectionPanel({
@@ -49,7 +50,9 @@ export function StudentCorrectionPanel({
                                 Progres pengerjaan
                             </p>
                             <div className="grid grid-cols-2 gap-3">
-                                <Input
+                                <CorrectionField
+                                    label="Jam Kompen dikerjakan"
+                                    error={errors.kompensasi_dikerjakan_jam}
                                     name="kompensasi_dikerjakan_jam"
                                     type="number"
                                     min="0"
@@ -59,7 +62,9 @@ export function StudentCorrectionPanel({
                                     }
                                     placeholder="Jam Kompen"
                                 />
-                                <Input
+                                <CorrectionField
+                                    label="Jam Responsi dikerjakan"
+                                    error={errors.responsi_dikerjakan_jam}
                                     name="responsi_dikerjakan_jam"
                                     type="number"
                                     min="0"
@@ -70,28 +75,24 @@ export function StudentCorrectionPanel({
                                     placeholder="Jam Responsi"
                                 />
                             </div>
-                            <Input
+                            <CorrectionField
+                                label="Tanggal dan waktu pengerjaan (WIB)"
+                                error={errors.last_worked_at}
                                 name="last_worked_at"
                                 type="datetime-local"
-                                required
                                 defaultValue={
-                                    student.last_worked_at?.slice(0, 16) ?? ""
+                                    student.last_worked_at ? datetimeLocalValue(student.last_worked_at, "Asia/Jakarta") : ""
                                 }
                             />
-                            <Input
+                            <CorrectionField
+                                label="Alasan perubahan"
+                                error={errors.reason}
                                 name="reason"
                                 required
                                 minLength={5}
                                 maxLength={1000}
                                 placeholder="Alasan perubahan"
                             />
-                            {errors.kompensasi_dikerjakan_jam ||
-                            errors.last_worked_at ? (
-                                <p className="text-xs font-bold text-rose-600">
-                                    {errors.kompensasi_dikerjakan_jam ??
-                                        errors.last_worked_at}
-                                </p>
-                            ) : null}
                             <Button
                                 disabled={processing}
                                 type="submit"
@@ -113,7 +114,9 @@ export function StudentCorrectionPanel({
                                 Koreksi total Kompen / Responsi
                             </p>
                             <div className="grid grid-cols-2 gap-3">
-                                <Input
+                                <CorrectionField
+                                    label="Total Kompen (jam)"
+                                    error={errors.total_kompensasi_jam}
                                     name="total_kompensasi_jam"
                                     type="number"
                                     min="0"
@@ -123,7 +126,9 @@ export function StudentCorrectionPanel({
                                     }
                                     placeholder="Total Kompen"
                                 />
-                                <Input
+                                <CorrectionField
+                                    label="Total Responsi (jam)"
+                                    error={errors.total_responsi_jam}
                                     name="total_responsi_jam"
                                     type="number"
                                     min="0"
@@ -134,18 +139,15 @@ export function StudentCorrectionPanel({
                                     placeholder="Total Responsi"
                                 />
                             </div>
-                            <Input
+                            <CorrectionField
+                                label="Alasan koreksi"
+                                error={errors.reason}
                                 name="reason"
                                 required
                                 minLength={5}
                                 maxLength={1000}
                                 placeholder="Alasan koreksi"
                             />
-                            {errors.total_kompensasi_jam ? (
-                                <p className="text-xs font-bold text-rose-600">
-                                    {errors.total_kompensasi_jam}
-                                </p>
-                            ) : null}
                             <Button
                                 disabled={processing}
                                 type="submit"

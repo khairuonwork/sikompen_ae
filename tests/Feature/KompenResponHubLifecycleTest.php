@@ -89,11 +89,11 @@ test('progress cannot exceed the effective debt total', function () {
     $this->actingAs($admin, 'admin')
         ->put("/admin/kompen-respon/students/{$student->id}/progress", [
             'kompensasi_dikerjakan_jam' => 9,
-            'responsi_dikerjakan_jam' => 0,
-            'last_worked_at' => now('Asia/Jakarta')->subDay()->format('Y-m-d\\TH:i'),
+            'responsi_dikerjakan_jam' => 8,
+            'last_worked_at' => null,
             'reason' => 'Tidak boleh melampaui total hutang.',
         ])
-        ->assertUnprocessable();
+        ->assertSessionHasErrors(['kompensasi_dikerjakan_jam', 'responsi_dikerjakan_jam', 'last_worked_at']);
 
     expect(KompenResponHubStudentProgress::query()->doesntExist())->toBeTrue();
 });
@@ -214,8 +214,8 @@ test('the warning page uses the persisted selected SP period and only allows lis
             ->has('warningCandidates.data', 1)
             ->where('warningCandidates.data.0.id', $gasalStudent->id)
             ->has('warningPeriods', 2)
-            ->where('warningPeriods.0', '2026/2027 Gasal')
-            ->where('warningPeriods.1', '2026/2027 Genap'),
+            ->where('warningPeriods.0', '2026/2027 Genap')
+            ->where('warningPeriods.1', '2026/2027 Gasal'),
         );
 
     $this->actingAs($admin, 'admin')
@@ -307,6 +307,109 @@ test('an admin can select an active workbook period and finalize its SP immediat
 
     expect($cutoff->fresh()->closed_at)->not->toBeNull()
         ->and(KompenResponHubWarningLetterArtifact::query()->where('cutoff_id', $cutoff->id)->exists())->toBeTrue();
+});
+
+test('selecting an SP semester creates an editable cutoff five minutes in the future', function (): void {
+    $this->travelTo(CarbonImmutable::create(2026, 10, 5, 10, 0, 0, 'Asia/Jakarta'));
+
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+
+    $this->actingAs($admin, 'admin')
+        ->post('/admin/kompen-respon/warning-periods/select', [
+            'periode_semester' => $student->periode_semester,
+        ])
+        ->assertRedirect('/admin?tab=warnings');
+
+    expect(KompenResponHubPeriodCutoff::query()->sole()->deadline_at)
+        ->toEqual(CarbonImmutable::create(2026, 10, 5, 10, 5, 0, 'Asia/Jakarta'));
+});
+
+test('the SP page shows a finalization recipient estimate before the cutoff passes', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $cutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->addWeek(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+    KompenResponHubWarningPeriodSelection::query()->create([
+        'selection_key' => KompenResponHubWarningPeriodSelection::ManagedWarningPeriodSelectionKey,
+        'sikompen_period_cutoff_id' => $cutoff->id,
+        'selected_at' => now(),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=warnings')
+        ->assertInertia(fn ($page) => $page
+            ->where('warningCandidates.meta.total', 0)
+            ->where('cutoffs.0.projected_recipient_count', 1),
+        );
+});
+
+test('filtered preview includes detached recipients, respects manual cancellation and matches the final spreadsheet', function (): void {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/warning-periods/select', [
+        'periode_semester' => $student->periode_semester,
+    ])->assertRedirect();
+    $cutoff = KompenResponHubPeriodCutoff::query()->sole();
+    $attributes = [
+        'cutoff_id' => $cutoff->id, 'periode_semester' => $student->periode_semester,
+        'current_student_id' => null, 'kelas' => '2AEA1', 'nama_mahasiswa' => 'Arsip Lama',
+        'letter_status' => 'draft', 'classification' => 'temporary', 'resolution' => 'outstanding',
+        'snapshot' => ['sisa_hutang_jam' => 2],
+    ];
+    $orphan = KompenResponHubWarningLetter::create([...$attributes, 'nim' => '999000001']);
+    $cancelled = $student->replicate();
+    $cancelled->nim = '999000002';
+    $cancelled->save();
+    KompenResponHubWarningLetter::create([
+        ...$attributes, 'nim' => $cancelled->nim, 'current_student_id' => $cancelled->id,
+        'letter_status' => 'cancelled', 'cancellation_source' => KompenResponHubWarningLetter::CancellationSourceManualRollback,
+    ]);
+
+    $this->get('/admin?tab=warnings&search=arsip&kelas=2AEA1&tingkat=2')
+        ->assertInertia(fn ($page) => $page->where('cutoffs.0.projected_recipient_count', 2)
+            ->where('warningPreview.meta.page_name', 'warning_preview_page')
+            ->where('warningPreview.meta.total', 1)->where('warningPreview.data.0.nim', $orphan->nim)
+            ->where('warningCandidates.meta.total', 0));
+    expect($orphan->fresh()->letter_status)->toBe('draft');
+    $this->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize")->assertSessionHas('success');
+    $artifact = KompenResponHubWarningLetterArtifact::query()->sole();
+    $sheet = IOFactory::load(Storage::disk('local')->path($artifact->stored_path))->getActiveSheet();
+    expect($artifact->row_count)->toBe(2)
+        ->and($sheet->getCell('A5')->getValue())->toBe($student->nim)
+        ->and($sheet->getCell('A6')->getValue())->toBe($orphan->nim);
+
+    KompenResponHubActiveImport::query()->where('periode_semester', $student->periode_semester)->delete();
+    $this->get('/admin?tab=warnings')->assertInertia(fn ($page) => $page
+        ->where('warningPeriodOptions.0.status', 'finalized')
+        ->where('warningPeriodOptions.0.is_active_workbook', false)
+        ->where('cutoffs.0.projected_recipient_count', 2)->where('warningPreview', null));
+    $artifact->update(['status' => KompenResponHubWarningLetterArtifact::StatusRevising]);
+    $cutoff->refresh()->update(['closed_at' => null]);
+    $this->get('/admin?tab=warnings')->assertInertia(fn ($page) => $page
+        ->where('warningPeriodOptions.0.status', 'revising')
+        ->where('warningPeriodOptions.0.is_active_workbook', false)->where('warningPreview', null));
+});
+
+test('SP preview paginates the filtered recipient list without changing the semester total', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    foreach (range(1, 6) as $index) {
+        $classmate = $student->replicate();
+        $classmate->fill(['nim' => (string) (200000000 + $index), 'kelas' => '2AEA1', 'tingkat' => 2])->save();
+    }
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/warning-periods/select', [
+        'periode_semester' => $student->periode_semester,
+    ])->assertRedirect();
+    $this->get('/admin?tab=warnings&kelas=2AEA1&per_page=5&warning_preview_page=2')
+        ->assertInertia(fn ($page) => $page->where('cutoffs.0.projected_recipient_count', 7)
+            ->where('warningPreview.meta.total', 6)->where('warningPreview.meta.current_page', 2)
+            ->has('warningPreview.data', 1)->where('warningPreview.data.0.nim', '200000006'));
+    expect(KompenResponHubWarningLetter::query()->count())->toBe(0);
 });
 
 test('an admin cannot select an inactive workbook period for SP', function () {
@@ -696,7 +799,7 @@ test('an admin can cancel a period finalization and preserve its audit trail', f
             'reason' => 'Data workbook periode ini perlu diperbaiki.',
         ])
         ->assertRedirect()
-        ->assertSessionHas('success', 'Koreksi dibuka untuk 1 mahasiswa. Artifact sebelumnya tetap tersimpan di List File dengan status sedang dibenarkan dan tidak lagi tersedia pada API.');
+        ->assertSessionHas('success', 'Koreksi dibuka untuk 1 mahasiswa. SP semester ini ditarik dari API. XLSX sebelumnya tetap tersimpan di List File dengan status sedang dibenarkan.');
 
     expect($warning->fresh()->letter_status)
         ->toBe(KompenResponHubWarningLetter::LetterStatusCancelled)

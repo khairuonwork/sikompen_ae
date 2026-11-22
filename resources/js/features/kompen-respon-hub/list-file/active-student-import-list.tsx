@@ -1,3 +1,4 @@
+import { ConfirmForm } from "../shared/components/confirm-action";
 import { Form } from "@inertiajs/react";
 import { CheckCircle2, Download, FilePenLine, Power, Trash2, UsersRound } from "lucide-react";
 import { useState } from "react";
@@ -61,7 +62,7 @@ export function ActiveStudentImportList({
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <p className="text-xs font-extrabold text-[#395886]">
-                                        {reference.periode_semester}
+                                        Roster login mahasiswa
                                     </p>
                                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-black tracking-wider text-emerald-800 uppercase">
                                         <CheckCircle2 className="size-3" /> Digunakan
@@ -83,9 +84,9 @@ export function ActiveStudentImportList({
                                                 <Download className="mr-1.5 size-3.5" /> Unduh
                                             </a>
                                         </Button>
-                                        <Form
+                                        <ConfirmForm
                                             {...release.form(reference.import.id)}
-                                            onBefore={() => window.confirm("Nonaktifkan roster ini? Seluruh mahasiswa akan langsung kehilangan akses masuk. Akun dan riwayatnya tetap tersimpan.")}
+                                            title="Nonaktifkan roster" description={"Nonaktifkan roster ini? Seluruh mahasiswa akan langsung kehilangan akses masuk. Akun dan riwayatnya tetap tersimpan."}
                                         >
                                             {({ processing }) => (
                                                 <Button
@@ -99,7 +100,7 @@ export function ActiveStudentImportList({
                                                     {processing ? "Menonaktifkan…" : "Nonaktifkan akses"}
                                                 </Button>
                                             )}
-                                        </Form>
+                                        </ConfirmForm>
                                     </div>
                                 </div>
                             </article>
@@ -107,7 +108,7 @@ export function ActiveStudentImportList({
                     </div>
                 ) : (
                     <p className="mt-4 rounded-2xl border border-dashed border-[#8AAEE0] bg-white/70 px-4 py-3 text-xs font-semibold text-[#395886]/70">
-                        Belum ada daftar mahasiswa aktif yang digunakan. Upload lalu pilih satu file roster untuk periode terkait.
+                        Belum ada daftar mahasiswa aktif yang digunakan. Upload lalu pilih satu file roster untuk menentukan siapa yang dapat masuk.
                     </p>
                 )}
                 {references.data.length > 0 ? <Pager data={references} /> : null}
@@ -140,13 +141,12 @@ export function ActiveStudentImportList({
                 <div className="data-table-scroll">
                     <table className="data-table min-w-[1300px]">
                         <colgroup>
-                            {["11rem", "27rem", "12rem", "14rem", "13rem", "24rem"].map((width, index) => (
+                            {["27rem", "12rem", "14rem", "13rem", "24rem"].map((width, index) => (
                                 <col key={`${width}-${index}`} style={{ width }} />
                             ))}
                         </colgroup>
                         <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                             <tr>
-                                <th className="px-5 py-4">Periode</th>
                                 <th className="px-5 py-4">File roster</th>
                                 <th className="px-5 py-4">Isi</th>
                                 <th className="px-5 py-4">Diunggah</th>
@@ -157,9 +157,6 @@ export function ActiveStudentImportList({
                         <tbody className="divide-y divide-[#F0F3FA]">
                             {versions.data.map((version) => (
                                 <tr key={version.id} className="align-middle hover:bg-[#B1C9EF]/10">
-                                    <td className="px-5 py-4 text-xs font-bold text-[#395886]">
-                                        {version.periode_semester ?? "Belum ditetapkan"}
-                                    </td>
                                     <td className="px-5 py-4">
                                         <p className="font-mono text-xs font-bold text-[#395886]">
                                             {version.original_filename}
@@ -208,16 +205,16 @@ export function ActiveStudentImportList({
                                                     <Trash2 className="mr-1.5 size-3.5" /> Hapus
                                                 </Button>
                                             ) : (
-                                                <Form
+                                                <ConfirmForm
                                                     {...activate.form(version.id)}
-                                                    onBefore={() => window.confirm(`Gunakan ${version.original_filename} sebagai satu-satunya roster aktif? Roster aktif sebelumnya akan langsung digantikan dan mahasiswa di dalamnya tidak lagi dapat masuk.`)}
+                                                    title="Gunakan roster" description={`Gunakan ${version.original_filename} sebagai satu-satunya roster aktif? Mahasiswa yang tidak tercantum pada file baru akan langsung kehilangan akses masuk.`}
                                                 >
                                                     {({ processing }) => (
                                                         <Button type="submit" size="sm" disabled={processing || version.is_active} className="shrink-0 rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
                                                             {version.is_active ? "Sedang digunakan" : processing ? "Memilih…" : "Jadikan digunakan"}
                                                         </Button>
                                                     )}
-                                                </Form>
+                                                </ConfirmForm>
                                             )}
                                         </div>
                                     </td>
@@ -249,7 +246,7 @@ export function ActiveStudentImportList({
                                     <DialogHeader>
                                         <DialogTitle className="text-[#395886]">Hapus versi file?</DialogTitle>
                                         <DialogDescription className="text-[#395886]/70">
-                                            {selectedVersion.original_filename} akan dihapus dari penyimpanan beserta data roster versi ini. Riwayat audit tetap tersimpan, tetapi file tidak dapat dipulihkan dari aplikasi.
+                                            {selectedVersion.original_filename} akan dipindahkan ke Recycle Bin. File dapat dipulihkan selama masa retensi.
                                         </DialogDescription>
                                     </DialogHeader>
                                     <DialogFooter className="gap-3 sm:gap-3">

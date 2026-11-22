@@ -45,6 +45,7 @@ services:
     expose:
       - "9000"
     volumes:
+      - sikompen_sp_artifacts:/var/www/html/storage/app/private/kompen-respon-hub/warning-artifacts
       - sikompen_import_storage:/var/www/html/storage/app/private/kompen-respon-hub/imports
       - sikompen_export_storage:/var/www/html/storage/app/private/kompen-respon-hub/exports
       - sikompen_api_sync_storage:/var/www/html/storage/app/private/kompen-respon-hub/api-sync
@@ -162,6 +163,8 @@ services:
       retries: 10
 
 volumes:
+  sikompen_sp_artifacts:
+    name: sikompen_sp_artifacts
   sikompen_database_data:
   sikompen_import_storage:
     name: sikompen_import_storage

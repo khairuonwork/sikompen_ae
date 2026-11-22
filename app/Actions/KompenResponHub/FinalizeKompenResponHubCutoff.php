@@ -28,132 +28,133 @@ class FinalizeKompenResponHubCutoff
         $issuedWarningCount = 0;
         $synchronizedWarningCount = 0;
 
-        KompenResponHubWarningLetter::query()
-            ->where('cutoff_id', $cutoff->id)
-            ->whereIn('letter_status', [
-                KompenResponHubWarningLetter::LetterStatusDraft,
-                KompenResponHubWarningLetter::LetterStatusIssued,
-            ])
-            ->where('classification', '!=', 'fixed')
-            ->chunkById(200, function ($warnings) use ($cutoff, $actor, $request, &$issuedWarningCount, &$synchronizedWarningCount): void {
-                foreach ($warnings as $warning) {
-                    $before = $warning->only(['classification', 'letter_status', 'issued_at']);
-                    $updates = [
-                        'classification' => 'fixed',
-                        'updated_by_admin_id' => $actor?->id,
-                    ];
+        foreach ($this->finalizationChanges($cutoff, $actor) as $change) {
+            $warning = $change['warning'];
+            if ($warning->isDirty()) {
+                $warning->save();
+            }
 
-                    $wasDraft = $warning->letter_status === KompenResponHubWarningLetter::LetterStatusDraft;
-                    if ($wasDraft) {
-                        $updates['letter_status'] = KompenResponHubWarningLetter::LetterStatusIssued;
-                        $updates['issued_at'] = now();
-                    }
+            if ($change['synchronized']) {
+                $synchronizedWarningCount++;
+                $this->activity->execute(
+                    'warning.classification_fixed',
+                    'warning_letter',
+                    (string) $warning->id,
+                    $actor,
+                    $request,
+                    $warning->nim,
+                    $cutoff->periode_semester,
+                    $warning->kelas,
+                    'Status SP ditetapkan saat finalisasi semester.',
+                    $change['before'],
+                    $warning->only(['classification', 'letter_status', 'issued_at']),
+                    ['cutoff_id' => $cutoff->id],
+                    $warning->nama_mahasiswa,
+                );
+            }
 
-                    $warning->update($updates);
-                    $synchronizedWarningCount++;
+            if ($change['issued']) {
+                $issuedWarningCount++;
+                $this->recordIssuedWarning($warning, $cutoff, $actor, $request, $change['before']);
+            }
+        }
 
-                    $this->activity->execute(
-                        'warning.classification_fixed',
-                        'warning_letter',
-                        (string) $warning->id,
-                        $actor,
-                        $request,
-                        $warning->nim,
-                        $cutoff->periode_semester,
-                        $warning->kelas,
-                        'SP diselaraskan saat periode difiksasi.',
-                        $before,
-                        $warning->only(['classification', 'letter_status', 'issued_at']),
-                        ['cutoff_id' => $cutoff->id],
-                        $warning->nama_mahasiswa,
-                    );
+        return ['issued_warning_count' => $issuedWarningCount, 'synchronized_warning_count' => $synchronizedWarningCount];
+    }
 
-                    if ($wasDraft) {
-                        $issuedWarningCount++;
-                        $this->recordIssuedWarning($warning, $cutoff, $actor, $request, $before);
-                    }
+    public function projectedRecipientCount(KompenResponHubPeriodCutoff $cutoff): int
+    {
+        return iterator_count($this->projectedRecipients($cutoff));
+    }
+
+    /** @return \Generator<int, KompenResponHubWarningLetter> */
+    public function projectedRecipients(KompenResponHubPeriodCutoff $cutoff): \Generator
+    {
+        foreach ($this->finalizationChanges($cutoff) as $change) {
+            $warning = $change['warning'];
+            $criteria = KompenResponHubWarningLetter::ArtifactRecipientAttributes;
+            if ($warning->only(array_keys($criteria)) === $criteria) {
+                yield $warning;
+            }
+        }
+    }
+
+    /**
+     * Calculate the final state in memory. Only execute() persists changes and records audit events.
+     *
+     * @return \Generator<int, array{warning: KompenResponHubWarningLetter, before: array<string, mixed>|null, synchronized: bool, issued: bool}>
+     */
+    private function finalizationChanges(KompenResponHubPeriodCutoff $cutoff, ?KompenResponHubAdmin $actor = null): \Generator
+    {
+        $existing = KompenResponHubWarningLetter::query()->where('cutoff_id', $cutoff->id);
+        $warnings = (clone $existing)->with(['student' => fn ($query) => $query
+            ->fromActiveImportReference()->where('periode_semester', $cutoff->periode_semester)
+            ->with(['progress', 'summaryOverride'])])->lazyById(200);
+
+        foreach ($warnings as $warning) {
+            $before = $warning->only(['classification', 'letter_status', 'resolution', 'snapshot', 'issued_at', 'cancelled_at', 'cancellation_source']);
+            $wasIssued = $warning->letter_status === KompenResponHubWarningLetter::LetterStatusIssued;
+            $synchronized = $warning->classification !== 'fixed' && ($wasIssued || $warning->letter_status === KompenResponHubWarningLetter::LetterStatusDraft);
+            if ($synchronized) {
+                $warning->classification = 'fixed';
+                $warning->letter_status = KompenResponHubWarningLetter::LetterStatusIssued;
+            }
+
+            if ($warning->student !== null) {
+                $snapshot = $this->snapshot($warning->student);
+                $warning->snapshot = $snapshot;
+                $warning->resolution = $snapshot['sisa_hutang_jam'] > 0 ? 'outstanding' : 'completed';
+                $manuallyCancelled = $warning->letter_status === KompenResponHubWarningLetter::LetterStatusCancelled
+                    && $warning->cancellation_source !== KompenResponHubWarningLetter::CancellationSourceFinalizationRollback;
+                if ($warning->resolution === 'outstanding' && ! $manuallyCancelled) {
+                    $warning->letter_status = KompenResponHubWarningLetter::LetterStatusIssued;
                 }
-            });
+            }
 
-        KompenResponHubStudent::query()
-            ->fromActiveImportReference()
+            $issued = ! $wasIssued && $warning->letter_status === KompenResponHubWarningLetter::LetterStatusIssued;
+            if ($issued) {
+                $warning->issued_at = now()->toImmutable();
+                $warning->cancelled_at = null;
+                $warning->cancellation_source = null;
+                if (! $synchronized) {
+                    $warning->reason = 'SP diterbitkan otomatis saat periode difiksasi.';
+                }
+            }
+            if ($warning->isDirty()) {
+                $warning->updated_by_admin_id = $actor?->id;
+            }
+
+            yield compact('warning', 'before', 'synchronized', 'issued');
+        }
+
+        $students = KompenResponHubStudent::query()->fromActiveImportReference()
             ->where('periode_semester', $cutoff->periode_semester)
-            ->with(['progress', 'summaryOverride'])
-            ->chunkById(200, function ($students) use ($cutoff, $actor, $request, &$issuedWarningCount): void {
-                foreach ($students as $student) {
-                    $snapshot = $this->snapshot($student);
-                    $isOutstanding = $snapshot['sisa_hutang_jam'] > 0;
-                    $warning = KompenResponHubWarningLetter::query()
-                        ->where('cutoff_id', $cutoff->id)
-                        ->where('current_student_id', $student->id)
-                        ->first();
+            ->whereNotIn('id', $existing->whereNotNull('current_student_id')->select('current_student_id'))
+            ->with(['progress', 'summaryOverride'])->lazyById(200);
+        foreach ($students as $student) {
+            $snapshot = $this->snapshot($student);
+            if ($snapshot['sisa_hutang_jam'] <= 0) {
+                continue;
+            }
+            $warning = new KompenResponHubWarningLetter([
+                'cutoff_id' => $cutoff->id,
+                'current_student_id' => $student->id,
+                'nim' => $student->nim,
+                'nama_mahasiswa' => $student->nama_mahasiswa,
+                'periode_semester' => $student->periode_semester,
+                'kelas' => $student->kelas,
+                'classification' => 'fixed',
+                'letter_status' => KompenResponHubWarningLetter::LetterStatusIssued,
+                'resolution' => 'outstanding',
+                'snapshot' => $snapshot,
+                'reason' => 'SP diterbitkan otomatis saat periode difiksasi.',
+                'issued_at' => now(),
+                'created_by_admin_id' => $actor?->id,
+                'updated_by_admin_id' => $actor?->id,
+            ]);
 
-                    if ($warning === null && ! $isOutstanding) {
-                        continue;
-                    }
-
-                    if ($warning === null) {
-                        $warning = KompenResponHubWarningLetter::query()->create([
-                            'cutoff_id' => $cutoff->id,
-                            'current_student_id' => $student->id,
-                            'nim' => $student->nim,
-                            'periode_semester' => $student->periode_semester,
-                            'kelas' => $student->kelas,
-                            'nama_mahasiswa' => $student->nama_mahasiswa,
-                            'classification' => 'fixed',
-                            'letter_status' => KompenResponHubWarningLetter::LetterStatusIssued,
-                            'resolution' => 'outstanding',
-                            'snapshot' => $snapshot,
-                            'reason' => 'SP diterbitkan otomatis saat periode difiksasi.',
-                            'issued_at' => now(),
-                            'created_by_admin_id' => $actor?->id,
-                            'updated_by_admin_id' => $actor?->id,
-                        ]);
-                        $issuedWarningCount++;
-                        $this->recordIssuedWarning($warning, $cutoff, $actor, $request);
-
-                        continue;
-                    }
-
-                    $resolution = $isOutstanding ? 'outstanding' : 'completed';
-                    $needsIssuance = $isOutstanding
-                        && in_array($warning->letter_status, [
-                            KompenResponHubWarningLetter::LetterStatusNotCreated,
-                            KompenResponHubWarningLetter::LetterStatusDraft,
-                        ], true);
-                    $isPeriodFinalizationRollback = $warning->letter_status === KompenResponHubWarningLetter::LetterStatusCancelled
-                        && $warning->cancellation_source === KompenResponHubWarningLetter::CancellationSourceFinalizationRollback;
-                    $needsReissuance = $isOutstanding && $isPeriodFinalizationRollback;
-                    if ($warning->snapshot !== $snapshot || $warning->resolution !== $resolution || $needsIssuance || $needsReissuance) {
-                        $before = $warning->only(['letter_status', 'resolution', 'snapshot', 'issued_at', 'cancelled_at', 'cancellation_source']);
-                        $updates = [
-                            'snapshot' => $snapshot,
-                            'resolution' => $resolution,
-                            'updated_by_admin_id' => $actor?->id,
-                        ];
-
-                        if ($needsIssuance || $needsReissuance) {
-                            $updates['letter_status'] = KompenResponHubWarningLetter::LetterStatusIssued;
-                            $updates['issued_at'] = now();
-                            $updates['reason'] = 'SP diterbitkan otomatis saat periode difiksasi.';
-                            $updates['cancelled_at'] = null;
-                            $updates['cancellation_source'] = null;
-                        }
-
-                        $warning->update($updates);
-
-                        if ($needsIssuance || $needsReissuance) {
-                            $issuedWarningCount++;
-                            $this->recordIssuedWarning($warning, $cutoff, $actor, $request, $before);
-                        }
-                    }
-                }
-            });
-
-        return [
-            'issued_warning_count' => $issuedWarningCount,
-            'synchronized_warning_count' => $synchronizedWarningCount,
-        ];
+            yield ['warning' => $warning, 'before' => null, 'synchronized' => false, 'issued' => true];
+        }
     }
 
     /** @param array<string, mixed>|null $before */

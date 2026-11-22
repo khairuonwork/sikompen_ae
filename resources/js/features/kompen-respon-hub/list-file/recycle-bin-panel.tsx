@@ -1,3 +1,4 @@
+import { ConfirmForm } from "../shared/components/confirm-action";
 import { Form } from "@inertiajs/react";
 import { ArchiveRestore, ChevronDown, Recycle } from "lucide-react";
 import { restore as restoreActiveStudentImport } from "@/actions/App/Http/Controllers/KompenResponHubActiveStudentImportController";
@@ -123,16 +124,16 @@ function RecycleBinList({
                                     {version.periode_semester ?? "Periode belum ditetapkan"} · dihapus {formatJakartaDateTime(version.deleted_at)}
                                 </p>
                             </div>
-                            <Form
+                            <ConfirmForm
                                 {...(kind === "kompen_respon" ? restoreImport.form(version.id) : restoreActiveStudentImport.form(version.id))}
-                                onBefore={() => window.confirm(`Pulihkan ${"display_filename" in version ? version.display_filename : version.original_filename}?`)}
+                                title="Pulihkan file" description={`Pulihkan ${"display_filename" in version ? version.display_filename : version.original_filename} ke List File? File yang dipulihkan dapat dipilih kembali.`}
                             >
                                 {({ processing }) => (
                                     <Button type="submit" size="sm" disabled={processing} variant="outline" className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
                                         <ArchiveRestore className="size-3.5" /> {processing ? "Memulihkan…" : "Pulihkan"}
                                     </Button>
                                 )}
-                            </Form>
+                            </ConfirmForm>
                         </article>
                     ))}
                     <Pager<ImportVersion | ActiveStudentImportVersion> data={versions} />

@@ -9,6 +9,7 @@ use App\Http\Controllers\KompenResponHubActivityRetentionController;
 use App\Http\Controllers\KompenResponHubAdminSetupController;
 use App\Http\Controllers\KompenResponHubController;
 use App\Http\Controllers\KompenResponHubExportController;
+use App\Http\Controllers\KompenResponHubGuideController;
 use App\Http\Controllers\KompenResponHubImportActivationController;
 use App\Http\Controllers\KompenResponHubImportController;
 use App\Http\Controllers\KompenResponHubImportTaskController;
@@ -23,6 +24,8 @@ use App\Http\Controllers\StudentProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', KompenResponHubLandingController::class)->name('home');
+Route::get('panduan/mahasiswa', [KompenResponHubGuideController::class, 'student'])
+    ->name('guides.student');
 
 Route::middleware('guest:admin')->group(function (): void {
     Route::get('admin/login', [AdminAuthenticationController::class, 'create'])->name('login');
@@ -207,6 +210,7 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
         ->middleware('throttle:10,1')
         ->name('kompen-respon.active-students.imports.restore');
     Route::get('settings', [KompenResponHubAdminSetupController::class, 'settings'])->name('settings');
+    Route::get('panduan/admin', [KompenResponHubGuideController::class, 'admin'])->name('guides.admin');
     Route::get('student-password-resets', [StudentPasswordResetManagementController::class, 'index'])
         ->name('student-password-resets.index');
     Route::post('student-password-resets/{studentPasswordReset}/refresh', [StudentPasswordResetManagementController::class, 'refresh'])
