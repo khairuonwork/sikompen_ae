@@ -1358,6 +1358,34 @@ test('an uploaded workbook is queued and its progress remains available outside 
         ->assertJsonPath('data.progress', 0);
 });
 
+test('a workbook is rejected when its students do not match the active roster', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $rosterStudent = KompenResponHubActiveStudent::factory()->create([
+        'nim' => '987654321',
+        'nama_mahasiswa' => 'Mahasiswa Lain',
+    ]);
+
+    KompenResponHubActiveStudentImportReference::query()->create([
+        'selection_key' => KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey,
+        'periode_semester' => $rosterStudent->importBatch->periode_semester,
+        'sikompen_active_student_import_id' => $rosterStudent->sikompen_active_student_import_id,
+        'activated_at' => now(),
+    ]);
+
+    $this->actingAs($admin, 'admin')->post('/admin/kompen-respon/imports', [
+        'uploader_name' => 'Khairul Anwar',
+        'file' => UploadedFile::fake()->createWithContent('kompen-respon.xlsx', workbookContents()),
+    ])->assertRedirect('/admin?tab=upload');
+
+    $importTask = KompenResponHubImportTask::query()->sole();
+
+    expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
+        ->and($importTask->error_message)->toContain('Rina Utami (123456789) tidak ada pada daftar mahasiswa aktif')
+        ->and(Storage::disk('local')->exists($importTask->stored_path))->toBeFalse()
+        ->and(KompenResponHubImport::query()->doesntExist())->toBeTrue();
+});
+
 test('an identical workbook is not queued twice even when uploaded with a different filename', function () {
     Storage::fake('local');
     Queue::fake();
