@@ -209,7 +209,17 @@ export function ImportVersionList({
                                                     <Download className="mr-1.5 size-3.5" /> Unduh
                                                 </a>
                                             </Button>
-                                            {isEditMode ? (
+                                            {version.is_active ? (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => openManagementDialog(version, "release")}
+                                                    className="shrink-0 rounded-xl border-amber-300 bg-white text-xs font-bold text-amber-800 hover:bg-amber-100 hover:text-amber-900"
+                                                >
+                                                    <Unlink className="mr-1.5 size-3.5" /> Lepaskan
+                                                </Button>
+                                            ) : isEditMode ? (
                                                 <>
                                                     <Button type="button" size="sm" variant="outline" onClick={() => openManagementDialog(version, "rename")} className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
                                                         <Pencil className="mr-1.5 size-3.5" /> Ubah nama
@@ -218,10 +228,6 @@ export function ImportVersionList({
                                                         <Trash2 className="mr-1.5 size-3.5" /> Hapus
                                                     </Button>
                                                 </>
-                                            ) : version.is_active ? (
-                                                <Button size="sm" disabled className="shrink-0 rounded-xl bg-emerald-600 text-xs font-bold text-white disabled:opacity-100">
-                                                    Digunakan
-                                                </Button>
                                             ) : (
                                                 <ConfirmForm
                                                     {...activate.form(version.id)}

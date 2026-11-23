@@ -777,6 +777,42 @@ test('an admin can download a finalized SP artifact from List File', function ()
         ->assertDownload('2026-2027_Gasal_list_surat_peringatan.xlsx');
 });
 
+test('an admin can delete a finalized SP artifact and reopen its period for correction', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $cutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalize")
+        ->assertRedirect();
+
+    $artifact = KompenResponHubWarningLetterArtifact::query()->sole();
+    Storage::disk('local')->assertExists($artifact->stored_path);
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/warning-artifacts/{$artifact->id}")
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Artifact 2026-2027_Gasal_list_surat_peringatan.xlsx dihapus permanen. Finalisasi periode dibuka kembali untuk koreksi; 1 SP ditarik dan perlu difinalisasi ulang.');
+
+    expect(KompenResponHubWarningLetterArtifact::query()->doesntExist())->toBeTrue()
+        ->and(Storage::disk('local')->exists($artifact->stored_path))->toBeFalse()
+        ->and($cutoff->fresh()->closed_at)->toBeNull()
+        ->and(KompenResponHubWarningLetter::query()->sole()->letter_status)
+        ->toBe(KompenResponHubWarningLetter::LetterStatusCancelled)
+        ->and(KompenResponHubWarningLetter::query()->sole()->cancellation_source)
+        ->toBe(KompenResponHubWarningLetter::CancellationSourceArtifactDeletion)
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'warning_artifact.permanently_deleted')
+            ->where('periode_semester', $student->periode_semester)
+            ->exists())
+        ->toBeTrue();
+});
+
 test('a corrupted SP artifact is not downloaded', function () {
     Storage::fake('local');
     $admin = KompenResponHubAdmin::factory()->create();

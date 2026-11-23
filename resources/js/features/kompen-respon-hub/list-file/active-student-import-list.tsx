@@ -1,6 +1,6 @@
 import { ConfirmForm } from "../shared/components/confirm-action";
 import { Form } from "@inertiajs/react";
-import { CheckCircle2, Download, FilePenLine, Power, Trash2, UsersRound } from "lucide-react";
+import { CheckCircle2, Download, FilePenLine, Power, Trash2, Unlink, UsersRound } from "lucide-react";
 import { useState } from "react";
 import {
     activate,
@@ -193,7 +193,26 @@ export function ActiveStudentImportList({
                                                     <Download className="mr-1.5 size-3.5" /> Unduh
                                                 </a>
                                             </Button>
-                                            {isEditMode ? (
+                                            {version.is_active ? (
+                                                <ConfirmForm
+                                                    {...release.form(version.id)}
+                                                    title="Nonaktifkan roster"
+                                                    description={`Nonaktifkan ${version.original_filename}? Seluruh mahasiswa akan langsung kehilangan akses masuk. Akun dan riwayatnya tetap tersimpan.`}
+                                                >
+                                                    {({ processing }) => (
+                                                        <Button
+                                                            type="submit"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            disabled={processing}
+                                                            className="shrink-0 rounded-xl border-amber-300 bg-white text-xs font-bold text-amber-800 hover:bg-amber-100 hover:text-amber-900"
+                                                        >
+                                                            <Unlink className="mr-1.5 size-3.5" />
+                                                            {processing ? "Menonaktifkan…" : "Lepaskan roster"}
+                                                        </Button>
+                                                    )}
+                                                </ConfirmForm>
+                                            ) : isEditMode ? (
                                                 <Button
                                                     type="button"
                                                     size="sm"
@@ -210,8 +229,8 @@ export function ActiveStudentImportList({
                                                     title="Gunakan roster" description={`Gunakan ${version.original_filename} sebagai satu-satunya roster aktif? Mahasiswa yang tidak tercantum pada file baru akan langsung kehilangan akses masuk.`}
                                                 >
                                                     {({ processing }) => (
-                                                        <Button type="submit" size="sm" disabled={processing || version.is_active} className="shrink-0 rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
-                                                            {version.is_active ? "Sedang digunakan" : processing ? "Memilih…" : "Jadikan digunakan"}
+                                                        <Button type="submit" size="sm" disabled={processing} className="shrink-0 rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
+                                                            {processing ? "Memilih…" : "Jadikan digunakan"}
                                                         </Button>
                                                     )}
                                                 </ConfirmForm>

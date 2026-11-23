@@ -1,5 +1,6 @@
-import { Download, FileSpreadsheet, History, PencilLine } from "lucide-react";
-import { download } from "@/actions/App/Http/Controllers/KompenResponHubWarningLetterArtifactController";
+import { Download, FileSpreadsheet, History, PencilLine, Trash2 } from "lucide-react";
+import { destroy, download } from "@/actions/App/Http/Controllers/KompenResponHubWarningLetterArtifactController";
+import { ConfirmForm } from "../shared/components/confirm-action";
 import { Button } from "@/components/ui/button";
 import { Pager } from "../shared/components/pagination";
 import type { Pagination, WarningLetterArtifact } from "../shared/types";
@@ -111,12 +112,28 @@ export function WarningLetterArtifactList({
                                                     </p>
                                                 ) : null}
                                             </td>
-                                            <td className="px-5 py-4 text-right">
-                                                <Button asChild size="sm" variant="outline" className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
-                                                    <a href={download.url(artifact.id)}>
-                                                        <Download className="mr-1.5 size-3.5" /> Unduh
-                                                    </a>
-                                                </Button>
+                                            <td className="px-5 py-4">
+                                                <div className="flex min-w-max justify-end gap-2">
+                                                    <Button asChild size="sm" variant="outline" className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                                        <a href={download.url(artifact.id)}>
+                                                            <Download className="mr-1.5 size-3.5" /> Unduh
+                                                        </a>
+                                                    </Button>
+                                                    <ConfirmForm
+                                                        {...destroy.form(artifact.id)}
+                                                        title="Hapus artifact permanen"
+                                                        description={artifact.status === "finalized"
+                                                            ? `Hapus ${artifact.display_filename}? Artifact XLSX tidak dapat dipulihkan. Karena ini artifact final terbaru, finalisasi periode akan dibuka kembali untuk koreksi dan SP yang diterbitkan akan ditarik.`
+                                                            : `Hapus ${artifact.display_filename}? Artifact XLSX tidak dapat dipulihkan. Riwayat aktivitas tetap tersimpan.`}
+                                                        confirmButtonClassName="rounded-xl bg-rose-700 text-white hover:bg-rose-800 hover:text-white"
+                                                    >
+                                                        {({ processing }) => (
+                                                            <Button type="submit" size="sm" disabled={processing} variant="outline" className="rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:border-rose-700 hover:bg-rose-700 hover:text-white">
+                                                                <Trash2 className="mr-1.5 size-3.5" /> {processing ? "Menghapus…" : "Hapus"}
+                                                            </Button>
+                                                        )}
+                                                    </ConfirmForm>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
