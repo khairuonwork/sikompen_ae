@@ -68,6 +68,7 @@ class KompenResponHubLifecycleController extends Controller
             $cutoff->fill([
                 'periode_semester' => $validated['periode_semester'],
                 'deadline_at' => CarbonImmutable::createFromFormat('Y-m-d\\TH:i', $validated['deadline_at'], 'Asia/Jakarta'),
+                'cutoff_enabled' => true,
                 'timezone' => 'Asia/Jakarta',
                 'updated_by_admin_id' => $request->user('admin')?->id,
             ])->save();

@@ -122,7 +122,10 @@ class BuildKompenResponHubExport
      */
     private function warningRecords(KompenResponHubExportTask $task, array $filters): Collection
     {
-        $query = $this->dataQuery->warnings($filters);
+        $query = $this->dataQuery->warnings(
+            $filters,
+            ($filters['warning_scope'] ?? 'active') === 'all',
+        );
 
         if ($task->format === 'pdf') {
             return $query->get();
@@ -187,6 +190,9 @@ class BuildKompenResponHubExport
             'search' => 'pencarian',
             'mata_kuliah' => 'mata-kuliah',
             'nama_dosen' => 'dosen',
+            'kompen_status' => 'status-kompen',
+            'responsi_status' => 'status-responsi',
+            'warning_scope' => 'cakupan-sp',
             'import_type' => 'jenis-data',
             'import_month' => 'bulan',
             'import_year' => 'tahun',

@@ -20,7 +20,9 @@ use App\Models\KompenResponHubImportTask;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubStudentAccount;
+use App\Models\KompenResponHubStudentProgress;
 use App\Models\KompenResponHubSystemSetting;
+use App\Models\KompenResponHubWarningLetter;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -1717,6 +1719,111 @@ test('a level that differs from its class code marks the queued import as failed
     $importTask = KompenResponHubImportTask::query()->sole();
     expect($importTask->status)->toBe(KompenResponHubImportTask::STATUS_FAILED)
         ->and($importTask->error_message)->toContain('Tingkat harus sama dengan angka awal');
+});
+
+test('Kompen and Responsi status filters scope the student table independently', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $noKompen = createStudent();
+    $noKompen->update([
+        'nim' => '234567890',
+        'nama_mahasiswa' => 'Nadia Tanpa Kompen',
+        'total_kompensasi_jam' => 0,
+        'total_hutang_jam' => 2,
+        'sisa_hutang_jam' => 2,
+    ]);
+
+    $kompenSelesai = $noKompen->replicate();
+    $kompenSelesai->fill([
+        'nim' => '345678901',
+        'nama_mahasiswa' => 'Raka Kompen Selesai',
+        'total_kompensasi_jam' => 1.5,
+        'total_hutang_jam' => 3.5,
+        'sisa_hutang_jam' => 2,
+    ]);
+    $kompenSelesai->save();
+
+    KompenResponHubStudentProgress::create([
+        'current_student_id' => $kompenSelesai->id,
+        'nim' => $kompenSelesai->nim,
+        'periode_semester' => $kompenSelesai->periode_semester,
+        'kelas' => $kompenSelesai->kelas,
+        'kompensasi_dikerjakan_jam' => 1.5,
+        'responsi_dikerjakan_jam' => 0,
+        'reason' => 'Pengerjaan kompen sudah diverifikasi.',
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->getJson('/api/kompen-respon/students?kompen_status=not_required')
+        ->assertOk()
+        ->assertJsonPath('data.0.nim', $noKompen->nim)
+        ->assertJsonCount(1, 'data');
+
+    $this->actingAs($admin, 'admin')
+        ->getJson('/api/kompen-respon/students?kompen_status=completed&responsi_status=outstanding')
+        ->assertOk()
+        ->assertJsonPath('data.0.nim', $kompenSelesai->nim)
+        ->assertJsonCount(1, 'data');
+});
+
+test('an admin can export active warnings or include their history', function (): void {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createStudent();
+
+    KompenResponHubWarningLetter::create([
+        'current_student_id' => $student->id,
+        'nim' => $student->nim,
+        'periode_semester' => $student->periode_semester,
+        'kelas' => $student->kelas,
+        'nama_mahasiswa' => $student->nama_mahasiswa,
+        'classification' => 'fixed',
+        'letter_status' => 'issued',
+        'resolution' => 'outstanding',
+        'snapshot' => ['sisa_hutang_jam' => 3.5],
+        'issued_at' => now(),
+    ]);
+    KompenResponHubWarningLetter::create([
+        'nim' => '987654321',
+        'periode_semester' => $student->periode_semester,
+        'kelas' => $student->kelas,
+        'nama_mahasiswa' => 'Riwayat SP',
+        'classification' => 'fixed',
+        'letter_status' => 'cancelled',
+        'resolution' => 'outstanding',
+        'snapshot' => ['sisa_hutang_jam' => 2],
+        'cancelled_at' => now(),
+    ]);
+
+    $this->actingAs($admin, 'admin')->post('/exports', [
+        'resource' => 'warnings',
+        'format' => 'xlsx',
+        'periode_semester' => $student->periode_semester,
+        'warning_scope' => 'all',
+    ])->assertRedirect();
+
+    $task = KompenResponHubExportTask::query()->sole();
+    $result = app(BuildKompenResponHubExport::class)->execute($task);
+
+    $pdfTask = KompenResponHubExportTask::factory()->create([
+        'resource' => 'warnings',
+        'format' => 'pdf',
+        'filters' => [
+            'periode_semester' => $student->periode_semester,
+            'warning_scope' => 'all',
+        ],
+    ]);
+    $pdfResult = app(BuildKompenResponHubExport::class)->execute($pdfTask);
+
+    expect($task->filters)->toMatchArray(['warning_scope' => 'all'])
+        ->and($result['download_filename'])->toContain('cakupan-sp-all')
+        ->and(Storage::disk('local')->exists($result['output_path']))->toBeTrue()
+        ->and(Storage::disk('local')->get($pdfResult['output_path']))->toStartWith('%PDF-')
+        ->and(app(KompenResponHubDataQuery::class)->warnings([
+            'periode_semester' => $student->periode_semester,
+        ])->count())->toBe(1)
+        ->and(app(KompenResponHubDataQuery::class)->warnings([
+            'periode_semester' => $student->periode_semester,
+        ], true)->count())->toBe(2);
 });
 
 function createStudent(string $period = '2026/2027 Ganjil'): KompenResponHubStudent

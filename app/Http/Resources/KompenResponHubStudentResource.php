@@ -58,7 +58,7 @@ class KompenResponHubStudentResource extends JsonResource
             return 'completed';
         }
 
-        if ($this->cutoff === null) {
+        if ($this->cutoff === null || ! $this->cutoff->cutoff_enabled) {
             return 'cutoff_unset';
         }
 

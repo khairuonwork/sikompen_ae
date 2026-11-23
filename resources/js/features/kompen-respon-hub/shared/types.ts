@@ -98,6 +98,7 @@ export type Cutoff = {
     periode_semester: string;
     deadline_at: string;
     timezone: string;
+    cutoff_enabled: boolean;
     has_passed: boolean;
     is_available: boolean;
     is_selected: boolean;
@@ -113,6 +114,7 @@ export type WarningPeriodOption = {
     periode_semester: string;
     status:
         | "unconfigured"
+        | "managing"
         | "cutoff_active"
         | "ready_to_finalize"
         | "finalized"
@@ -278,6 +280,9 @@ export type Filters = {
     import_month?: string;
     import_year?: number;
     import_type?: "kompen_respon" | "active_students";
+    kompen_status?: "not_required" | "outstanding" | "completed";
+    responsi_status?: "not_required" | "outstanding" | "completed";
+    warning_scope?: "active" | "all";
     activity_event?: string;
     activity_actor?: string;
     per_page?: number;

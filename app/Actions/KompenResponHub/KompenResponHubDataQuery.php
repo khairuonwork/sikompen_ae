@@ -14,6 +14,7 @@ use App\Models\KompenResponHubWarningLetter;
 use App\Models\KompenResponHubWarningPeriodSelection;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 
 class KompenResponHubDataQuery
@@ -21,6 +22,14 @@ class KompenResponHubDataQuery
     public const FILTER_OPTIONS_CACHE_KEY = 'sikompen:filter-options:v2';
 
     public const FILTER_OPTIONS_CACHE_VERSION_KEY = 'sikompen:filter-options:version';
+
+    private const EffectiveKompensasiTotalExpression = 'COALESCE((SELECT total_kompensasi_jam FROM sikompen_mahasiswa_summary_overrides WHERE current_student_id = sikompen_mahasiswa.id LIMIT 1), sikompen_mahasiswa.total_kompensasi_jam)';
+
+    private const EffectiveResponsiTotalExpression = 'COALESCE((SELECT total_responsi_jam FROM sikompen_mahasiswa_summary_overrides WHERE current_student_id = sikompen_mahasiswa.id LIMIT 1), sikompen_mahasiswa.total_responsi_jam)';
+
+    private const EffectiveKompensasiCompletedExpression = 'COALESCE((SELECT kompensasi_dikerjakan_jam FROM sikompen_mahasiswa_progress WHERE current_student_id = sikompen_mahasiswa.id LIMIT 1), 0)';
+
+    private const EffectiveResponsiCompletedExpression = 'COALESCE((SELECT responsi_dikerjakan_jam FROM sikompen_mahasiswa_progress WHERE current_student_id = sikompen_mahasiswa.id LIMIT 1), 0)';
 
     /**
      * @param  array<string, mixed>  $filters
@@ -242,6 +251,7 @@ class KompenResponHubDataQuery
                     ->from($cutoffTable)
                     ->whereColumn("{$cutoffTable}.periode_semester", "{$studentTable}.periode_semester")
                     ->whereNull('closed_at')
+                    ->where('cutoff_enabled', true)
                     ->where('deadline_at', '<=', now());
             })
             ->whereRaw($this->effectiveDebtExpression())
@@ -379,6 +389,8 @@ class KompenResponHubDataQuery
             });
         }
 
+        $this->applyWorkStatusFilters($query, $filters);
+
         return $query
             ->orderBy('tingkat')
             ->orderBy('kelas')
@@ -430,6 +442,8 @@ class KompenResponHubDataQuery
                             ->orWhere('nim', 'like', $this->containsPattern((string) $filters['search']));
                     });
                 }
+
+                $this->applyWorkStatusFilters($studentQuery, $filters);
             });
         }
 
@@ -445,7 +459,7 @@ class KompenResponHubDataQuery
     /** @param array<string, mixed> $filters */
     private function hasStudentFilters(array $filters): bool
     {
-        foreach (['nim', 'nama', 'search', 'kelas', 'periode_semester', 'tingkat'] as $field) {
+        foreach (['nim', 'nama', 'search', 'kelas', 'periode_semester', 'tingkat', 'kompen_status', 'responsi_status'] as $field) {
             if (filled($filters[$field] ?? null)) {
                 return true;
             }
@@ -457,6 +471,34 @@ class KompenResponHubDataQuery
     private function containsPattern(string $value): string
     {
         return '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value).'%';
+    }
+
+    /**
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
+     * @param  array<string, mixed>  $filters
+     */
+    private function applyWorkStatusFilters(Builder $query, array $filters): void
+    {
+        foreach ([
+            'kompen_status' => [self::EffectiveKompensasiTotalExpression, self::EffectiveKompensasiCompletedExpression],
+            'responsi_status' => [self::EffectiveResponsiTotalExpression, self::EffectiveResponsiCompletedExpression],
+        ] as $filter => [$total, $completed]) {
+            $status = $filters[$filter] ?? null;
+
+            if (! is_string($status) || $status === '') {
+                continue;
+            }
+
+            if ($status === 'not_required') {
+                $query->whereRaw("({$total}) <= 0");
+            } elseif ($status === 'outstanding') {
+                $query->whereRaw("({$total}) > ({$completed})");
+            } elseif ($status === 'completed') {
+                $query->whereRaw("({$total}) > 0 AND ({$completed}) >= ({$total})");
+            }
+        }
     }
 
     /** @return literal-string */

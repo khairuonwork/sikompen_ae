@@ -191,7 +191,7 @@ class KompenResponHubController extends Controller
             ? KompenResponHubPeriodCutoff::query()
                 ->with('warningLetterArtifact')
                 ->orderByDesc('deadline_at')
-                ->get(['id', 'periode_semester', 'deadline_at', 'closed_at', 'timezone'])
+                ->get(['id', 'periode_semester', 'deadline_at', 'cutoff_enabled', 'closed_at', 'timezone'])
             : collect();
         $activeWarningPeriods = $isAdmin
             ? KompenResponHubActiveImport::query()
@@ -234,7 +234,7 @@ class KompenResponHubController extends Controller
         $listedCutoff = $cutoffsByPeriod->get($listedPeriod);
         if ($activeTab === 'warnings' && $listedCutoff !== null && $listedCutoff->closed_at === null
             && in_array($listedPeriod, $activeWarningPeriods, true)) {
-            if ($listedCutoff->deadline_at->isFuture()) {
+            if (! $listedCutoff->cutoff_enabled || $listedCutoff->deadline_at->isFuture()) {
                 [$projectionCount, $preview] = $this->recipientPreview($listedCutoff, $filters);
             } elseif ($listedPeriod === $selectedWarningPeriod) {
                 $projectionCount = $this->cutoffFinalizer->projectedRecipientCount($listedCutoff);
@@ -266,7 +266,9 @@ class KompenResponHubController extends Controller
                                 ? KompenResponHubWarningLetterArtifact::StatusFinalized
                                 : ($cutoff->warningLetterArtifact?->status === KompenResponHubWarningLetterArtifact::StatusRevising
                                     ? KompenResponHubWarningLetterArtifact::StatusRevising
-                                    : ($cutoff->deadline_at->isFuture() ? 'cutoff_active' : 'ready_to_finalize')));
+                                    : (! $cutoff->cutoff_enabled
+                                        ? 'managing'
+                                        : ($cutoff->deadline_at->isFuture() ? 'cutoff_active' : 'ready_to_finalize'))));
 
                     return [
                         'periode_semester' => $period,
@@ -293,7 +295,8 @@ class KompenResponHubController extends Controller
                         ->setTimezone($cutoff->timezone)
                         ->toIso8601String(),
                     'timezone' => $cutoff->timezone,
-                    'has_passed' => $cutoff->deadline_at->isPast(),
+                    'cutoff_enabled' => $cutoff->cutoff_enabled,
+                    'has_passed' => $cutoff->cutoff_enabled && $cutoff->deadline_at->isPast(),
                     'is_available' => in_array($cutoff->periode_semester, $activeWarningPeriods, true),
                     'is_selected' => $cutoff->periode_semester === $selectedWarningPeriod,
                     'finalization_status' => $cutoff->closed_at !== null

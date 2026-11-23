@@ -53,9 +53,9 @@ class SelectKompenResponHubWarningPeriod
     }
 
     /**
-     * Select an active workbook period for SP without making an admin define a
-     * deadline. The cutoff record remains an internal lifecycle anchor for
-     * warnings, revisions, artifacts, and rollback.
+     * Select an active workbook period for SP without enabling a cutoff. The
+     * cutoff record remains an internal lifecycle anchor for warnings,
+     * revisions, artifacts, and rollback.
      *
      * @return array{cutoff: KompenResponHubPeriodCutoff, changed: bool, created: bool}
      */
@@ -81,6 +81,7 @@ class SelectKompenResponHubWarningPeriod
                     $cutoff = KompenResponHubPeriodCutoff::query()->create([
                         'periode_semester' => $period,
                         'deadline_at' => now('Asia/Jakarta')->startOfMinute()->addMinutes(5),
+                        'cutoff_enabled' => false,
                         'timezone' => 'Asia/Jakarta',
                         'updated_by_admin_id' => $adminId,
                     ]);

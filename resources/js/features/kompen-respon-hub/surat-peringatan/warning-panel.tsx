@@ -85,6 +85,14 @@ function CutoffTimingNotice({
               className: "border-amber-300 bg-amber-50 text-amber-950",
               iconClassName: "bg-amber-600 text-white",
           }
+          : !cutoff.cutoff_enabled
+            ? {
+                icon: CalendarClock,
+                title: "Cutoff belum diaktifkan",
+                description: "Semester sedang dikelola dan dapat langsung difinalisasi. Aktifkan cutoff bila ingin menetapkan batas waktu kerja.",
+                className: "border-[#8AAEE0] bg-[#F0F3FA] text-[#1E293B]",
+                iconClassName: "bg-[#395886] text-white",
+            }
           : cutoff.has_passed
             ? {
                 icon: CircleAlert,
@@ -122,9 +130,11 @@ function CutoffTimingNotice({
                     <p className="mt-1 text-xs leading-relaxed font-medium">
                         {state.description}
                     </p>
-                    <p className="mt-2 text-xs font-bold">
-                        Batas waktu: {formattedDeadline} WIB
-                    </p>
+                    {cutoff.cutoff_enabled ? (
+                        <p className="mt-2 text-xs font-bold">
+                            Batas waktu: {formattedDeadline} WIB
+                        </p>
+                    ) : null}
                 </div>
             </div>
         </section>
@@ -339,6 +349,7 @@ export function WarningPanel({
     const [selectedInspectionPeriod, setSelectedInspectionPeriod] = useState(
         selectedListPeriod,
     );
+    const [isCutoffFormOpen, setIsCutoffFormOpen] = useState(false);
     const selectedCutoff = cutoffs.find(
         (cutoff) => cutoff.periode_semester === selectedWarningPeriod,
     );
@@ -358,7 +369,7 @@ export function WarningPanel({
         if (!option) return "Belum diatur";
         const labels: Record<WarningPeriodOption["status"], string> = {
             finalized: "SP final", revising: "Sedang dibenarkan", cutoff_active: "Cutoff aktif",
-            ready_to_finalize: "Cutoff terlewati", unconfigured: "Belum diatur",
+            ready_to_finalize: "Cutoff terlewati", managing: "Sedang diatur", unconfigured: "Belum diatur",
         };
         return labels[option.status] + (option.is_active_workbook ? "" : " · workbook historis");
     };
@@ -369,6 +380,10 @@ export function WarningPanel({
         setIsOtherPeriodPickerOpen(isInspectionMode);
         setSelectedInspectionPeriod(selectedListPeriod);
     }, [filters.kelas, filters.tingkat, isInspectionMode, selectedListPeriod]);
+
+    useEffect(() => {
+        setIsCutoffFormOpen(false);
+    }, [selectedCutoff?.id]);
 
     function selectManagedWarningPeriod(period: string): void {
         if (period === selectedWarningPeriod) {
@@ -616,24 +631,6 @@ export function WarningPanel({
                                 ))}
                             </SelectContent>
                         </Select>
-                        <div className="flex flex-wrap gap-2 pt-1">
-                            {selectableWarningPeriods.slice(0, 2).map((period, index) => (
-                                <Button
-                                    key={period}
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => selectManagedWarningPeriod(period)}
-                                    className="h-8 rounded-xl border-[#8AAEE0] bg-white text-[11px] font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
-                                >
-                                    {index === 0 ? "Terbaru tersedia" : "Sebelumnya tersedia"}: {period}
-                                </Button>
-                            ))}
-                        </div>
-                        <p className="text-xs text-[#395886]/70">
-                            Status semester ditentukan dari cutoff dan artifact,
-                            bukan dari roster mahasiswa aktif.
-                        </p>
                     </div>
                 ) : (
                     <div className="rounded-2xl border border-dashed border-[#8AAEE0] bg-[#F0F3FA]/60 p-4 text-xs text-[#395886]/75">
@@ -668,7 +665,35 @@ export function WarningPanel({
 
                 {selectedCutoff ? <CutoffTimingNotice cutoff={selectedCutoff} /> : null}
 
-                {selectedCutoff && canEditWarning ? (
+                {selectedCutoff && canEditWarning && !isCutoffFormOpen ? (
+                    <section className="flex flex-col gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F7FAFF] p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-sm font-extrabold text-[#395886]">
+                                {selectedCutoff.cutoff_enabled
+                                    ? "Batas cutoff sudah aktif"
+                                    : "Cutoff bersifat opsional"}
+                            </p>
+                            <p className="mt-1 text-xs leading-relaxed text-[#395886]/75">
+                                {selectedCutoff.cutoff_enabled
+                                    ? `Batas saat ini: ${formatCutoffDateTime(selectedCutoff.deadline_at, selectedCutoff.timezone)} WIB.`
+                                    : "Tanpa cutoff, admin dapat memeriksa data dan finalisasi langsung ketika semester sudah siap."}
+                            </p>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setIsCutoffFormOpen(true)}
+                            className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                        >
+                            <CalendarClock className="mr-1.5 size-3.5" />
+                            {selectedCutoff.cutoff_enabled
+                                ? "Edit cutoff"
+                                : "Aktifkan cutoff"}
+                        </Button>
+                    </section>
+                ) : null}
+
+                {selectedCutoff && canEditWarning && isCutoffFormOpen ? (
                     <Form
                         key={selectedCutoff.id}
                         {...storeCutoff.form()}
@@ -684,13 +709,15 @@ export function WarningPanel({
                                 {errors.periode_semester && <p className="text-xs font-bold text-rose-700">{errors.periode_semester}</p>}
                                 <div>
                                     <p className="text-sm font-extrabold text-[#395886]">
-                                        Batas waktu periode
+                                        {selectedCutoff.cutoff_enabled
+                                            ? "Edit batas cutoff"
+                                            : "Aktifkan batas cutoff"}
                                     </p>
                                     <p className="mt-1 text-xs leading-relaxed text-[#395886]/70">
-                                        Gunakan waktu WIB (Asia/Jakarta). Batas
-                                        waktu dapat diperbarui selama SP belum
-                                        final, termasuk saat periode sedang
-                                        dikoreksi.
+                                        Gunakan waktu WIB (Asia/Jakarta). Setelah
+                                        disimpan, cutoff aktif dan dapat diubah
+                                        lagi melalui opsi Edit cutoff selama SP
+                                        belum final.
                                     </p>
                                 </div>
                                 <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
@@ -708,14 +735,26 @@ export function WarningPanel({
                                             className="h-10 rounded-xl border-[#8AAEE0] bg-white text-sm font-semibold text-[#1E293B] [color-scheme:light]"
                                         />
                                     </div>
-                                    <Button
-                                        disabled={processing}
-                                        type="submit"
-                                        className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
-                                    >
-                                        <Save className="mr-1.5 size-3.5" />
-                                        Simpan cutoff
-                                    </Button>
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button
+                                            disabled={processing}
+                                            type="submit"
+                                            className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
+                                        >
+                                            <Save className="mr-1.5 size-3.5" />
+                                            {selectedCutoff.cutoff_enabled
+                                                ? "Simpan perubahan"
+                                                : "Aktifkan cutoff"}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setIsCutoffFormOpen(false)}
+                                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#F0F3FA]"
+                                        >
+                                            Batal
+                                        </Button>
+                                    </div>
                                 </div>
                             </>
                         )}
@@ -723,7 +762,7 @@ export function WarningPanel({
                 ) : null}
 
                 {selectedCutoff && canManage ? (
-                    <div className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center">
+                    <div className="grid gap-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
                         <div>
                             <p className="text-xs leading-relaxed font-medium text-amber-900">
                                 {isSelectedCutoffFinalized
@@ -743,8 +782,9 @@ export function WarningPanel({
                                 {...rollbackCutoffFinalization.form(
                                     selectedCutoff.id,
                                 )}
-                                className="flex shrink-0 flex-wrap items-center gap-2"
-                                title="Mulai koreksi" description={"Mulai koreksi seluruh SP pada periode ini? Mahasiswa akan segera hilang dari API SP. Artifact dan riwayat audit tetap tersimpan."}
+                                className="grid gap-3 rounded-xl border border-amber-200 bg-white/90 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+                                title="Mulai koreksi"
+                                description="Mulai koreksi seluruh SP pada periode ini? Mahasiswa akan segera hilang dari API SP. Artifact dan riwayat audit tetap tersimpan."
                             >
                                 {({ errors, processing }) => (
                                     <>
@@ -756,13 +796,13 @@ export function WarningPanel({
                                             minLength={5}
                                             maxLength={1000}
                                             placeholder="Alasan membuka koreksi"
-                                            className="h-9 min-w-52 bg-white text-xs"
+                                            className="h-10 bg-white text-sm"
                                         />
                                         <Button
                                             disabled={processing}
                                             type="submit"
                                             variant="outline"
-                                            className="rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
+                                            className="h-10 rounded-xl border-rose-300 bg-white px-4 text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
                                         >
                                             <Undo2 className="mr-1.5 size-3.5" />
                                             Mulai koreksi

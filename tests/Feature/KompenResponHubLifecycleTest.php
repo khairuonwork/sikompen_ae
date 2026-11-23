@@ -309,7 +309,7 @@ test('an admin can select an active workbook period and finalize its SP immediat
         ->and(KompenResponHubWarningLetterArtifact::query()->where('cutoff_id', $cutoff->id)->exists())->toBeTrue();
 });
 
-test('selecting an SP semester creates an editable cutoff five minutes in the future', function (): void {
+test('selecting an SP semester creates a lifecycle anchor without enabling the cutoff', function (): void {
     $this->travelTo(CarbonImmutable::create(2026, 10, 5, 10, 0, 0, 'Asia/Jakarta'));
 
     $admin = KompenResponHubAdmin::factory()->create();
@@ -322,7 +322,47 @@ test('selecting an SP semester creates an editable cutoff five minutes in the fu
         ->assertRedirect('/admin?tab=warnings');
 
     expect(KompenResponHubPeriodCutoff::query()->sole()->deadline_at)
-        ->toEqual(CarbonImmutable::create(2026, 10, 5, 10, 5, 0, 'Asia/Jakarta'));
+        ->toEqual(CarbonImmutable::create(2026, 10, 5, 10, 5, 0, 'Asia/Jakarta'))
+        ->and(KompenResponHubPeriodCutoff::query()->sole()->cutoff_enabled)->toBeFalse();
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=warnings')
+        ->assertInertia(fn ($page) => $page
+            ->where('warningPeriodOptions.0.status', 'managing')
+            ->where('cutoffs.0.cutoff_enabled', false)
+            ->where('cutoffs.0.has_passed', false),
+        );
+});
+
+test('an admin explicitly enables a cutoff for a managed SP semester', function (): void {
+    $this->travelTo(CarbonImmutable::create(2026, 10, 5, 10, 0, 0, 'Asia/Jakarta'));
+
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+
+    $this->actingAs($admin, 'admin')
+        ->post('/admin/kompen-respon/warning-periods/select', [
+            'periode_semester' => $student->periode_semester,
+        ])
+        ->assertRedirect('/admin?tab=warnings');
+
+    $this->actingAs($admin, 'admin')
+        ->put('/admin/kompen-respon/cutoffs', [
+            'periode_semester' => $student->periode_semester,
+            'deadline_at' => '2026-10-05T10:05',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Batas waktu periode berhasil disimpan.');
+
+    expect(KompenResponHubPeriodCutoff::query()->sole()->cutoff_enabled)->toBeTrue();
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=warnings')
+        ->assertInertia(fn ($page) => $page
+            ->where('warningPeriodOptions.0.status', 'cutoff_active')
+            ->where('cutoffs.0.cutoff_enabled', true)
+            ->where('cutoffs.0.has_passed', false),
+        );
 });
 
 test('the SP page shows a finalization recipient estimate before the cutoff passes', function (): void {

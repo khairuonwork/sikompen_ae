@@ -23,6 +23,8 @@ export function FilterPanel({
     const [tingkat, setTingkat] = useState(filters.tingkat?.toString() ?? "");
     const [kelas, setKelas] = useState(filters.kelas ?? "");
     const [periode, setPeriode] = useState(filters.periode_semester ?? "");
+    const [kompenStatus, setKompenStatus] = useState(filters.kompen_status ?? "");
+    const [responsiStatus, setResponsiStatus] = useState(filters.responsi_status ?? "");
     const [perPage, setPerPage] = useState(
         filters.per_page?.toString() ?? "15",
     );
@@ -31,12 +33,18 @@ export function FilterPanel({
     return (
         <Form
             {...indexAction.form()}
-            className="grid grid-cols-2 gap-3.5 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl lg:grid-cols-[minmax(220px,1fr)_repeat(4,minmax(140px,auto))]"
+            className="grid grid-cols-2 gap-3.5 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl lg:grid-cols-4"
         >
             <input name="tab" type="hidden" value={activeTab} />
             <input name="tingkat" type="hidden" value={tingkat} />
             <input name="kelas" type="hidden" value={kelas} />
             <input name="periode_semester" type="hidden" value={periode} />
+            {activeTab === "students" ? (
+                <>
+                    <input name="kompen_status" type="hidden" value={kompenStatus} />
+                    <input name="responsi_status" type="hidden" value={responsiStatus} />
+                </>
+            ) : null}
             <input name="per_page" type="hidden" value={perPage} />
 
             {/* Search Input */}
@@ -75,6 +83,39 @@ export function FilterPanel({
                     ))}
                 </SelectContent>
             </Select>
+
+            {activeTab === "students" ? (
+                <>
+                    <Select
+                        value={kompenStatus || undefined}
+                        onValueChange={(value) => setKompenStatus(value === "all" ? "" : value)}
+                    >
+                        <SelectTrigger className="w-full rounded-2xl border-[#8AAEE0] bg-white py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
+                            <SelectValue placeholder="Status Kompen" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl text-xs font-semibold">
+                            <SelectItem value="all" className="cursor-pointer hover:bg-[#B1C9EF]/20">Semua status Kompen</SelectItem>
+                            <SelectItem value="not_required" className="cursor-pointer hover:bg-[#B1C9EF]/20">Tidak ada Kompen</SelectItem>
+                            <SelectItem value="outstanding" className="cursor-pointer hover:bg-[#B1C9EF]/20">Kompen belum selesai</SelectItem>
+                            <SelectItem value="completed" className="cursor-pointer hover:bg-[#B1C9EF]/20">Kompen selesai</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select
+                        value={responsiStatus || undefined}
+                        onValueChange={(value) => setResponsiStatus(value === "all" ? "" : value)}
+                    >
+                        <SelectTrigger className="w-full rounded-2xl border-[#8AAEE0] bg-white py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
+                            <SelectValue placeholder="Status Responsi" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl text-xs font-semibold">
+                            <SelectItem value="all" className="cursor-pointer hover:bg-[#B1C9EF]/20">Semua status Responsi</SelectItem>
+                            <SelectItem value="not_required" className="cursor-pointer hover:bg-[#B1C9EF]/20">Tidak ada Responsi</SelectItem>
+                            <SelectItem value="outstanding" className="cursor-pointer hover:bg-[#B1C9EF]/20">Responsi belum selesai</SelectItem>
+                            <SelectItem value="completed" className="cursor-pointer hover:bg-[#B1C9EF]/20">Responsi selesai</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </>
+            ) : null}
 
             {/* Select Kelas */}
             <Select
@@ -135,7 +176,7 @@ export function FilterPanel({
             </Select>
 
             {/* Controls Row */}
-            <div className="col-span-2 flex gap-2 lg:col-span-1">
+            <div className="col-span-2 flex gap-2 lg:col-span-2">
                 <Select value={perPage} onValueChange={setPerPage}>
                     <SelectTrigger className="w-24 rounded-2xl border-[#8AAEE0] bg-white py-2.5 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
                         <SelectValue />
