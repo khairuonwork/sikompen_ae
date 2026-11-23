@@ -98,6 +98,7 @@ export type Cutoff = {
     periode_semester: string;
     deadline_at: string;
     timezone: string;
+    has_passed: boolean;
     is_available: boolean;
     is_selected: boolean;
     finalization_status: "editable" | "finalized" | "revising";

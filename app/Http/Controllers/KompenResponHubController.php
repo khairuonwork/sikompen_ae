@@ -293,6 +293,7 @@ class KompenResponHubController extends Controller
                         ->setTimezone($cutoff->timezone)
                         ->toIso8601String(),
                     'timezone' => $cutoff->timezone,
+                    'has_passed' => $cutoff->deadline_at->isPast(),
                     'is_available' => in_array($cutoff->periode_semester, $activeWarningPeriods, true),
                     'is_selected' => $cutoff->periode_semester === $selectedWarningPeriod,
                     'finalization_status' => $cutoff->closed_at !== null

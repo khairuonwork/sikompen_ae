@@ -343,7 +343,29 @@ test('the SP page shows a finalization recipient estimate before the cutoff pass
         ->get('/admin?tab=warnings')
         ->assertInertia(fn ($page) => $page
             ->where('warningCandidates.meta.total', 0)
+            ->where('cutoffs.0.has_passed', false)
             ->where('cutoffs.0.projected_recipient_count', 1),
+        );
+});
+
+test('the SP page exposes when a cutoff has passed using server time', function (): void {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createLifecycleStudent();
+    $cutoff = KompenResponHubPeriodCutoff::create([
+        'periode_semester' => $student->periode_semester,
+        'deadline_at' => now()->subMinute(),
+        'timezone' => 'Asia/Jakarta',
+    ]);
+    KompenResponHubWarningPeriodSelection::query()->create([
+        'selection_key' => KompenResponHubWarningPeriodSelection::ManagedWarningPeriodSelectionKey,
+        'sikompen_period_cutoff_id' => $cutoff->id,
+        'selected_at' => now(),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->get('/admin?tab=warnings')
+        ->assertInertia(fn ($page) => $page
+            ->where('cutoffs.0.has_passed', true),
         );
 });
 

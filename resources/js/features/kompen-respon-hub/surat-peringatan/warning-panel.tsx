@@ -8,6 +8,9 @@ import {
     Archive,
     Eye,
     EyeOff,
+    CalendarClock,
+    CircleAlert,
+    CircleCheck,
     Trash2,
     Undo2,
     X,
@@ -46,6 +49,87 @@ import type {
     WarningRecipient,
 } from "../shared/types";
 import { Pager } from "../shared/components/pagination";
+
+function formatCutoffDateTime(value: string, timezone: string): string {
+    return new Intl.DateTimeFormat("id-ID", {
+        dateStyle: "full",
+        timeStyle: "short",
+        timeZone: timezone,
+    }).format(new Date(value));
+}
+
+function CutoffTimingNotice({
+    cutoff,
+}: {
+    cutoff: Cutoff;
+}): React.JSX.Element {
+    const formattedDeadline = formatCutoffDateTime(
+        cutoff.deadline_at,
+        cutoff.timezone,
+    );
+    const isFinalized = cutoff.finalization_status === "finalized";
+    const isRevising = cutoff.finalization_status === "revising";
+    const state = isFinalized
+        ? {
+            icon: CircleCheck,
+            title: "Periode sudah final",
+            description: "Artifact XLSX resmi sudah diterbitkan. Mulai koreksi bila data perlu diperbaiki.",
+            className: "border-emerald-300 bg-emerald-50 text-emerald-950",
+            iconClassName: "bg-emerald-600 text-white",
+        }
+        : isRevising
+          ? {
+              icon: CircleAlert,
+              title: "Koreksi sedang dibuka",
+              description: "SP sementara tidak tersedia di API. Setelah data benar, finalisasi ulang untuk menerbitkan revisi XLSX.",
+              className: "border-amber-300 bg-amber-50 text-amber-950",
+              iconClassName: "bg-amber-600 text-white",
+          }
+          : cutoff.has_passed
+            ? {
+                icon: CircleAlert,
+                title: "Cutoff sudah terlewati",
+                description: "Periksa kandidat SP lalu finalisasi. Waktu cutoff dan data masih dapat diperbaiki selama periode belum final.",
+                className: "border-rose-300 bg-rose-50 text-rose-950",
+                iconClassName: "bg-rose-600 text-white",
+            }
+            : {
+                icon: CalendarClock,
+                title: "Cutoff masih berjalan",
+                description: "Gunakan waktu ini untuk memeriksa data. Pratinjau menunjukkan penerima bila finalisasi dilakukan sekarang.",
+                className: "border-[#8AAEE0] bg-[#F0F3FA] text-[#1E293B]",
+                iconClassName: "bg-[#395886] text-white",
+            };
+    const Icon = state.icon;
+
+    return (
+        <section
+            aria-live="polite"
+            className={cn("rounded-2xl border p-4", state.className)}
+        >
+            <div className="flex items-start gap-3">
+                <span
+                    aria-hidden="true"
+                    className={cn(
+                        "grid size-9 shrink-0 place-items-center rounded-xl shadow-sm",
+                        state.iconClassName,
+                    )}
+                >
+                    <Icon className="size-4" />
+                </span>
+                <div className="min-w-0">
+                    <p className="text-sm font-extrabold">{state.title}</p>
+                    <p className="mt-1 text-xs leading-relaxed font-medium">
+                        {state.description}
+                    </p>
+                    <p className="mt-2 text-xs font-bold">
+                        Batas waktu: {formattedDeadline} WIB
+                    </p>
+                </div>
+            </div>
+        </section>
+    );
+}
 
 export function WarningStatusBadge({
     warning,
@@ -581,6 +665,8 @@ export function WarningPanel({
                         mengelola Surat Peringatan.
                     </div>
                 )}
+
+                {selectedCutoff ? <CutoffTimingNotice cutoff={selectedCutoff} /> : null}
 
                 {selectedCutoff && canEditWarning ? (
                     <Form
