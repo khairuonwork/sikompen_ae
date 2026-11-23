@@ -7,8 +7,6 @@ use App\Models\KompenResponHubImport;
 use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubWarningLetter;
-use App\Models\KompenResponHubWarningPeriodSelection;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class ReleaseKompenResponHubImportVersion
@@ -53,16 +51,6 @@ class ReleaseKompenResponHubImportVersion
 
                 if ($hasActiveWarning) {
                     throw new \LogicException('Workbook tidak dapat dilepas karena periode ini masih memiliki SP aktif. Mulai koreksi periode SP terlebih dahulu.');
-                }
-
-                $isSelectedWarningPeriod = KompenResponHubWarningPeriodSelection::query()
-                    ->where('selection_key', KompenResponHubWarningPeriodSelection::ManagedWarningPeriodSelectionKey)
-                    ->whereHas('cutoff', fn (Builder $cutoffQuery): Builder => $cutoffQuery->where('periode_semester', $lockedImport->periode_semester))
-                    ->lockForUpdate()
-                    ->exists();
-
-                if ($isSelectedWarningPeriod) {
-                    throw new \LogicException('Workbook tidak dapat dilepas karena periodenya sedang dipilih sebagai periode SP aktif. Pilih periode SP aktif lain terlebih dahulu.');
                 }
 
                 $activeImport->delete();

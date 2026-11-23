@@ -9,6 +9,7 @@ use App\Models\KompenResponHubImportAuditLog;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubWarningLetter;
+use App\Models\KompenResponHubWarningLetterArtifact;
 use App\Models\KompenResponHubWarningPeriodSelection;
 
 test('an admin can release an active workbook without changing finalized warning history', function (): void {
@@ -55,28 +56,57 @@ test('an admin can release an active workbook without changing finalized warning
             ->exists())->toBeTrue();
 });
 
-test('an admin cannot release a workbook selected as the active SP period', function (): void {
+test('an admin can release a workbook selected as the active SP period after its correction is opened', function (): void {
     $admin = KompenResponHubAdmin::factory()->create();
     $import = activeWorkbookImport();
     $cutoff = KompenResponHubPeriodCutoff::query()->create([
         'periode_semester' => $import->periode_semester,
         'deadline_at' => now()->subDay(),
         'timezone' => 'Asia/Jakarta',
+        'closed_at' => now(),
     ]);
     KompenResponHubWarningPeriodSelection::query()->create([
         'selection_key' => KompenResponHubWarningPeriodSelection::ManagedWarningPeriodSelectionKey,
         'sikompen_period_cutoff_id' => $cutoff->id,
         'selected_at' => now(),
     ]);
+    KompenResponHubWarningLetter::query()->create([
+        'cutoff_id' => $cutoff->id,
+        'nim' => '261000001',
+        'periode_semester' => $import->periode_semester,
+        'kelas' => '1AEA1',
+        'nama_mahasiswa' => 'Alya Pratama',
+        'classification' => 'fixed',
+        'letter_status' => KompenResponHubWarningLetter::LetterStatusIssued,
+        'resolution' => 'outstanding',
+        'snapshot' => ['sisa_hutang_jam' => 1],
+    ]);
+    KompenResponHubWarningLetterArtifact::query()->create([
+        'cutoff_id' => $cutoff->id,
+        'status' => KompenResponHubWarningLetterArtifact::StatusFinalized,
+        'revision' => 1,
+        'display_filename' => '2026-2027_Gasal_list_surat_peringatan.xlsx',
+        'stored_path' => 'kompen-respon-hub/warning-artifacts/final.xlsx',
+        'file_hash' => hash('sha256', 'final.xlsx'),
+        'row_count' => 1,
+        'finalized_at' => now(),
+    ]);
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/cutoffs/{$cutoff->id}/finalization", [
+            'reason' => 'Workbook perlu diperbaiki.',
+        ])
+        ->assertRedirect();
 
     $this->actingAs($admin, 'admin')
         ->delete("/admin/kompen-respon/imports/{$import->id}/activation")
         ->assertRedirect('/admin?tab=files')
-        ->assertSessionHas('error', 'Workbook tidak dapat dilepas karena periodenya sedang dipilih sebagai periode SP aktif. Pilih periode SP aktif lain terlebih dahulu.');
+        ->assertSessionHas('success');
 
     expect(KompenResponHubActiveImport::query()
         ->where('kompen_respon_hub_import_id', $import->id)
-        ->exists())->toBeTrue();
+        ->doesntExist())->toBeTrue()
+        ->and($cutoff->fresh()->closed_at)->toBeNull();
 });
 
 test('an admin cannot release an active workbook while its period has an active warning', function (): void {
