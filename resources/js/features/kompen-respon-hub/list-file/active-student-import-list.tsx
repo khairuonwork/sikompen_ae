@@ -82,6 +82,9 @@ export function ActiveStudentImportList({
                                 <p className="mt-3 break-words font-mono text-xs font-bold text-[#395886]">
                                     {reference.import.original_filename}
                                 </p>
+                                <p className="mt-1 text-[11px] font-semibold text-[#395886]/75">
+                                    Periode data: {reference.periode_semester ?? "Belum ditetapkan"}
+                                </p>
                                 <p className="mt-1 text-[11px] text-[#395886]/60">
                                     Dipilih {formatJakartaDateTime(reference.activated_at)}
                                 </p>
@@ -150,15 +153,16 @@ export function ActiveStudentImportList({
                     </Button>
                 </div>
                 <div className="data-table-scroll">
-                    <table className="data-table min-w-[1300px]">
+                    <table className="data-table min-w-[1400px]">
                         <colgroup>
-                            {["27rem", "12rem", "14rem", "13rem", "24rem"].map((width, index) => (
+                            {["26rem", "12rem", "12rem", "14rem", "13rem", "24rem"].map((width, index) => (
                                 <col key={`${width}-${index}`} style={{ width }} />
                             ))}
                         </colgroup>
                         <thead className="border-b border-[#F0F3FA] bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                             <tr>
                                 <th className="px-5 py-4">File roster</th>
+                                <th className="px-5 py-4">Periode</th>
                                 <th className="px-5 py-4">Isi</th>
                                 <th className="px-5 py-4">Diunggah</th>
                                 <th className="px-5 py-4">Status</th>
@@ -175,6 +179,9 @@ export function ActiveStudentImportList({
                                         <p className="mt-1 text-[11px] text-[#395886]/60">
                                             {version.uploader_name} · {version.uploader_username ?? "—"}
                                         </p>
+                                    </td>
+                                    <td className="px-5 py-4 text-xs font-bold text-[#395886]">
+                                        {version.periode_semester ?? "Belum ditetapkan"}
                                     </td>
                                     <td className="px-5 py-4 text-xs font-semibold text-[#395886]">
                                         {version.class_count} kelas<br />
