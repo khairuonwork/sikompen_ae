@@ -138,6 +138,9 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
     Route::delete('kompen-respon/active-students/imports/{import}', [KompenResponHubActiveStudentImportController::class, 'destroy'])
         ->middleware('throttle:10,1')
         ->name('kompen-respon.active-students.imports.destroy');
+    Route::delete('kompen-respon/active-students/imports/{import}/permanent', [KompenResponHubActiveStudentImportController::class, 'forceDestroy'])
+        ->middleware('throttle:5,15')
+        ->name('kompen-respon.active-students.imports.force-destroy');
     Route::get('kompen-respon/active-students/import-tasks/{task}', [KompenResponHubActiveStudentImportController::class, 'showTask'])
         ->name('kompen-respon.active-students.import-tasks.show');
     Route::post('kompen-respon/imports', [KompenResponHubImportController::class, 'store'])
@@ -151,6 +154,9 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
     Route::delete('kompen-respon/imports/{import}', [KompenResponHubImportController::class, 'destroy'])
         ->middleware('throttle:10,15')
         ->name('kompen-respon.imports.destroy');
+    Route::delete('kompen-respon/imports/{import}/permanent', [KompenResponHubImportController::class, 'forceDestroy'])
+        ->middleware('throttle:5,15')
+        ->name('kompen-respon.imports.force-destroy');
     Route::post('kompen-respon/imports/{import}/activate', [KompenResponHubImportActivationController::class, 'store'])
         ->middleware('throttle:sikompen-workbook-activation')
         ->name('kompen-respon.imports.activate');

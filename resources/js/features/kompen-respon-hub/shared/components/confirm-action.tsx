@@ -9,6 +9,7 @@ type Confirmation = {
     title: string;
     description: string;
     submit: (finish: () => void) => void;
+    confirmButtonClassName?: string;
 };
 
 export function useConfirmAction() {
@@ -68,7 +69,7 @@ export function useConfirmAction() {
                     <Button
                         type="button"
                         disabled={processing}
-                        className="rounded-xl bg-[#395886] text-white hover:bg-[#1E293B] hover:text-white"
+                        className={action?.confirmButtonClassName ?? "rounded-xl bg-[#395886] text-white hover:bg-[#1E293B] hover:text-white"}
                         onClick={submit}
                     >
                         {processing ? "Memproses…" : action?.title}
@@ -84,9 +85,10 @@ export function useConfirmAction() {
 type ConfirmFormProps = ComponentProps<typeof Form<Record<string, string>>> & {
     title: string;
     description: string;
+    confirmButtonClassName?: string;
 };
 
-export function ConfirmForm({ title, description, ...props }: ConfirmFormProps) {
+export function ConfirmForm({ title, description, confirmButtonClassName, ...props }: ConfirmFormProps) {
     const { confirm, dialog } = useConfirmAction();
     const finishVisit = useRef<(() => void) | null>(null);
 
@@ -102,6 +104,7 @@ export function ConfirmForm({ title, description, ...props }: ConfirmFormProps) 
                     confirm({
                         title,
                         description,
+                        confirmButtonClassName,
                         submit: (finish) => {
                             if (!form.reportValidity()) {
                                 finish();

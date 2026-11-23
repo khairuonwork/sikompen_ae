@@ -1,8 +1,8 @@
 import { ConfirmForm } from "../shared/components/confirm-action";
 import { Form } from "@inertiajs/react";
-import { ArchiveRestore, ChevronDown, Recycle } from "lucide-react";
-import { restore as restoreActiveStudentImport } from "@/actions/App/Http/Controllers/KompenResponHubActiveStudentImportController";
-import { restore as restoreImport } from "@/actions/App/Http/Controllers/KompenResponHubImportController";
+import { ArchiveRestore, ChevronDown, Recycle, Trash2 } from "lucide-react";
+import { forceDestroy as forceDestroyActiveStudentImport, restore as restoreActiveStudentImport } from "@/actions/App/Http/Controllers/KompenResponHubActiveStudentImportController";
+import { forceDestroy as forceDestroyImport, restore as restoreImport } from "@/actions/App/Http/Controllers/KompenResponHubImportController";
 import { updateWorkbookRecycleBin } from "@/actions/App/Http/Controllers/KompenResponHubActivityRetentionController";
 import { Button } from "@/components/ui/button";
 import { Pager } from "../shared/components/pagination";
@@ -124,16 +124,30 @@ function RecycleBinList({
                                     {version.periode_semester ?? "Periode belum ditetapkan"} · dihapus {formatJakartaDateTime(version.deleted_at)}
                                 </p>
                             </div>
-                            <ConfirmForm
-                                {...(kind === "kompen_respon" ? restoreImport.form(version.id) : restoreActiveStudentImport.form(version.id))}
-                                title="Pulihkan file" description={`Pulihkan ${"display_filename" in version ? version.display_filename : version.original_filename} ke List File? File yang dipulihkan dapat dipilih kembali.`}
-                            >
-                                {({ processing }) => (
-                                    <Button type="submit" size="sm" disabled={processing} variant="outline" className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
-                                        <ArchiveRestore className="size-3.5" /> {processing ? "Memulihkan…" : "Pulihkan"}
-                                    </Button>
-                                )}
-                            </ConfirmForm>
+                            <div className="flex shrink-0 flex-wrap gap-2">
+                                <ConfirmForm
+                                    {...(kind === "kompen_respon" ? restoreImport.form(version.id) : restoreActiveStudentImport.form(version.id))}
+                                    title="Pulihkan file" description={`Pulihkan ${"display_filename" in version ? version.display_filename : version.original_filename} ke List File? File yang dipulihkan dapat dipilih kembali.`}
+                                >
+                                    {({ processing }) => (
+                                        <Button type="submit" size="sm" disabled={processing} variant="outline" className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                            <ArchiveRestore className="size-3.5" /> {processing ? "Memulihkan…" : "Pulihkan"}
+                                        </Button>
+                                    )}
+                                </ConfirmForm>
+                                <ConfirmForm
+                                    {...(kind === "kompen_respon" ? forceDestroyImport.form(version.id) : forceDestroyActiveStudentImport.form(version.id))}
+                                    title="Hapus permanen"
+                                    description={`Hapus permanen ${"display_filename" in version ? version.display_filename : version.original_filename}? File sumber dan data hasil impornya tidak dapat dipulihkan. Riwayat audit tetap tersimpan.`}
+                                    confirmButtonClassName="rounded-xl bg-rose-700 text-white hover:bg-rose-800 hover:text-white"
+                                >
+                                    {({ processing }) => (
+                                        <Button type="submit" size="sm" disabled={processing} variant="outline" className="rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:border-rose-700 hover:bg-rose-700 hover:text-white">
+                                            <Trash2 className="size-3.5" /> {processing ? "Menghapus…" : "Hapus permanen"}
+                                        </Button>
+                                    )}
+                                </ConfirmForm>
+                            </div>
                         </article>
                     ))}
                     <Pager<ImportVersion | ActiveStudentImportVersion> data={versions} />

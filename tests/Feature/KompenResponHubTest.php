@@ -1002,6 +1002,46 @@ test('an admin can move an inactive workbook version to the recycle bin while it
             ->exists())->toBeTrue();
 });
 
+test('an admin can permanently delete a trashed workbook and its imported data', function () {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createStudent();
+    $import = KompenResponHubImport::query()->findOrFail($student->kompen_respon_hub_import_id);
+    Storage::disk('local')->put($import->stored_path, 'workbook');
+
+    KompenResponHubActiveImport::query()
+        ->where('kompen_respon_hub_import_id', $import->id)
+        ->delete();
+    $import->delete();
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/imports/{$import->id}/permanent")
+        ->assertRedirect('/admin?tab=files')
+        ->assertSessionHas('success');
+
+    expect(KompenResponHubImport::withTrashed()->find($import->id))->toBeNull()
+        ->and(KompenResponHubStudent::query()->find($student->id))->toBeNull()
+        ->and(Storage::disk('local')->exists($import->stored_path))->toBeFalse()
+        ->and(KompenResponHubImportAuditLog::query()
+            ->where('event_type', KompenResponHubImportAuditLog::EVENT_PURGE)
+            ->where('original_filename', 'source.xlsx')
+            ->where('metadata->permanently_deleted_from_recycle_bin', true)
+            ->exists())->toBeTrue()
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'import.permanently_deleted')
+            ->where('subject_reference', (string) $import->id)
+            ->exists())->toBeTrue();
+});
+
+test('an admin cannot permanently delete a workbook outside the recycle bin', function () {
+    $admin = KompenResponHubAdmin::factory()->create();
+    $student = createStudent();
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/imports/{$student->kompen_respon_hub_import_id}/permanent")
+        ->assertNotFound();
+});
+
 test('an admin cannot delete the workbook version currently used by a period', function () {
     $admin = KompenResponHubAdmin::factory()->create();
     $student = createStudent();

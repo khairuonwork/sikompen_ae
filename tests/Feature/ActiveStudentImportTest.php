@@ -209,6 +209,39 @@ test('an administrator can move an unused active student roster version to the r
             ->exists())->toBeTrue();
 });
 
+test('an administrator can permanently delete a trashed active student roster', function (): void {
+    Storage::fake('local');
+    $admin = KompenResponHubAdmin::factory()->create();
+    $import = KompenResponHubActiveStudentImport::factory()->create([
+        'original_filename' => 'roster-salah.xlsx',
+        'stored_path' => 'kompen-respon-hub/imports/active-students/roster-salah.xlsx',
+    ]);
+    $student = KompenResponHubActiveStudent::factory()
+        ->for($import, 'importBatch')
+        ->create();
+    Storage::disk('local')->put($import->stored_path, 'workbook');
+    $import->delete();
+
+    $this->actingAs($admin, 'admin')
+        ->delete("/admin/kompen-respon/active-students/imports/{$import->id}/permanent")
+        ->assertRedirect('/admin?tab=files')
+        ->assertSessionHas('success');
+
+    expect(KompenResponHubActiveStudentImport::withTrashed()->find($import->id))->toBeNull()
+        ->and(KompenResponHubActiveStudent::query()->find($student->id))->toBeNull()
+        ->and(Storage::disk('local')->exists($import->stored_path))->toBeFalse()
+        ->and(KompenResponHubImportAuditLog::query()
+            ->where('event_type', KompenResponHubImportAuditLog::EVENT_PURGE)
+            ->where('import_type', KompenResponHubImportAuditLog::ImportTypeActiveStudents)
+            ->where('original_filename', 'roster-salah.xlsx')
+            ->where('metadata->permanently_deleted_from_recycle_bin', true)
+            ->exists())->toBeTrue()
+        ->and(KompenResponHubActivityLog::query()
+            ->where('event_type', 'active_students.permanently_deleted')
+            ->where('subject_reference', (string) $import->id)
+            ->exists())->toBeTrue();
+});
+
 test('an administrator cannot delete an active student roster version in use', function (): void {
     $admin = KompenResponHubAdmin::factory()->create();
     $import = KompenResponHubActiveStudentImport::factory()->create([

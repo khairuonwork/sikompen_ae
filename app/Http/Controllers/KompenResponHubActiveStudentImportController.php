@@ -8,6 +8,7 @@ use App\Actions\KompenResponHub\ReleaseKompenResponHubActiveStudentImport;
 use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Actions\KompenResponHub\ValidateKompenResponHubWorkbookArchive;
 use App\Http\Requests\DestroyKompenResponHubActiveStudentImportRequest;
+use App\Http\Requests\PermanentlyDestroyKompenResponHubActiveStudentImportRequest;
 use App\Http\Requests\ReleaseKompenResponHubActiveStudentImportRequest;
 use App\Http\Requests\RestoreKompenResponHubActiveStudentImportRequest;
 use App\Http\Requests\StoreKompenResponHubActiveStudentImportRequest;
@@ -261,6 +262,79 @@ class KompenResponHubActiveStudentImportController extends Controller
 
         return to_route('admin.kompen-respon.index', ['tab' => 'files'])
             ->with('success', "Versi {$restoredImport->original_filename} dipulihkan dari recycle bin.");
+    }
+
+    public function forceDestroy(
+        PermanentlyDestroyKompenResponHubActiveStudentImportRequest $request,
+        SikompenAdminAccess $access,
+        RecordKompenResponHubActivity $activity,
+        string $import,
+    ): RedirectResponse {
+        $actor = $access->actor($request);
+        $admin = $this->adminForActor($actor['id']);
+
+        /** @var array{id: int, original_filename: string, periode_semester: string|null, class_count: int, student_count: int} $deletedImport */
+        $deletedImport = DB::connection(config('kompen-respon-hub.database_connection'))
+            ->transaction(function () use ($actor, $admin, $import): array {
+                $trashedImport = KompenResponHubActiveStudentImport::onlyTrashed()
+                    ->lockForUpdate()
+                    ->findOrFail((int) $import);
+
+                $snapshot = [
+                    'id' => $trashedImport->id,
+                    'original_filename' => $trashedImport->original_filename,
+                    'periode_semester' => $trashedImport->periode_semester,
+                    'class_count' => $trashedImport->class_count,
+                    'student_count' => $trashedImport->student_count,
+                ];
+
+                if (str_starts_with($trashedImport->stored_path, 'kompen-respon-hub/imports/active-students/')
+                    && Storage::disk('local')->exists($trashedImport->stored_path)) {
+                    abort_unless(
+                        Storage::disk('local')->delete($trashedImport->stored_path),
+                        500,
+                        'File roster tidak dapat dihapus dari penyimpanan.',
+                    );
+                }
+
+                KompenResponHubImportAuditLog::create([
+                    'event_type' => KompenResponHubImportAuditLog::EVENT_PURGE,
+                    'import_type' => KompenResponHubImportAuditLog::ImportTypeActiveStudents,
+                    'source_active_student_import_id' => $trashedImport->id,
+                    'actor_name' => $admin instanceof KompenResponHubAdmin ? $admin->username : $actor['username'],
+                    'actor_username' => $actor['username'],
+                    'periode_semester' => $trashedImport->periode_semester,
+                    'original_filename' => $trashedImport->original_filename,
+                    'class_count' => $trashedImport->class_count,
+                    'student_count' => $trashedImport->student_count,
+                    'detail_count' => 0,
+                    'metadata' => ['permanently_deleted_from_recycle_bin' => true],
+                    'occurred_at' => now(),
+                ]);
+
+                $trashedImport->forceDelete();
+
+                return $snapshot;
+            });
+
+        $activity->execute(
+            'active_students.permanently_deleted',
+            'active_student_import',
+            (string) $deletedImport['id'],
+            $admin,
+            $request,
+            reason: 'Roster dan data mahasiswa sumber dihapus permanen dari recycle bin.',
+            beforeState: [
+                'original_filename' => $deletedImport['original_filename'],
+                'student_count' => $deletedImport['student_count'],
+                'class_count' => $deletedImport['class_count'],
+            ],
+            subjectName: $deletedImport['original_filename'],
+            period: $deletedImport['periode_semester'],
+        );
+
+        return to_route('admin.kompen-respon.index', ['tab' => 'files'])
+            ->with('success', "Versi {$deletedImport['original_filename']} dihapus permanen dari recycle bin.");
     }
 
     public function activate(

@@ -51,10 +51,6 @@ class PurgeKompenResponHubRecycledWorkbooks extends Command
             ->where('deleted_at', '<=', $threshold)
             ->chunkById(100, function ($imports) use (&$purgedCount): void {
                 foreach ($imports as $import) {
-                    if ($import->students()->exists()) {
-                        continue;
-                    }
-
                     if (str_starts_with($import->stored_path, 'kompen-respon-hub/imports/')) {
                         Storage::disk('local')->delete($import->stored_path);
                     }
