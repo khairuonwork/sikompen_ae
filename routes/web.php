@@ -127,6 +127,9 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
     Route::post('kompen-respon/active-students/imports', [KompenResponHubActiveStudentImportController::class, 'store'])
         ->middleware('throttle:10,15')
         ->name('kompen-respon.active-students.imports.store');
+    Route::put('kompen-respon/active-students/imports/{import}', [KompenResponHubActiveStudentImportController::class, 'update'])
+        ->middleware('throttle:20,1')
+        ->name('kompen-respon.active-students.imports.update');
     Route::get('kompen-respon/active-students/imports/{import}/download', [KompenResponHubActiveStudentImportController::class, 'downloadUploadedWorkbook'])
         ->name('kompen-respon.active-students.imports.download');
     Route::post('kompen-respon/active-students/imports/{import}/activate', [KompenResponHubActiveStudentImportController::class, 'activate'])
@@ -182,6 +185,9 @@ Route::middleware(['sikompen.admin', 'sikompen.standard-admin'])->prefix('admin'
         ->name('kompen-respon.cutoffs.finalization.destroy');
     Route::get('kompen-respon/warning-artifacts/{artifact}/download', [KompenResponHubWarningLetterArtifactController::class, 'download'])
         ->name('kompen-respon.warning-artifacts.download');
+    Route::put('kompen-respon/warning-artifacts/{artifact}', [KompenResponHubWarningLetterArtifactController::class, 'update'])
+        ->middleware('throttle:20,1')
+        ->name('kompen-respon.warning-artifacts.update');
     Route::delete('kompen-respon/warning-artifacts/{artifact}', [KompenResponHubWarningLetterArtifactController::class, 'destroy'])
         ->middleware('throttle:5,15')
         ->name('kompen-respon.warning-artifacts.destroy');

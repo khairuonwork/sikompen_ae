@@ -7,6 +7,7 @@ import {
     destroy as destroyImport,
     downloadUploadedWorkbook,
     release,
+    update,
 } from "@/actions/App/Http/Controllers/KompenResponHubActiveStudentImportController";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,12 +18,16 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Pager } from "../shared/components/pagination";
 import type {
     ActiveStudentImportReference,
     ActiveStudentImportVersion,
     Pagination,
 } from "../shared/types";
+
+type FileManagementAction = "rename" | "delete" | null;
 
 function formatJakartaDateTime(value: string): string {
     return new Intl.DateTimeFormat("id-ID", {
@@ -41,6 +46,12 @@ export function ActiveStudentImportList({
 }): React.JSX.Element {
     const [isEditMode, setIsEditMode] = useState(false);
     const [selectedVersion, setSelectedVersion] = useState<ActiveStudentImportVersion | null>(null);
+    const [managementAction, setManagementAction] = useState<FileManagementAction>(null);
+
+    function closeManagementDialog(): void {
+        setSelectedVersion(null);
+        setManagementAction(null);
+    }
 
     return (
         <section className="grid gap-4">
@@ -213,16 +224,32 @@ export function ActiveStudentImportList({
                                                     )}
                                                 </ConfirmForm>
                                             ) : isEditMode ? (
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant="outline"
-                                                    disabled={version.is_active}
-                                                    onClick={() => setSelectedVersion(version)}
-                                                    className="shrink-0 rounded-xl border-rose-200 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
-                                                >
-                                                    <Trash2 className="mr-1.5 size-3.5" /> Hapus
-                                                </Button>
+                                                <>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            setSelectedVersion(version);
+                                                            setManagementAction("rename");
+                                                        }}
+                                                        className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
+                                                    >
+                                                        <FilePenLine className="mr-1.5 size-3.5" /> Ubah nama
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            setSelectedVersion(version);
+                                                            setManagementAction("delete");
+                                                        }}
+                                                        className="shrink-0 rounded-xl border-rose-200 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
+                                                    >
+                                                        <Trash2 className="mr-1.5 size-3.5" /> Hapus
+                                                    </Button>
+                                                </>
                                             ) : (
                                                 <ConfirmForm
                                                     {...activate.form(version.id)}
@@ -246,19 +273,44 @@ export function ActiveStudentImportList({
             </div>
 
             <Dialog
-                open={selectedVersion !== null}
+                open={selectedVersion !== null && managementAction !== null}
                 onOpenChange={(isOpen) => {
                     if (!isOpen) {
-                        setSelectedVersion(null);
+                        closeManagementDialog();
                     }
                 }}
             >
                 <DialogContent className="rounded-3xl border-[#B1C9EF] bg-white p-6 text-[#395886]">
-                    {selectedVersion !== null ? (
+                    {selectedVersion !== null && managementAction === "rename" ? (
+                        <Form
+                            key={`rename-${selectedVersion.id}`}
+                            {...update.form(selectedVersion.id)}
+                            onSuccess={closeManagementDialog}
+                        >
+                            {({ errors, processing }) => (
+                                <div className="grid gap-5">
+                                    <DialogHeader>
+                                        <DialogTitle className="text-[#395886]">Ubah nama file</DialogTitle>
+                                        <DialogDescription className="text-[#395886]/70">Ekstensi .xlsx selalu dipertahankan; isi roster tidak berubah.</DialogDescription>
+                                    </DialogHeader>
+                                    <div className="grid gap-2 py-2">
+                                        <Label htmlFor="display_filename" className="text-xs font-bold text-[#395886]">Nama file</Label>
+                                        <Input id="display_filename" name="display_filename" defaultValue={selectedVersion.original_filename} className="border-[#8AAEE0] bg-white text-[#395886]" />
+                                        {errors.display_filename ? <p className="text-xs font-semibold text-rose-700">{errors.display_filename}</p> : null}
+                                    </div>
+                                    <DialogFooter className="gap-3 sm:gap-3">
+                                        <Button type="button" variant="outline" onClick={closeManagementDialog} className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#F0F3FA] hover:text-[#395886]">Batal</Button>
+                                        <Button type="submit" disabled={processing} className="bg-[#395886] text-white hover:bg-[#1E293B] hover:text-white">{processing ? "Menyimpan…" : "Simpan nama"}</Button>
+                                    </DialogFooter>
+                                </div>
+                            )}
+                        </Form>
+                    ) : null}
+                    {selectedVersion !== null && managementAction === "delete" ? (
                         <Form
                             key={`delete-${selectedVersion.id}`}
                             {...destroyImport.form(selectedVersion.id)}
-                            onSuccess={() => setSelectedVersion(null)}
+                            onSuccess={closeManagementDialog}
                         >
                             {({ processing }) => (
                                 <div className="grid gap-5">
@@ -272,7 +324,7 @@ export function ActiveStudentImportList({
                                         <Button
                                             type="button"
                                             variant="outline"
-                                            onClick={() => setSelectedVersion(null)}
+                                            onClick={closeManagementDialog}
                                             className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#F0F3FA] hover:text-[#395886]"
                                         >
                                             Batal

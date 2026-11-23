@@ -1,7 +1,12 @@
-import { Download, FileSpreadsheet, History, PencilLine, Trash2 } from "lucide-react";
-import { destroy, download } from "@/actions/App/Http/Controllers/KompenResponHubWarningLetterArtifactController";
+import { Form } from "@inertiajs/react";
+import { Download, FilePenLine, FileSpreadsheet, History, PencilLine, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { destroy, download, update } from "@/actions/App/Http/Controllers/KompenResponHubWarningLetterArtifactController";
 import { ConfirmForm } from "../shared/components/confirm-action";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Pager } from "../shared/components/pagination";
 import type { Pagination, WarningLetterArtifact } from "../shared/types";
 
@@ -22,6 +27,9 @@ export function WarningLetterArtifactList({
 }: {
     data: Pagination<WarningLetterArtifact>;
 }): React.JSX.Element {
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [selectedArtifact, setSelectedArtifact] = useState<WarningLetterArtifact | null>(null);
+
     return (
         <section className="overflow-hidden rounded-3xl border border-white/80 bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl">
             <div className="flex flex-col justify-between gap-3 border-b border-[#F0F3FA] px-5 py-4 sm:flex-row sm:items-center">
@@ -33,6 +41,9 @@ export function WarningLetterArtifactList({
                         Hasil XLSX resmi setiap periode. Saat koreksi dibuka, file sebelumnya tetap tersimpan tetapi belum menjadi hasil final.
                     </p>
                 </div>
+                <Button type="button" variant="outline" onClick={() => setIsEditMode((enabled) => !enabled)} className={isEditMode ? "rounded-xl border-[#395886] bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white" : "rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"}>
+                    <FilePenLine className="size-3.5" /> {isEditMode ? "Selesai mengelola" : "Kelola file"}
+                </Button>
             </div>
             {data.data.length > 0 ? (
                 <>
@@ -119,6 +130,11 @@ export function WarningLetterArtifactList({
                                                             <Download className="mr-1.5 size-3.5" /> Unduh
                                                         </a>
                                                     </Button>
+                                                    {isEditMode ? (
+                                                        <Button type="button" size="sm" variant="outline" onClick={() => setSelectedArtifact(artifact)} className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                                            <FilePenLine className="mr-1.5 size-3.5" /> Ubah nama
+                                                        </Button>
+                                                    ) : null}
                                                     <ConfirmForm
                                                         {...destroy.form(artifact.id)}
                                                         title="Hapus artifact permanen"
@@ -148,6 +164,21 @@ export function WarningLetterArtifactList({
                     Belum ada artifact Surat Peringatan. Finalisasi periode setelah cutoff untuk membuat XLSX resmi.
                 </p>
             )}
+            <Dialog open={selectedArtifact !== null} onOpenChange={(isOpen) => { if (!isOpen) setSelectedArtifact(null); }}>
+                <DialogContent className="rounded-3xl border-[#B1C9EF] bg-white p-6 text-[#395886]">
+                    {selectedArtifact ? (
+                        <Form {...update.form(selectedArtifact.id)} onSuccess={() => setSelectedArtifact(null)}>
+                            {({ errors, processing }) => (
+                                <div className="grid gap-5">
+                                    <DialogHeader><DialogTitle className="text-[#395886]">Ubah nama artifact</DialogTitle><DialogDescription className="text-[#395886]/70">Ekstensi .xlsx selalu dipertahankan; isi artifact tidak berubah.</DialogDescription></DialogHeader>
+                                    <div className="grid gap-2"><Label htmlFor="display_filename" className="text-xs font-bold text-[#395886]">Nama file</Label><Input id="display_filename" name="display_filename" defaultValue={selectedArtifact.display_filename} className="border-[#8AAEE0] bg-white text-[#395886]" />{errors.display_filename ? <p className="text-xs font-semibold text-rose-700">{errors.display_filename}</p> : null}</div>
+                                    <DialogFooter className="gap-3 sm:gap-3"><Button type="button" variant="outline" onClick={() => setSelectedArtifact(null)} className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#F0F3FA] hover:text-[#395886]">Batal</Button><Button type="submit" disabled={processing} className="bg-[#395886] text-white hover:bg-[#1E293B] hover:text-white">{processing ? "Menyimpan…" : "Simpan nama"}</Button></DialogFooter>
+                                </div>
+                            )}
+                        </Form>
+                    ) : null}
+                </DialogContent>
+            </Dialog>
         </section>
     );
 }

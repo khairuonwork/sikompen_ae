@@ -12,6 +12,7 @@ use App\Http\Requests\PermanentlyDestroyKompenResponHubActiveStudentImportReques
 use App\Http\Requests\ReleaseKompenResponHubActiveStudentImportRequest;
 use App\Http\Requests\RestoreKompenResponHubActiveStudentImportRequest;
 use App\Http\Requests\StoreKompenResponHubActiveStudentImportRequest;
+use App\Http\Requests\UpdateKompenResponHubImportRequest;
 use App\Http\Resources\KompenResponHubActiveStudentImportTaskResource;
 use App\Jobs\ProcessKompenResponHubActiveStudentImport;
 use App\Models\KompenResponHubActiveStudentImport;
@@ -31,6 +32,36 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class KompenResponHubActiveStudentImportController extends Controller
 {
+    public function update(
+        UpdateKompenResponHubImportRequest $request,
+        SikompenAdminAccess $access,
+        RecordKompenResponHubActivity $activity,
+        KompenResponHubActiveStudentImport $import,
+    ): RedirectResponse {
+        $actor = $access->actor($request);
+        $admin = KompenResponHubAdmin::query()->find($actor['id']);
+        $displayFilename = $request->string('display_filename')->toString();
+        $previousFilename = $import->original_filename;
+
+        $import->update(['original_filename' => $displayFilename]);
+
+        $activity->execute(
+            'active_students.import_renamed',
+            'active_student_import',
+            (string) $import->id,
+            $admin,
+            $request,
+            period: $import->periode_semester,
+            reason: 'Nama tampilan roster mahasiswa aktif diperbarui.',
+            beforeState: ['display_filename' => $previousFilename],
+            afterState: ['display_filename' => $displayFilename],
+            subjectName: $displayFilename,
+        );
+
+        return to_route('admin.kompen-respon.index', ['tab' => 'files'])
+            ->with('success', "Nama roster diperbarui menjadi {$displayFilename}.");
+    }
+
     public function downloadTemplate(): BinaryFileResponse
     {
         $path = storage_path('app/private/kompen-respon-hub/Template_Daftar_Mahasiswa_Aktif_Sikompen.xlsx');

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Actions\KompenResponHub\SikompenAdminAccess;
 use App\Http\Requests\PermanentlyDestroyKompenResponHubWarningLetterArtifactRequest;
+use App\Http\Requests\UpdateKompenResponHubImportRequest;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubWarningLetter;
@@ -16,6 +17,36 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class KompenResponHubWarningLetterArtifactController extends Controller
 {
+    public function update(
+        UpdateKompenResponHubImportRequest $request,
+        SikompenAdminAccess $access,
+        RecordKompenResponHubActivity $activity,
+        KompenResponHubWarningLetterArtifact $artifact,
+    ): RedirectResponse {
+        $actor = $access->actor($request);
+        $admin = KompenResponHubAdmin::query()->find($actor['id']);
+        $displayFilename = $request->string('display_filename')->toString();
+        $previousFilename = $artifact->display_filename;
+
+        $artifact->update(['display_filename' => $displayFilename]);
+
+        $activity->execute(
+            'warning_artifact.renamed',
+            'warning_letter_artifact',
+            (string) $artifact->id,
+            $admin,
+            $request,
+            period: $artifact->cutoff?->periode_semester,
+            reason: 'Nama tampilan artifact Surat Peringatan diperbarui.',
+            beforeState: ['display_filename' => $previousFilename],
+            afterState: ['display_filename' => $displayFilename],
+            subjectName: $displayFilename,
+        );
+
+        return to_route('admin.kompen-respon.index', ['tab' => 'files'])
+            ->with('success', "Nama artifact diperbarui menjadi {$displayFilename}.");
+    }
+
     public function download(KompenResponHubWarningLetterArtifact $artifact): StreamedResponse
     {
         $disk = Storage::disk('local');
