@@ -20,6 +20,7 @@ class KompenResponHubActiveStudentImportReferenceFactory extends Factory
     public function definition(): array
     {
         return [
+            'selection_key' => KompenResponHubActiveStudentImportReference::StudentLoginSelectionKey,
             'periode_semester' => '2027/2028 Gasal',
             'sikompen_active_student_import_id' => KompenResponHubActiveStudentImport::factory(),
             'activated_by_admin_id' => KompenResponHubAdmin::factory(),

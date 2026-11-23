@@ -20,13 +20,19 @@ export type Student = {
     effective_kompensasi_dikerjakan_jam: string;
     effective_responsi_dikerjakan_jam: string;
     effective_sisa_hutang_jam: string;
-    progress_status: "none" | "completed" | "warning_active";
+    progress_status:
+        | "no_obligation"
+        | "completed"
+        | "cutoff_unset"
+        | "in_progress"
+        | "awaiting_finalization"
+        | "warning_active"
+        | "needs_review";
     last_worked_at: string | null;
     has_summary_override: boolean;
     has_active_warning: boolean;
     warning: Pick<Warning, "id" | "letter_status" | "resolution"> | null;
 };
-
 export type Detail = {
     id: number;
     student_id: number;
@@ -92,6 +98,56 @@ export type Cutoff = {
     periode_semester: string;
     deadline_at: string;
     timezone: string;
+    cutoff_enabled: boolean;
+    has_passed: boolean;
+    is_available: boolean;
+    is_selected: boolean;
+    finalization_status: "editable" | "finalized" | "revising";
+    finalized_at: string | null;
+    artifact_revision: number | null;
+    projected_recipient_count: number | null;
+};
+
+export type WarningRecipient = Pick<Student, "nim" | "nama_mahasiswa" | "kelas" | "periode_semester" | "effective_sisa_hutang_jam"> & { id: string | number };
+
+export type WarningPeriodOption = {
+    periode_semester: string;
+    status:
+        | "unconfigured"
+        | "managing"
+        | "cutoff_active"
+        | "ready_to_finalize"
+        | "finalized"
+        | "revising";
+    is_active_workbook: boolean;
+    is_selected: boolean;
+};
+
+export type WarningLetterArtifact = {
+    id: number;
+    cutoff_id: number;
+    periode_semester: string | null;
+    status: "finalized" | "revising" | "superseded";
+    revision: number;
+    display_filename: string;
+    row_count: number;
+    source_provenance: {
+        kompen_respon_workbook: {
+            import_id: number;
+            display_filename: string;
+            file_hash: string;
+            periode_semester: string;
+        };
+        active_student_roster: {
+            import_id: number;
+            original_filename: string;
+            file_hash: string;
+            periode_semester: string | null;
+        } | null;
+    } | null;
+    finalized_at: string;
+    finalized_by_admin_id: number | null;
+    correction_started_at: string | null;
 };
 
 export type ImportAuditLog = {
@@ -224,6 +280,9 @@ export type Filters = {
     import_month?: string;
     import_year?: number;
     import_type?: "kompen_respon" | "active_students";
+    kompen_status?: "not_required" | "outstanding" | "completed";
+    responsi_status?: "not_required" | "outstanding" | "completed";
+    warning_scope?: "active" | "all";
     activity_event?: string;
     activity_actor?: string;
     per_page?: number;
@@ -292,6 +351,8 @@ export type KompenResponHubPageProps = {
     importAuditYears: number[];
     activityFilterOptions: { event_types: string[]; actor_usernames: string[] };
     warningPeriods: string[];
+    selectableWarningPeriods: string[];
+    warningPeriodOptions: WarningPeriodOption[];
     flash: { success: string | null; error: string | null };
     students: Pagination<Student> | null;
     details: Pagination<Detail> | null;
@@ -300,10 +361,11 @@ export type KompenResponHubPageProps = {
     activeImportVersions: Pagination<ImportVersion> | null;
     activeStudentImportVersions: Pagination<ActiveStudentImportVersion> | null;
     activeStudentImportReferences: Pagination<ActiveStudentImportReference> | null;
+    warningLetterArtifacts: Pagination<WarningLetterArtifact> | null;
     recycledImportVersions: Pagination<ImportVersion> | null;
     recycledActiveStudentImportVersions: Pagination<ActiveStudentImportVersion> | null;
-    dataConsistencyReport: DataConsistencyRecord[];
     warnings: Pagination<Warning> | null;
+    warningPreview: Pagination<WarningRecipient> | null;
     warningCandidates: Pagination<Student> | null;
     rolledBackWarnings: Pagination<Warning> | null;
     activityLogs: Pagination<ActivityLog> | null;
@@ -314,14 +376,4 @@ export type KompenResponHubPageProps = {
     activeImportTasks: ImportTask[];
     exportTasks: ExportTask[];
     exportStalledAfterMinutes: number;
-    managedPeriodHasActiveWarnings: boolean;
-};
-
-export type DataConsistencyRecord = {
-    periode_semester: string;
-    status: "ready" | "roster_missing" | "mismatch";
-    kompen_respon_students: number;
-    roster_students: number;
-    missing_from_roster: string[];
-    missing_from_kompen_respon: string[];
 };

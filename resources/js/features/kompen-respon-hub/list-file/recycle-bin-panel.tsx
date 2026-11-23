@@ -1,7 +1,8 @@
+import { ConfirmForm } from "../shared/components/confirm-action";
 import { Form } from "@inertiajs/react";
-import { ArchiveRestore, Recycle } from "lucide-react";
-import { restore as restoreActiveStudentImport } from "@/actions/App/Http/Controllers/KompenResponHubActiveStudentImportController";
-import { restore as restoreImport } from "@/actions/App/Http/Controllers/KompenResponHubImportController";
+import { ArchiveRestore, ChevronDown, Recycle, Trash2 } from "lucide-react";
+import { forceDestroy as forceDestroyActiveStudentImport, restore as restoreActiveStudentImport } from "@/actions/App/Http/Controllers/KompenResponHubActiveStudentImportController";
+import { forceDestroy as forceDestroyImport, restore as restoreImport } from "@/actions/App/Http/Controllers/KompenResponHubImportController";
 import { updateWorkbookRecycleBin } from "@/actions/App/Http/Controllers/KompenResponHubActivityRetentionController";
 import { Button } from "@/components/ui/button";
 import { Pager } from "../shared/components/pagination";
@@ -42,7 +43,7 @@ export function RecycleBinPanel({
                         <Recycle className="size-4" /> Recycle bin workbook
                     </h3>
                     <p className="mt-0.5 max-w-3xl text-xs font-medium text-[#395886]/70">
-                        File yang dilepas dari List File dapat dipulihkan selama masa retensi. Penghapusan permanen tidak menghapus data operasional yang masih bergantung pada versi tersebut.
+                        File yang dipindahkan dari List File dapat dipulihkan selama masa retensi. Riwayat audit tetap disimpan saat file dihapus permanen.
                     </p>
                 </div>
                 <Form {...updateWorkbookRecycleBin.form()} className="flex flex-wrap items-center gap-2">
@@ -51,16 +52,22 @@ export function RecycleBinPanel({
                             <label className="text-xs font-bold text-[#395886]" htmlFor="workbook-recycle-bin-retention-days">
                                 Simpan selama
                             </label>
-                            <select
-                                id="workbook-recycle-bin-retention-days"
-                                name="workbook_recycle_bin_retention_days"
-                                defaultValue={retentionDays}
-                                className="h-9 rounded-xl border border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] outline-none focus:border-[#395886]"
-                            >
-                                {[7, 14, 30, 60, 90, 180].map((days) => (
-                                    <option key={days} value={days}>{days} hari</option>
-                                ))}
-                            </select>
+                            <div className="relative shrink-0">
+                                <select
+                                    id="workbook-recycle-bin-retention-days"
+                                    name="workbook_recycle_bin_retention_days"
+                                    defaultValue={retentionDays}
+                                    className="h-9 min-w-28 appearance-none rounded-xl border border-[#8AAEE0] bg-white py-2 pr-9 pl-3 text-xs font-bold text-[#395886] outline-none transition-colors hover:border-[#628ECB] focus:border-[#395886] focus-visible:ring-2 focus-visible:ring-[#628ECB]/40"
+                                >
+                                    {[7, 14, 30, 60, 90, 180].map((days) => (
+                                        <option key={days} value={days}>{days} hari</option>
+                                    ))}
+                                </select>
+                                <ChevronDown
+                                    aria-hidden="true"
+                                    className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-[#395886]"
+                                />
+                            </div>
                             <Button type="submit" size="sm" disabled={processing} className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white">
                                 Simpan
                             </Button>
@@ -117,16 +124,30 @@ function RecycleBinList({
                                     {version.periode_semester ?? "Periode belum ditetapkan"} · dihapus {formatJakartaDateTime(version.deleted_at)}
                                 </p>
                             </div>
-                            <Form
-                                {...(kind === "kompen_respon" ? restoreImport.form(version.id) : restoreActiveStudentImport.form(version.id))}
-                                onBefore={() => window.confirm(`Pulihkan ${"display_filename" in version ? version.display_filename : version.original_filename}?`)}
-                            >
-                                {({ processing }) => (
-                                    <Button type="submit" size="sm" disabled={processing} variant="outline" className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
-                                        <ArchiveRestore className="size-3.5" /> {processing ? "Memulihkan…" : "Pulihkan"}
-                                    </Button>
-                                )}
-                            </Form>
+                            <div className="flex shrink-0 flex-wrap gap-2">
+                                <ConfirmForm
+                                    {...(kind === "kompen_respon" ? restoreImport.form(version.id) : restoreActiveStudentImport.form(version.id))}
+                                    title="Pulihkan file" description={`Pulihkan ${"display_filename" in version ? version.display_filename : version.original_filename} ke List File? File yang dipulihkan dapat dipilih kembali.`}
+                                >
+                                    {({ processing }) => (
+                                        <Button type="submit" size="sm" disabled={processing} variant="outline" className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white">
+                                            <ArchiveRestore className="size-3.5" /> {processing ? "Memulihkan…" : "Pulihkan"}
+                                        </Button>
+                                    )}
+                                </ConfirmForm>
+                                <ConfirmForm
+                                    {...(kind === "kompen_respon" ? forceDestroyImport.form(version.id) : forceDestroyActiveStudentImport.form(version.id))}
+                                    title="Hapus permanen"
+                                    description={`Hapus permanen ${"display_filename" in version ? version.display_filename : version.original_filename}? File sumber dan data hasil impornya tidak dapat dipulihkan. Riwayat audit tetap tersimpan.`}
+                                    confirmButtonClassName="rounded-xl bg-rose-700 text-white hover:bg-rose-800 hover:text-white"
+                                >
+                                    {({ processing }) => (
+                                        <Button type="submit" size="sm" disabled={processing} variant="outline" className="rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:border-rose-700 hover:bg-rose-700 hover:text-white">
+                                            <Trash2 className="size-3.5" /> {processing ? "Menghapus…" : "Hapus permanen"}
+                                        </Button>
+                                    )}
+                                </ConfirmForm>
+                            </div>
                         </article>
                     ))}
                     <Pager<ImportVersion | ActiveStudentImportVersion> data={versions} />

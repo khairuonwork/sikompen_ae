@@ -6,6 +6,7 @@ use App\Actions\KompenResponHub\ImportKompenResponHubWorkbook;
 use App\Actions\KompenResponHub\ParseKompenResponHubWorkbook;
 use App\Actions\KompenResponHub\RecordKompenResponHubActivity;
 use App\Actions\KompenResponHub\ValidateKompenResponHubWorkbookArchive;
+use App\Models\KompenResponHubActiveStudent;
 use App\Models\KompenResponHubAdmin;
 use App\Models\KompenResponHubImportTask;
 use Carbon\CarbonInterface;
@@ -67,6 +68,13 @@ class ProcessKompenResponHubImport implements ShouldQueue
 
         if ($payload['errors'] !== []) {
             $this->markAsFailed($importTask, $this->validationErrorMessage($payload['errors']), $activity);
+
+            return;
+        }
+
+        $rosterMismatchMessage = $this->rosterMismatchMessage($payload['students']);
+        if ($rosterMismatchMessage !== null) {
+            $this->markAsFailed($importTask, $rosterMismatchMessage, $activity);
 
             return;
         }
@@ -167,6 +175,60 @@ class ProcessKompenResponHubImport implements ShouldQueue
             ->implode(' ');
 
         return "Workbook perlu diperbaiki. {$messages}";
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $students
+     */
+    private function rosterMismatchMessage(array $students): ?string
+    {
+        $activeRoster = KompenResponHubActiveStudent::query()
+            ->fromActiveRosterReference()
+            ->get(['nim', 'nama_mahasiswa'])
+            ->mapWithKeys(fn (KompenResponHubActiveStudent $student): array => [
+                $student->nim => $this->normalizedName($student->nama_mahasiswa),
+            ]);
+
+        if ($activeRoster->isEmpty()) {
+            return null;
+        }
+
+        $mismatches = [];
+
+        foreach ($students as $student) {
+            $nim = $student['nim'] ?? null;
+            $name = $student['nama_mahasiswa'] ?? null;
+
+            if (! is_string($nim) || ! is_string($name)) {
+                continue;
+            }
+
+            $rosterName = $activeRoster->get($nim);
+            if (! is_string($rosterName)) {
+                $mismatches[] = "{$name} ({$nim}) tidak ada pada daftar mahasiswa aktif";
+
+                continue;
+            }
+
+            if ($rosterName !== $this->normalizedName($name)) {
+                $mismatches[] = "{$name} ({$nim}) memiliki nama yang berbeda pada daftar mahasiswa aktif";
+            }
+        }
+
+        if ($mismatches === []) {
+            return null;
+        }
+
+        $listedMismatches = array_slice($mismatches, 0, 20);
+        $remainingCount = count($mismatches) - count($listedMismatches);
+        $remainingSummary = $remainingCount > 0 ? " dan {$remainingCount} mahasiswa lain" : '';
+
+        return 'Workbook tidak sesuai dengan daftar mahasiswa aktif: '.implode('; ', $listedMismatches)."{$remainingSummary}. Perbaiki daftar mahasiswa aktif, pilih roster yang benar, lalu unggah ulang workbook Kompen dan Respon.";
+    }
+
+    private function normalizedName(string $name): string
+    {
+        return mb_strtoupper((string) preg_replace('/\s+/u', ' ', trim($name)));
     }
 
     private function markAsFailed(

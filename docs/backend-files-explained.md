@@ -23,7 +23,7 @@ Dokumen ini memetakan file aplikasi yang membentuk fitur Sikompen; framework dan
 | --- | --- |
 | Workbook | `ParseKompenResponHubWorkbook`, `ValidateKompenResponHubWorkbookArchive`, `ImportKompenResponHubWorkbook`, `ActivateKompenResponHubImportVersion`, `ReleaseKompenResponHubImportVersion`. |
 | Roster | `ParseKompenResponHubActiveStudentWorkbook`, `ImportKompenResponHubActiveStudents`, `ActivateKompenResponHubActiveStudentImport`. |
-| Data/lifecycle | `KompenResponHubDataQuery`, `BuildKompenResponHubDataConsistencyReport`, `FinalizeKompenResponHubCutoff`, `RecordKompenResponHubActivity`. |
+| Data/lifecycle | `KompenResponHubDataQuery`, `FinalizeKompenResponHubCutoff`, `RecordKompenResponHubActivity`. |
 | Job | `ProcessKompenResponHubImport`, `ProcessKompenResponHubActiveStudentImport`, `GenerateKompenResponHubExport`, `GenerateKompenResponHubApiSyncArtifact`. |
 | Command | `Reconcile...Tasks` dan seluruh `Purge...`. Client API dikelola melalui environment deployment. |
 

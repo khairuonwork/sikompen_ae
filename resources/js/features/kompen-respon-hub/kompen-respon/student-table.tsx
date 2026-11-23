@@ -36,7 +36,7 @@ export function StudentTable({
     ];
     const columnWidths = [
         "5.5rem",
-        "8.5rem",
+        "11rem",
         "12.5rem",
         "7.5rem",
         "10rem",
@@ -147,19 +147,23 @@ export function ProgressStatusBadge({
     status: Student["progress_status"];
 }): React.JSX.Element | null {
     const labels: Record<Student["progress_status"], string> = {
+        no_obligation: "Tidak ada kewajiban",
         completed: "Selesai",
+        cutoff_unset: "Cutoff belum diatur",
+        in_progress: "Masa pengerjaan",
+        awaiting_finalization: "Menunggu finalisasi",
         warning_active: "SP aktif",
-        none: "",
+        needs_review: "Perlu ditinjau",
     };
     const tones: Record<Student["progress_status"], string> = {
+        no_obligation: "bg-slate-100 text-slate-700",
         completed: "bg-emerald-100 text-emerald-800",
+        cutoff_unset: "bg-slate-100 text-slate-700",
+        in_progress: "bg-sky-100 text-sky-800",
+        awaiting_finalization: "bg-amber-100 text-amber-800",
         warning_active: "bg-rose-100 text-rose-800",
-        none: "",
+        needs_review: "bg-violet-100 text-violet-800",
     };
-
-    if (status === "none") {
-        return null;
-    }
 
     return (
         <span

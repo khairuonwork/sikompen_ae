@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\KompenResponHub\BuildKompenResponHubDataConsistencyReport;
+use App\Actions\KompenResponHub\FinalizeKompenResponHubCutoff;
 use App\Actions\KompenResponHub\KompenResponHubDataQuery;
 use App\Actions\KompenResponHub\SikompenStudentAccess;
 use App\Http\Requests\KompenResponHubTableRequest;
@@ -18,7 +18,9 @@ use App\Http\Resources\KompenResponHubImportTaskResource;
 use App\Http\Resources\KompenResponHubImportVersionResource;
 use App\Http\Resources\KompenResponHubStudentResource;
 use App\Http\Resources\KompenResponHubStudentSearchResource;
+use App\Http\Resources\KompenResponHubWarningLetterArtifactResource;
 use App\Http\Resources\KompenResponHubWarningLetterResource;
+use App\Models\KompenResponHubActiveImport;
 use App\Models\KompenResponHubActiveStudentImportTask;
 use App\Models\KompenResponHubActivityLog;
 use App\Models\KompenResponHubDetail;
@@ -30,10 +32,11 @@ use App\Models\KompenResponHubPeriodCutoff;
 use App\Models\KompenResponHubStudent;
 use App\Models\KompenResponHubStudentAccount;
 use App\Models\KompenResponHubSystemSetting;
-use App\Models\KompenResponHubWarningLetter;
+use App\Models\KompenResponHubWarningLetterArtifact;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Collection;
+use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Pagination\LengthAwarePaginator as PreviewPaginator;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -42,7 +45,7 @@ class KompenResponHubController extends Controller
     public function __construct(
         private KompenResponHubDataQuery $dataQuery,
         private SikompenStudentAccess $studentAccess,
-        private BuildKompenResponHubDataConsistencyReport $dataConsistencyReport,
+        private FinalizeKompenResponHubCutoff $cutoffFinalizer,
     ) {}
 
     public function studentIndex(KompenResponHubTableRequest $request): Response
@@ -75,6 +78,14 @@ class KompenResponHubController extends Controller
 
     public function student(KompenResponHubStudent $student): JsonResponse
     {
+        abort_unless(
+            KompenResponHubStudent::query()
+                ->fromActiveImportReference()
+                ->whereKey($student->id)
+                ->exists(),
+            404,
+        );
+
         $studentNim = $this->studentAccess->studentNim(request());
         abort_if($studentNim !== null && $student->nim !== $studentNim, 404);
 
@@ -96,6 +107,14 @@ class KompenResponHubController extends Controller
 
     public function adminStudentOverview(KompenResponHubStudent $student): JsonResponse
     {
+        abort_unless(
+            KompenResponHubStudent::query()
+                ->fromActiveImportReference()
+                ->whereKey($student->id)
+                ->exists(),
+            404,
+        );
+
         $student->load([
             'importBatch:id,original_filename,imported_at',
             'progress',
@@ -165,17 +184,37 @@ class KompenResponHubController extends Controller
 
         $filterOptions = $this->dataQuery->filterOptions($filters);
 
+        $selectedWarningPeriod = $isAdmin
+            ? $this->dataQuery->selectedWarningPeriod()
+            : null;
         $cutoffs = $isAdmin
             ? KompenResponHubPeriodCutoff::query()
+                ->with('warningLetterArtifact')
                 ->orderByDesc('deadline_at')
-                ->get(['id', 'periode_semester', 'deadline_at', 'timezone'])
+                ->get(['id', 'periode_semester', 'deadline_at', 'cutoff_enabled', 'closed_at', 'timezone'])
             : collect();
+        $activeWarningPeriods = $isAdmin
+            ? KompenResponHubActiveImport::query()
+                ->pluck('periode_semester')
+                ->map(static fn (mixed $period): string => (string) $period)
+                ->values()
+                ->all()
+            : [];
+        $activeWarningPeriods = $this->sortWarningPeriods($activeWarningPeriods);
+        $warningPeriods = $this->sortWarningPeriods(array_values(array_unique([
+            ...$activeWarningPeriods,
+            ...$cutoffs
+                ->pluck('periode_semester')
+                ->map(static fn (mixed $period): string => (string) $period)
+                ->all(),
+        ])));
+        $cutoffsByPeriod = $cutoffs->keyBy('periode_semester');
 
         if ($isAdmin && $activeTab === 'warnings') {
             $filters = $this->filtersForWarningPeriod(
                 $filters,
-                $cutoffs,
-                $filterOptions['periode_semester'],
+                $warningPeriods,
+                $selectedWarningPeriod,
             );
         }
 
@@ -189,6 +228,19 @@ class KompenResponHubController extends Controller
             unset($filters['list_period']);
         }
 
+        $preview = null;
+        $projectionCount = null;
+        $listedPeriod = $filters['list_period'] ?? $selectedWarningPeriod;
+        $listedCutoff = $cutoffsByPeriod->get($listedPeriod);
+        if ($activeTab === 'warnings' && $listedCutoff !== null && $listedCutoff->closed_at === null
+            && in_array($listedPeriod, $activeWarningPeriods, true)) {
+            if (! $listedCutoff->cutoff_enabled || $listedCutoff->deadline_at->isFuture()) {
+                [$projectionCount, $preview] = $this->recipientPreview($listedCutoff, $filters);
+            } elseif ($listedPeriod === $selectedWarningPeriod) {
+                $projectionCount = $this->cutoffFinalizer->projectedRecipientCount($listedCutoff);
+            }
+        }
+
         return Inertia::render('kompen-respon-hub/index', [
             'activeTab' => $activeTab,
             'isAdmin' => $isAdmin,
@@ -198,7 +250,33 @@ class KompenResponHubController extends Controller
             'filters' => $filters,
             'filterOptions' => $filterOptions,
             'warningPeriods' => $isAdmin && $activeTab === 'warnings'
-                ? $filterOptions['periode_semester']
+                ? $warningPeriods
+                : [],
+            'selectableWarningPeriods' => $isAdmin && $activeTab === 'warnings'
+                ? $activeWarningPeriods
+                : [],
+            'warningPeriodOptions' => $isAdmin && $activeTab === 'warnings'
+                ? array_map(function (string $period) use ($activeWarningPeriods, $cutoffsByPeriod, $selectedWarningPeriod): array {
+                    /** @var KompenResponHubPeriodCutoff|null $cutoff */
+                    $cutoff = $cutoffsByPeriod->get($period);
+                    $isActiveWorkbook = in_array($period, $activeWarningPeriods, true);
+                    $status = $cutoff === null
+                            ? 'unconfigured'
+                            : ($cutoff->closed_at !== null
+                                ? KompenResponHubWarningLetterArtifact::StatusFinalized
+                                : ($cutoff->warningLetterArtifact?->status === KompenResponHubWarningLetterArtifact::StatusRevising
+                                    ? KompenResponHubWarningLetterArtifact::StatusRevising
+                                    : (! $cutoff->cutoff_enabled
+                                        ? 'managing'
+                                        : ($cutoff->deadline_at->isFuture() ? 'cutoff_active' : 'ready_to_finalize'))));
+
+                    return [
+                        'periode_semester' => $period,
+                        'status' => $status,
+                        'is_active_workbook' => $isActiveWorkbook,
+                        'is_selected' => $period === $selectedWarningPeriod,
+                    ];
+                }, $warningPeriods)
                 : [],
             'importAuditPeriods' => $isAdmin && $activeTab === 'imports'
                 ? $this->dataQuery->importAuditPeriods()
@@ -217,17 +295,22 @@ class KompenResponHubController extends Controller
                         ->setTimezone($cutoff->timezone)
                         ->toIso8601String(),
                     'timezone' => $cutoff->timezone,
+                    'cutoff_enabled' => $cutoff->cutoff_enabled,
+                    'has_passed' => $cutoff->cutoff_enabled && $cutoff->deadline_at->isPast(),
+                    'is_available' => in_array($cutoff->periode_semester, $activeWarningPeriods, true),
+                    'is_selected' => $cutoff->periode_semester === $selectedWarningPeriod,
+                    'finalization_status' => $cutoff->closed_at !== null
+                        ? KompenResponHubWarningLetterArtifact::StatusFinalized
+                        : ($cutoff->warningLetterArtifact?->status === KompenResponHubWarningLetterArtifact::StatusRevising
+                            ? KompenResponHubWarningLetterArtifact::StatusRevising
+                            : 'editable'),
+                    'finalized_at' => $cutoff->warningLetterArtifact?->finalized_at?->toIso8601String(),
+                    'artifact_revision' => $cutoff->warningLetterArtifact?->revision,
+                    'projected_recipient_count' => $cutoff->closed_at !== null ? $cutoff->warningLetterArtifact?->row_count
+                        : ($cutoff->periode_semester === $listedPeriod ? $projectionCount : null),
                 ])
                     ->all()
                 : [],
-            'managedPeriodHasActiveWarnings' => $isAdmin && $activeTab === 'warnings'
-                ? KompenResponHubWarningLetter::query()
-                    ->where('periode_semester', $filters['warning_period'] ?? null)
-                    ->where('classification', 'fixed')
-                    ->where('letter_status', KompenResponHubWarningLetter::LetterStatusIssued)
-                    ->where('resolution', 'outstanding')
-                    ->exists()
-                : false,
             'activeImportTasks' => $isAdmin
                 ? $this->activeImportTasks()
                 : [],
@@ -290,15 +373,15 @@ class KompenResponHubController extends Controller
             'activeStudentImportReferences' => $isAdmin && $activeTab === 'files'
                 ? $this->activeStudentImportReferencePaginator($filters)
                 : null,
+            'warningLetterArtifacts' => $isAdmin && $activeTab === 'files'
+                ? $this->warningLetterArtifactPaginator($filters)
+                : null,
             'recycledImportVersions' => $isAdmin && $activeTab === 'files'
                 ? $this->recycledImportVersionPaginator($filters)
                 : null,
             'recycledActiveStudentImportVersions' => $isAdmin && $activeTab === 'files'
                 ? $this->recycledActiveStudentImportVersionPaginator($filters)
                 : null,
-            'dataConsistencyReport' => $isAdmin && $activeTab === 'files'
-                ? $this->dataConsistencyReport->execute()
-                : [],
             'warnings' => $isAdmin && $activeTab === 'warnings'
                 ? $this->resourcePaginator(
                     $this->dataQuery->warnings($filters)->paginate($this->perPage($filters))->withQueryString(),
@@ -306,6 +389,7 @@ class KompenResponHubController extends Controller
                     'page',
                 )
                 : null,
+            'warningPreview' => $preview,
             'warningCandidates' => $isAdmin && $activeTab === 'warnings'
                 ? $this->resourcePaginator(
                     $this->dataQuery->warningCandidates($filters)->paginate($this->perPage($filters), ['*'], 'warning_candidate_page')->withQueryString(),
@@ -330,10 +414,74 @@ class KompenResponHubController extends Controller
         ]);
     }
 
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array{int, array<string, mixed>}
+     */
+    private function recipientPreview(KompenResponHubPeriodCutoff $cutoff, array $filters): array
+    {
+        $total = 0;
+        $rows = [];
+        $search = mb_strtolower((string) ($filters['search'] ?? ''));
+        foreach ($this->cutoffFinalizer->projectedRecipients($cutoff) as $warning) {
+            $total++;
+            if ((filled($filters['kelas'] ?? null) && $warning->kelas !== $filters['kelas'])
+                || (filled($filters['tingkat'] ?? null) && ! str_starts_with($warning->kelas, (string) $filters['tingkat']))
+                || (filled($filters['nim'] ?? null) && $warning->nim !== $filters['nim'])
+                || ! str_contains(mb_strtolower($warning->nama_mahasiswa.' '.$warning->nim), $search)) {
+                continue;
+            }
+            $rows[] = [
+                'id' => $warning->exists ? 'sp-'.$warning->id : 'student-'.$warning->current_student_id,
+                'nim' => $warning->nim, 'nama_mahasiswa' => $warning->nama_mahasiswa,
+                'kelas' => $warning->kelas, 'periode_semester' => $cutoff->periode_semester,
+                'effective_sisa_hutang_jam' => (string) ($warning->snapshot['sisa_hutang_jam'] ?? 0),
+            ];
+        }
+
+        $rows = collect($rows)->sortBy([['kelas', 'asc'], ['nim', 'asc'], ['id', 'asc']]);
+        $pageName = 'warning_preview_page';
+        $perPage = $this->perPage($filters);
+        $page = min(PreviewPaginator::resolveCurrentPage($pageName), max(1, (int) ceil($rows->count() / $perPage)));
+        $paginator = new PreviewPaginator($rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page, [
+            'path' => request()->url(), 'pageName' => $pageName,
+        ]);
+        $pagination = JsonResource::collection($paginator->withQueryString())->response()->getData(true);
+        $pagination['meta']['page_name'] = $pageName;
+
+        return [$total, $pagination];
+    }
+
     /** @param array<string, mixed> $filters */
     private function perPage(array $filters): int
     {
         return (int) ($filters['per_page'] ?? 15);
+    }
+
+    /** @param array<int, string> $periods
+     * @return list<string>
+     */
+    private function sortWarningPeriods(array $periods): array
+    {
+        usort($periods, static function (string $left, string $right): int {
+            $parse = static function (string $period): ?array {
+                if (preg_match('/^(\d{4})\/(\d{4})\s+(Gasal|Genap)$/', $period, $matches) !== 1) {
+                    return null;
+                }
+
+                return [(int) $matches[2], $matches[3] === 'Genap' ? 2 : 1];
+            };
+            $leftParts = $parse($left);
+            $rightParts = $parse($right);
+
+            if ($leftParts !== null && $rightParts !== null) {
+                return [$rightParts[0], $rightParts[1]] <=> [$leftParts[0], $leftParts[1]];
+            }
+
+            return strnatcasecmp($right, $left);
+        });
+
+        return $periods;
     }
 
     /**
@@ -407,6 +555,35 @@ class KompenResponHubController extends Controller
         return $this->resourcePaginator(
             $paginator,
             KompenResponHubActiveStudentImportReferenceResource::class,
+            $pageName,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function warningLetterArtifactPaginator(array $filters): array
+    {
+        $pageName = 'warning_artifact_page';
+        $requestedPage = max(1, (int) ($filters[$pageName] ?? 1));
+        $paginator = KompenResponHubWarningLetterArtifact::query()
+            ->with('cutoff')
+            ->latest('updated_at')
+            ->paginate($this->perPage($filters), ['*'], $pageName, $requestedPage)
+            ->withQueryString();
+
+        if ($paginator->isEmpty() && $paginator->total() > 0 && $paginator->currentPage() > $paginator->lastPage()) {
+            $paginator = KompenResponHubWarningLetterArtifact::query()
+                ->with('cutoff')
+                ->latest('updated_at')
+                ->paginate($this->perPage($filters), ['*'], $pageName, $paginator->lastPage())
+                ->withQueryString();
+        }
+
+        return $this->resourcePaginator(
+            $paginator,
+            KompenResponHubWarningLetterArtifactResource::class,
             $pageName,
         );
     }
@@ -527,12 +704,14 @@ class KompenResponHubController extends Controller
      * optional inspection period for the displayed list.
      *
      * @param  array<string, mixed>  $filters
-     * @param  Collection<int, KompenResponHubPeriodCutoff>  $cutoffs
      * @param  list<string>  $warningPeriods
      * @return array<string, mixed>
      */
-    private function filtersForWarningPeriod(array $filters, Collection $cutoffs, array $warningPeriods): array
-    {
+    private function filtersForWarningPeriod(
+        array $filters,
+        array $warningPeriods,
+        ?string $selectedWarningPeriod,
+    ): array {
         if ($warningPeriods === []) {
             unset($filters['periode_semester']);
             unset($filters['warning_period']);
@@ -541,16 +720,22 @@ class KompenResponHubController extends Controller
             return $filters;
         }
 
-        $requestedWarningPeriod = $filters['warning_period'] ?? $filters['periode_semester'] ?? null;
-        $hasRequestedWarningPeriod = filled($requestedWarningPeriod)
-            && in_array($requestedWarningPeriod, $warningPeriods, true);
+        $warningPeriod = filled($selectedWarningPeriod)
+            && in_array($selectedWarningPeriod, $warningPeriods, true)
+            ? $selectedWarningPeriod
+            : null;
 
-        $firstCutoff = $cutoffs->first();
-        $warningPeriod = $hasRequestedWarningPeriod
-            ? $requestedWarningPeriod
-            : ($firstCutoff instanceof KompenResponHubPeriodCutoff
-                ? $firstCutoff->periode_semester
-                : $warningPeriods[0]);
+        if ($warningPeriod === null) {
+            unset($filters['warning_period']);
+            if (in_array($filters['list_period'] ?? null, $warningPeriods, true)) {
+                $filters['periode_semester'] = $filters['list_period'];
+            } else {
+                unset($filters['list_period'], $filters['periode_semester']);
+            }
+
+            return $filters;
+        }
+
         $requestedListPeriod = $filters['list_period'] ?? $warningPeriod;
         $hasRequestedListPeriod = filled($requestedListPeriod)
             && in_array($requestedListPeriod, $warningPeriods, true);
@@ -569,10 +754,10 @@ class KompenResponHubController extends Controller
     }
 
     /**
-     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog|KompenResponHubImport|\App\Models\KompenResponHubActiveStudentImport|\App\Models\KompenResponHubActiveStudentImportReference|\App\Models\KompenResponHubWarningLetter|\App\Models\KompenResponHubActivityLog
+     * @template TModel of KompenResponHubStudent|KompenResponHubDetail|KompenResponHubImportAuditLog|KompenResponHubImport|\App\Models\KompenResponHubActiveStudentImport|\App\Models\KompenResponHubActiveStudentImportReference|\App\Models\KompenResponHubWarningLetter|\App\Models\KompenResponHubWarningLetterArtifact|\App\Models\KompenResponHubActivityLog
      *
      * @param  LengthAwarePaginator<int, TModel>  $paginator
-     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource|KompenResponHubImportVersionResource|KompenResponHubActiveStudentImportResource|KompenResponHubActiveStudentImportReferenceResource|KompenResponHubWarningLetterResource|KompenResponHubActivityLogResource>  $resource
+     * @param  class-string<KompenResponHubStudentResource|KompenResponHubDetailResource|KompenResponHubImportAuditLogResource|KompenResponHubImportVersionResource|KompenResponHubActiveStudentImportResource|KompenResponHubActiveStudentImportReferenceResource|KompenResponHubWarningLetterArtifactResource|KompenResponHubWarningLetterResource|KompenResponHubActivityLogResource>  $resource
      * @return array<string, mixed>
      */
     private function resourcePaginator(LengthAwarePaginator $paginator, string $resource, string $pageName): array

@@ -54,6 +54,7 @@ RUN rm -f public/hot \
         bootstrap/cache \
         storage/app/private/kompen-respon-hub/imports \
         storage/app/private/kompen-respon-hub/exports \
+        storage/app/private/kompen-respon-hub/warning-artifacts \
         storage/logs \
     && chown -R www-data:www-data bootstrap/cache storage \
     && chmod +x /usr/local/bin/docker-entrypoint \

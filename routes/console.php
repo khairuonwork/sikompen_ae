@@ -20,6 +20,11 @@ Schedule::command('sikompen:purge-import-tasks')
     ->daily()
     ->withoutOverlapping();
 
+Schedule::command('sikompen:purge-student-password-reset-requests')
+    ->dailyAt('02:00')
+    ->timezone('Asia/Jakarta')
+    ->withoutOverlapping(30);
+
 Schedule::command('sikompen:purge-activity-logs')
     ->dailyAt('02:15')
     ->timezone('Asia/Jakarta')

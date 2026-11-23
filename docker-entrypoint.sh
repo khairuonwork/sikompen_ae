@@ -6,6 +6,7 @@ for writable_directory in \
     storage/logs \
     storage/app/private/kompen-respon-hub/imports \
     storage/app/private/kompen-respon-hub/exports \
+    storage/app/private/kompen-respon-hub/warning-artifacts \
     storage/app/private/kompen-respon-hub/api-sync; do
     mkdir -p "$writable_directory"
     chown -R www-data:www-data "$writable_directory"

@@ -1,13 +1,16 @@
+import { TableGuide } from "../shared/components/feedback";
+import { CorrectionField } from "../shared/components/correction-field";
+import { ConfirmForm, useConfirmAction } from "../shared/components/confirm-action";
 import { Form, router } from "@inertiajs/react";
 import {
-    CalendarClock,
-    ChevronDown,
-    Clock3,
     Save,
     Search,
     Archive,
     Eye,
     EyeOff,
+    CalendarClock,
+    CircleAlert,
+    CircleCheck,
     Trash2,
     Undo2,
     X,
@@ -17,6 +20,7 @@ import {
     destroyWarning,
     finalizeCutoff,
     rollbackCutoffFinalization,
+    selectWarningPeriod,
     storeCutoff,
     updateWarning,
 } from "@/actions/App/Http/Controllers/KompenResponHubLifecycleController";
@@ -41,8 +45,101 @@ import type {
     Pagination,
     Student,
     Warning,
+    WarningPeriodOption,
+    WarningRecipient,
 } from "../shared/types";
 import { Pager } from "../shared/components/pagination";
+
+function formatCutoffDateTime(value: string, timezone: string): string {
+    return new Intl.DateTimeFormat("id-ID", {
+        dateStyle: "full",
+        timeStyle: "short",
+        timeZone: timezone,
+    }).format(new Date(value));
+}
+
+function CutoffTimingNotice({
+    cutoff,
+}: {
+    cutoff: Cutoff;
+}): React.JSX.Element {
+    const formattedDeadline = formatCutoffDateTime(
+        cutoff.deadline_at,
+        cutoff.timezone,
+    );
+    const isFinalized = cutoff.finalization_status === "finalized";
+    const isRevising = cutoff.finalization_status === "revising";
+    const state = isFinalized
+        ? {
+            icon: CircleCheck,
+            title: "Periode sudah final",
+            description: "Artifact XLSX resmi sudah diterbitkan. Mulai koreksi bila data perlu diperbaiki.",
+            className: "border-emerald-300 bg-emerald-50 text-emerald-950",
+            iconClassName: "bg-emerald-600 text-white",
+        }
+        : isRevising
+          ? {
+              icon: CircleAlert,
+              title: "Koreksi sedang dibuka",
+              description: "SP sementara tidak tersedia di API. Setelah data benar, finalisasi ulang untuk menerbitkan revisi XLSX.",
+              className: "border-amber-300 bg-amber-50 text-amber-950",
+              iconClassName: "bg-amber-600 text-white",
+          }
+          : !cutoff.cutoff_enabled
+            ? {
+                icon: CalendarClock,
+                title: "Cutoff belum diaktifkan",
+                description: "Semester sedang dikelola dan dapat langsung difinalisasi. Aktifkan cutoff bila ingin menetapkan batas waktu kerja.",
+                className: "border-[#8AAEE0] bg-[#F0F3FA] text-[#1E293B]",
+                iconClassName: "bg-[#395886] text-white",
+            }
+          : cutoff.has_passed
+            ? {
+                icon: CircleAlert,
+                title: "Cutoff sudah terlewati",
+                description: "Periksa kandidat SP lalu finalisasi. Waktu cutoff dan data masih dapat diperbaiki selama periode belum final.",
+                className: "border-rose-300 bg-rose-50 text-rose-950",
+                iconClassName: "bg-rose-600 text-white",
+            }
+            : {
+                icon: CalendarClock,
+                title: "Cutoff masih berjalan",
+                description: "Gunakan waktu ini untuk memeriksa data. Pratinjau menunjukkan penerima bila finalisasi dilakukan sekarang.",
+                className: "border-[#8AAEE0] bg-[#F0F3FA] text-[#1E293B]",
+                iconClassName: "bg-[#395886] text-white",
+            };
+    const Icon = state.icon;
+
+    return (
+        <section
+            aria-live="polite"
+            className={cn("rounded-2xl border p-4", state.className)}
+        >
+            <div className="flex items-start gap-3">
+                <span
+                    aria-hidden="true"
+                    className={cn(
+                        "grid size-9 shrink-0 place-items-center rounded-xl shadow-sm",
+                        state.iconClassName,
+                    )}
+                >
+                    <Icon className="size-4" />
+                </span>
+                <div className="min-w-0">
+                    <p className="text-sm font-extrabold">{state.title}</p>
+                    <p className="mt-1 text-xs leading-relaxed font-medium">
+                        {state.description}
+                    </p>
+                    {cutoff.cutoff_enabled ? (
+                        <p className="mt-2 text-xs font-bold">
+                            Batas waktu: {formattedDeadline} WIB
+                        </p>
+                    ) : null}
+                </div>
+            </div>
+        </section>
+    );
+}
 
 export function WarningStatusBadge({
     warning,
@@ -97,6 +194,7 @@ export function WarningTable({
                         {["18rem", "10rem", "13rem", "8rem", "22rem"].map((width, index) => (
                             <col key={`${width}-${index}`} style={{ width }} />
                         ))}
+                        {onSelect && <col style={{ width: "9rem" }} />}
                     </colgroup>
                     <thead className="bg-[#B1C9EF]/20 text-left text-[10px] font-black tracking-[0.15em] text-[#395886] uppercase">
                         <tr>
@@ -105,17 +203,14 @@ export function WarningTable({
                             <th className="px-5 py-4">Status</th>
                             <th className="px-5 py-4">Sisa[j]</th>
                             <th className="px-5 py-4">Catatan</th>
+                            {onSelect && <th className="px-5 py-4">Tindakan</th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F0F3FA]">
                         {data.data.map((warning) => (
                             <tr
                                 key={warning.id}
-                                onClick={() => onSelect?.(warning)}
-                                className={cn(
-                                    "hover:bg-[#B1C9EF]/10",
-                                    onSelect && "cursor-pointer",
-                                )}
+                                className="hover:bg-[#B1C9EF]/10"
                             >
                                 <td className="px-5 py-4">
                                     <p className="break-words font-bold text-[#395886]">
@@ -141,6 +236,11 @@ export function WarningTable({
                                 <td className="px-5 py-4 text-xs text-[#395886]/70">
                                     {warning.reason ?? "—"}
                                 </td>
+                                {onSelect && <td className="px-5 py-4">
+                                    <Button type="button" size="sm" variant="outline" onClick={() => onSelect(warning)}
+                                        aria-label={`Kelola SP ${warning.nama_mahasiswa}`}
+                                        className="rounded-xl border-[#8AAEE0] bg-white text-[#395886] hover:bg-[#395886] hover:text-white">Kelola SP</Button>
+                                </td>}
                             </tr>
                         ))}
                     </tbody>
@@ -152,16 +252,17 @@ export function WarningTable({
 }
 
 function WarningCandidateTable({
-    data,
+    data, preview = false,
 }: {
-    data: Pagination<Student>;
+    data: Pagination<WarningRecipient>;
+    preview?: boolean;
 }): React.JSX.Element {
     return (
         <section className="overflow-hidden rounded-3xl border border-amber-200 bg-white/80 shadow-sm">
             <div className="border-b border-amber-100 bg-amber-50 px-4 py-3">
-                <p className="text-sm font-extrabold text-amber-900">Kandidat SP</p>
+                <p className="text-sm font-extrabold text-amber-900">{preview ? "Pratinjau penerima finalisasi" : "Kandidat SP"}</p>
                 <p className="mt-0.5 text-xs text-amber-800/80">
-                    Belum diterbitkan dan belum dikirim melalui API. Finalisasi SP periode untuk menetapkan seluruh kandidat ini sebagai SP aktif.
+                    {preview ? "Jika difinalisasi sekarang, mahasiswa berikut akan tercantum dalam XLSX. Pratinjau ini belum menerbitkan SP atau mengubah API." : "Cutoff sudah lewat. Kandidat diperiksa sebelum finalisasi semester dan penerbitan XLSX resmi."}
                 </p>
             </div>
             <div className="data-table-scroll">
@@ -181,6 +282,7 @@ function WarningCandidateTable({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F0F3FA]">
+                        {!data.data.length && <tr><td colSpan={5} className="px-5 py-4 text-sm text-[#395886]">Tidak ada penerima yang sesuai dengan filter.</td></tr>}
                         {data.data.map((student) => (
                             <tr key={student.id} className="hover:bg-amber-50/50">
                                 <td className="px-5 py-4">
@@ -191,7 +293,7 @@ function WarningCandidateTable({
                                 <td className="px-5 py-4 text-xs font-semibold text-[#395886]">{student.periode_semester}</td>
                                 <td className="px-5 py-4 text-right font-mono text-xs font-bold text-[#395886]">{number(student.effective_sisa_hutang_jam)}</td>
                                 <td className="px-5 py-4">
-                                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-extrabold text-amber-800">Kandidat SP</span>
+                                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-extrabold text-amber-800">{preview ? "Pratinjau" : "Kandidat SP"}</span>
                                 </td>
                             </tr>
                         ))}
@@ -208,11 +310,13 @@ export function WarningPanel({
     filterOptions,
     filters,
     warningPeriods,
+    selectableWarningPeriods,
+    warningPeriodOptions,
     warnings,
     warningCandidates,
+    warningPreview,
     rolledBackWarnings,
-    managedPeriodHasActiveWarnings,
-    selectedWarning,
+    selectedWarning: selection,
     onSelectWarning,
     onCloseWarning,
 }: {
@@ -220,10 +324,12 @@ export function WarningPanel({
     filterOptions: FilterOptions;
     filters: Filters;
     warningPeriods: string[];
+    selectableWarningPeriods: string[];
+    warningPeriodOptions: WarningPeriodOption[];
     warnings: Pagination<Warning> | null;
     warningCandidates: Pagination<Student> | null;
+    warningPreview: Pagination<WarningRecipient> | null;
     rolledBackWarnings: Pagination<Warning> | null;
-    managedPeriodHasActiveWarnings: boolean;
     selectedWarning: Warning | null;
     onSelectWarning: (warning: Warning) => void;
     onCloseWarning: () => void;
@@ -231,13 +337,6 @@ export function WarningPanel({
     const selectedWarningPeriod = filters.warning_period ?? "";
     const selectedListPeriod = filters.list_period ?? selectedWarningPeriod;
     const isInspectionMode = selectedListPeriod !== selectedWarningPeriod;
-    const [editingCutoffPeriod, setEditingCutoffPeriod] = useState(
-        selectedWarningPeriod,
-    );
-    const [isCutoffEditorOpen, setIsCutoffEditorOpen] = useState(
-        cutoffs.length === 0,
-    );
-    const [isCutoffHistoryOpen, setIsCutoffHistoryOpen] = useState(false);
     const [selectedFilterClass, setSelectedFilterClass] = useState(
         filters.kelas ?? "",
     );
@@ -250,18 +349,30 @@ export function WarningPanel({
     const [selectedInspectionPeriod, setSelectedInspectionPeriod] = useState(
         selectedListPeriod,
     );
+    const [isCutoffFormOpen, setIsCutoffFormOpen] = useState(false);
     const selectedCutoff = cutoffs.find(
         (cutoff) => cutoff.periode_semester === selectedWarningPeriod,
     );
-    const editingCutoff = cutoffs.find(
-        (cutoff) => cutoff.periode_semester === editingCutoffPeriod,
-    );
-    const isSelectedCutoffElapsed =
-        selectedCutoff !== undefined &&
-        new Date(selectedCutoff.deadline_at).getTime() <= Date.now();
-    const isEditingCutoffElapsed =
-        editingCutoff !== undefined &&
-        new Date(editingCutoff.deadline_at).getTime() <= Date.now();
+    const isSelectedCutoffFinalized =
+        selectedCutoff?.finalization_status === "finalized";
+    const isSelectedCutoffRevising =
+        selectedCutoff?.finalization_status === "revising";
+    const hasNoFinalizationRecipients =
+        selectedCutoff?.projected_recipient_count === 0;
+    const canManage = !!selectedCutoff?.is_available && !isInspectionMode;
+    const selectedWarning = warnings?.data.find((item) => item.id === selection?.id)
+        ?? rolledBackWarnings?.data.find((item) => item.id === selection?.id);
+    const canEditWarning = canManage && !isSelectedCutoffFinalized;
+    const { confirm, dialog, processing: actionPending } = useConfirmAction();
+    const periodLabel = (period: string) => {
+        const option = warningPeriodOptions.find((item) => item.periode_semester === period);
+        if (!option) return "Belum diatur";
+        const labels: Record<WarningPeriodOption["status"], string> = {
+            finalized: "SP final", revising: "Sedang dibenarkan", cutoff_active: "Cutoff aktif",
+            ready_to_finalize: "Cutoff terlewati", managing: "Sedang diatur", unconfigured: "Belum diatur",
+        };
+        return labels[option.status] + (option.is_active_workbook ? "" : " · workbook historis");
+    };
 
     useEffect(() => {
         setSelectedFilterClass(filters.kelas ?? "");
@@ -270,46 +381,47 @@ export function WarningPanel({
         setSelectedInspectionPeriod(selectedListPeriod);
     }, [filters.kelas, filters.tingkat, isInspectionMode, selectedListPeriod]);
 
-    function openCutoffEditor(period: string): void {
-        setEditingCutoffPeriod(period);
-        setIsCutoffEditorOpen(true);
-    }
+    useEffect(() => {
+        setIsCutoffFormOpen(false);
+    }, [selectedCutoff?.id]);
 
     function selectManagedWarningPeriod(period: string): void {
-        router.get(
-            adminIndex.url({
-                query: {
-                    tab: "warnings",
-                    warning_period: period,
-                    tingkat: filters.tingkat,
-                    kelas: filters.kelas,
-                    search: filters.search,
-                    per_page: filters.per_page,
-                },
-            }),
-            {},
-            {
-                preserveScroll: true,
-                preserveState: false,
-            },
-        );
+        if (period === selectedWarningPeriod) {
+            return;
+        }
+
+        confirm({
+            title: "Atur semester SP",
+            description: `Kelola SP untuk ${period}? Riwayat semester lain tetap tersimpan.`,
+            submit: (onFinish) => router.post(selectWarningPeriod.url(), { periode_semester: period }, { preserveScroll: true, onFinish }),
+        });
     }
 
     function returnToManagedPeriod(): void {
-        selectManagedWarningPeriod(selectedWarningPeriod);
+        router.get(
+            adminIndex.url(),
+            { tab: "warnings", warning_period: selectedWarningPeriod },
+            { preserveScroll: true },
+        );
     }
 
     return (
         <section className="grid gap-4">
+            {dialog}
+            <TableGuide title="Panduan Surat Peringatan" items={[
+                "Pilih semester dari workbook Kompen dan Responsi yang digunakan. Roster mengatur akses login mahasiswa.",
+                "Cutoff bersifat opsional. Sebelum batas waktu, pratinjau menunjukkan penerima bila difinalisasi sekarang. Setelah cutoff, periksa daftar kandidat SP.",
+                "Finalisasi menetapkan penerima, menyimpan XLSX resmi di List File dan menerbitkan status SP melalui API. Jika jumlahnya nol, konfirmasi untuk membuat XLSX kosong.",
+                "Mulai koreksi untuk menarik SP semester tersebut dari API. Setelah diperbaiki, finalisasi ulang membuat revisi XLSX baru dan menyimpan riwayat sebelumnya.",
+            ]} />
             <section className="order-2 rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm">
                 <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                     <div>
                         <h2 className="text-base font-extrabold text-[#395886]">
-                            List Mahasiswa
+                            Daftar mahasiswa
                         </h2>
                         <p className="mt-0.5 text-xs text-[#395886]/70">
-                            Kandidat dari periode yang dikelola masuk API hanya
-                            setelah Finalisasi SP dilakukan.
+                            Pilih filter untuk memeriksa penerima pada semester yang ditampilkan.
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -454,7 +566,7 @@ export function WarningPanel({
                                         value={period}
                                         className="cursor-pointer hover:bg-[#B1C9EF]/20"
                                     >
-                                        {period}
+                                        {period} · {periodLabel(period)}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -473,32 +585,34 @@ export function WarningPanel({
                 <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                     <div>
                         <h2 className="text-lg font-extrabold text-[#395886]">
-                            Batas waktu periode
+                            Semester Surat Peringatan
                         </h2>
                         <p className="mt-1 text-xs text-[#395886]/70">
-                            Timezone operasional: Asia/Jakarta.
+                            Tentukan semester yang sedang diatur. Cutoff,
+                            finalisasi, artifact, dan riwayat SP mengikuti
+                            semester ini.
                         </p>
                     </div>
                     {selectedCutoff ? (
                         <span
                             className={cn(
                                 "w-fit rounded-full px-3 py-1 text-xs font-bold",
-                                isSelectedCutoffElapsed
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-emerald-100 text-emerald-700",
+                                isSelectedCutoffFinalized
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : isSelectedCutoffRevising
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-[#B1C9EF]/40 text-[#395886]",
                             )}
                         >
-                            {isSelectedCutoffElapsed
-                                ? "Cutoff telah lewat"
-                                : "Cutoff aktif"}
+                            {periodLabel(selectedWarningPeriod)}
                         </span>
                     ) : null}
                 </div>
 
-                {warningPeriods.length ? (
+                {selectableWarningPeriods.length ? (
                     <div className="grid gap-1.5 rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 p-3 md:max-w-xl">
                         <Label className="text-xs font-bold text-[#395886]">
-                            Periode SP yang dikelola
+                            Semester yang diatur
                         </Label>
                         <Select
                             value={selectedWarningPeriod || "placeholder"}
@@ -512,332 +626,222 @@ export function WarningPanel({
                                 <SelectValue placeholder="Pilih periode SP" />
                             </SelectTrigger>
                             <SelectContent className="rounded-2xl text-xs font-semibold">
-                                {warningPeriods.map((period) => (
-                                    <SelectItem
-                                        key={period}
-                                        value={period}
-                                        className="cursor-pointer hover:bg-[#B1C9EF]/20"
-                                    >
-                                        {period}
-                                    </SelectItem>
+                                {selectableWarningPeriods.map((period) => (
+                                    <SelectItem key={period} value={period}>{period} · {periodLabel(period)}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        <p className="text-xs text-[#395886]/70">
-                            Cutoff, finalisasi, pembatalan finalisasi, API, dan
-                            riwayat SP mengikuti periode ini.
-                        </p>
-                    </div>
-                ) : null}
-
-                {selectedCutoff ? (
-                    <div className="flex flex-col justify-between gap-4 rounded-2xl border border-[#8AAEE0] bg-[#B1C9EF]/20 p-4 sm:flex-row sm:items-center">
-                        <div className="flex items-start gap-3">
-                            <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#395886] text-white">
-                                <CalendarClock className="size-4" />
-                            </div>
-                            <div>
-                                <p className="text-[11px] font-black tracking-[0.14em] text-[#628ECB] uppercase">
-                                    Periode SP terpilih
-                                </p>
-                                <p className="mt-1 text-base font-extrabold text-[#395886]">
-                                    {selectedCutoff.periode_semester}
-                                </p>
-                                <p className="mt-1 text-sm font-semibold text-[#395886]/75">
-                                    Batas waktu {datetimeLocalValue(selectedCutoff.deadline_at, selectedCutoff.timezone).replace("T", ", ")}
-                                </p>
-                            </div>
-                        </div>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() =>
-                                openCutoffEditor(selectedCutoff.periode_semester)
-                            }
-                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
-                        >
-                            Ubah batas waktu
-                        </Button>
                     </div>
                 ) : (
-                    <div className="flex flex-col justify-between gap-3 rounded-2xl border border-dashed border-[#8AAEE0] bg-[#F0F3FA]/60 p-4 sm:flex-row sm:items-center">
-                        <div>
-                            <p className="text-sm font-bold text-[#395886]">
-                                Belum ada cutoff aktif
-                            </p>
-                            <p className="mt-1 text-xs text-[#395886]/70">
-                                Tentukan periode dan batas waktu sebelum proses
-                                fiksasi dilakukan.
-                            </p>
-                        </div>
-                        <Button
-                            type="button"
-                            onClick={() => {
-                                setEditingCutoffPeriod(selectedWarningPeriod);
-
-
-                                setIsCutoffEditorOpen(true);
-                            }}
-                            className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
-                        >
-                            Atur batas waktu
-                        </Button>
+                    <div className="rounded-2xl border border-dashed border-[#8AAEE0] bg-[#F0F3FA]/60 p-4 text-xs text-[#395886]/75">
+                        Belum ada workbook Kompen dan Respon yang digunakan.
+                        Pilih versi workbook terlebih dahulu melalui List File.
                     </div>
                 )}
 
-                {cutoffs.length ? (
-                    <section className="rounded-2xl border border-[#D5DEEF] bg-[#F0F3FA]/45 p-3">
+                {selectedCutoff ? (
+                    <div className="flex flex-col justify-between gap-4 rounded-2xl border border-[#8AAEE0] bg-[#B1C9EF]/20 p-4 sm:flex-row sm:items-center">
+                        <div>
+                            <p className="text-[11px] font-black tracking-[0.14em] text-[#628ECB] uppercase">
+                                Semester yang sedang diatur
+                            </p>
+                            <p className="mt-1 text-base font-extrabold text-[#395886]">
+                                {selectedCutoff.periode_semester}
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-[#395886]/75">
+                                {selectedCutoff.is_available ? "Finalisasi mencatat kondisi workbook saat diterbitkan." : "Workbook semester ini sudah dilepas. Riwayat SP dapat dilihat."}
+                            </p>
+                            <p className="mt-2 text-xs font-bold text-[#395886]">
+                                {selectedCutoff.projected_recipient_count !== null && `${isSelectedCutoffFinalized ? "Penerima pada XLSX resmi" : "Penerima bila difinalisasi sekarang"}: ${selectedCutoff.projected_recipient_count}.`}
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="rounded-2xl border border-dashed border-[#8AAEE0] bg-[#F0F3FA]/60 p-4 text-xs text-[#395886]/75">
+                        Pilih salah satu periode workbook aktif untuk mulai
+                        mengelola Surat Peringatan.
+                    </div>
+                )}
+
+                {selectedCutoff ? <CutoffTimingNotice cutoff={selectedCutoff} /> : null}
+
+                {selectedCutoff && canEditWarning && !isCutoffFormOpen ? (
+                    <section className="flex flex-col gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F7FAFF] p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-sm font-extrabold text-[#395886]">
+                                {selectedCutoff.cutoff_enabled
+                                    ? "Batas cutoff sudah aktif"
+                                    : "Cutoff bersifat opsional"}
+                            </p>
+                            <p className="mt-1 text-xs leading-relaxed text-[#395886]/75">
+                                {selectedCutoff.cutoff_enabled
+                                    ? `Batas saat ini: ${formatCutoffDateTime(selectedCutoff.deadline_at, selectedCutoff.timezone)} WIB.`
+                                    : "Tanpa cutoff, admin dapat memeriksa data dan finalisasi langsung ketika semester sudah siap."}
+                            </p>
+                        </div>
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={() =>
-                                setIsCutoffHistoryOpen(
-                                    (isOpen) => !isOpen,
-                                )
-                            }
-                            className="h-10 w-full justify-between rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white"
-                            aria-expanded={isCutoffHistoryOpen}
+                            onClick={() => setIsCutoffFormOpen(true)}
+                            className="shrink-0 rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
                         >
-                            Riwayat batas waktu periode ({cutoffs.length})
-                            <ChevronDown
-                                className={cn(
-                                    "size-4 transition-transform duration-200",
-                                    isCutoffHistoryOpen && "rotate-180",
-                                )}
-                            />
+                            <CalendarClock className="mr-1.5 size-3.5" />
+                            {selectedCutoff.cutoff_enabled
+                                ? "Edit cutoff"
+                                : "Aktifkan cutoff"}
                         </Button>
-                        {isCutoffHistoryOpen ? (
-                            <div className="mt-3 grid gap-2">
-                            {cutoffs.map((cutoff) => {
-                                const isElapsed =
-                                    new Date(cutoff.deadline_at).getTime() <=
-                                    Date.now();
-
-                                return (
-                                    <div
-                                        key={cutoff.id}
-                                        className="flex flex-col justify-between gap-3 rounded-xl border border-[#D5DEEF] bg-white p-3 sm:flex-row sm:items-center"
-                                    >
-                                        <div>
-                                            <p className="text-xs font-bold text-[#395886]">
-                                                {cutoff.periode_semester}
-                                            </p>
-                                            <p className="mt-0.5 text-xs text-[#395886]/70">
-                                                {datetimeLocalValue(
-                                                    cutoff.deadline_at,
-                                                    cutoff.timezone,
-                                                ).replace("T", ", ")}
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", isElapsed ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700")}>
-                                                {isElapsed
-                                                    ? "Cutoff lewat"
-                                                    : "Aktif"}
-                                            </span>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                disabled={
-                                                    cutoff.periode_semester ===
-                                                    selectedWarningPeriod
-                                                }
-                                                onClick={() =>
-                                                    selectManagedWarningPeriod(
-                                                        cutoff.periode_semester,
-                                                    )
-                                                }
-                                                className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#395886] hover:text-white"
-                                            >
-                                                {cutoff.periode_semester ===
-                                                selectedWarningPeriod
-                                                    ? "Dipilih"
-                                                    : "Pilih"}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                            </div>
-                        ) : null}
                     </section>
                 ) : null}
 
-                {isCutoffEditorOpen ? (
+                {selectedCutoff && canEditWarning && isCutoffFormOpen ? (
                     <Form
+                        key={selectedCutoff.id}
                         {...storeCutoff.form()}
-                        className="grid gap-3 rounded-2xl border border-[#8AAEE0]/70 bg-white p-4 md:grid-cols-[minmax(180px,0.8fr)_minmax(220px,1fr)_auto] md:items-end"
+                        className="grid gap-3 rounded-2xl border border-[#D5DEEF] bg-[#F7FAFF] p-4"
                     >
-                        {({ processing, errors }) => (
+                        {({ errors, processing }) => (
                             <>
-                                <div className="grid gap-1.5">
-                                    <Label className="text-xs font-bold text-[#395886]">
-                                        Periode
-                                    </Label>
-                                    <input
-                                        name="periode_semester"
-                                        type="hidden"
-                                        value={editingCutoffPeriod}
-                                    />
-                                    <Select
-                                        value={
-                                            editingCutoffPeriod ||
-                                            "placeholder"
-                                        }
-                                        onValueChange={(value) =>
-                                            setEditingCutoffPeriod(
-                                                value === "placeholder"
-                                                    ? ""
-                                                    : value,
-                                            )
-                                        }
-                                    >
-                                        <SelectTrigger className="h-10 w-full rounded-2xl border-[#8AAEE0] bg-white px-3 text-xs font-bold text-[#395886] shadow-2xs transition-all duration-300 hover:border-[#628ECB] hover:bg-[#628ECB] hover:text-white">
-                                            <SelectValue placeholder="Pilih periode" />
-                                        </SelectTrigger>
-                                        <SelectContent className="rounded-2xl text-xs font-semibold">
-                                            <SelectItem value="placeholder">
-                                                Pilih periode
-                                            </SelectItem>
-                                            {filterOptions.periode_semester.map(
-                                                (period) => (
-                                                    <SelectItem
-                                                        key={period}
-                                                        value={period}
-                                                        className="cursor-pointer hover:bg-[#B1C9EF]/20"
-                                                    >
-                                                        {period}
-                                                    </SelectItem>
-                                                ),
-                                            )}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="grid gap-1.5">
-                                    <Label className="text-xs font-bold text-[#395886]">
-                                        Tanggal dan waktu batas
-                                    </Label>
-                                    <Input
-                                        key={editingCutoff?.id ?? "new-cutoff"}
-                                        name="deadline_at"
-                                        type="datetime-local"
-                                        required
-                                        step={60}
-                                        defaultValue={
-                                            editingCutoff
-                                                ? datetimeLocalValue(
-                                                      editingCutoff.deadline_at,
-                                                      editingCutoff.timezone,
-                                                  )
-                                                : ""
-                                        }
-                                    />
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    <Button
-                                        disabled={processing}
-                                        type="submit"
-                                        className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
-                                    >
-                                        <Clock3 className="mr-2 size-4" />
-                                        {isEditingCutoffElapsed
-                                            ? "Perpanjang cutoff"
-                                            : "Simpan batas waktu"}
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => setIsCutoffEditorOpen(false)}
-                                        className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]"
-                                    >
-                                        Batal
-                                    </Button>
-                                </div>
-                                {errors.deadline_at || errors.periode_semester ? (
-                                    <p className="text-xs font-bold text-rose-600 md:col-span-3">
-                                        {errors.deadline_at ?? errors.periode_semester}
+                                <input
+                                    name="periode_semester"
+                                    type="hidden"
+                                    value={selectedCutoff.periode_semester}
+                                />
+                                {errors.periode_semester && <p className="text-xs font-bold text-rose-700">{errors.periode_semester}</p>}
+                                <div>
+                                    <p className="text-sm font-extrabold text-[#395886]">
+                                        {selectedCutoff.cutoff_enabled
+                                            ? "Edit batas cutoff"
+                                            : "Aktifkan batas cutoff"}
                                     </p>
-                                ) : null}
+                                    <p className="mt-1 text-xs leading-relaxed text-[#395886]/70">
+                                        Gunakan waktu WIB (Asia/Jakarta). Setelah
+                                        disimpan, cutoff aktif dan dapat diubah
+                                        lagi melalui opsi Edit cutoff selama SP
+                                        belum final.
+                                    </p>
+                                </div>
+                                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                                    <div className="grid gap-1.5">
+                                        <CorrectionField
+                                            label="Tanggal dan waktu batas cutoff"
+                                            error={errors.deadline_at}
+                                            id={`cutoff-${selectedCutoff.id}`}
+                                            name="deadline_at"
+                                            type="datetime-local"
+                                            required
+                                            defaultValue={datetimeLocalValue(
+                                                selectedCutoff.deadline_at, selectedCutoff.timezone,
+                                            )}
+                                            className="h-10 rounded-xl border-[#8AAEE0] bg-white text-sm font-semibold text-[#1E293B] [color-scheme:light]"
+                                        />
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button
+                                            disabled={processing}
+                                            type="submit"
+                                            className="rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
+                                        >
+                                            <Save className="mr-1.5 size-3.5" />
+                                            {selectedCutoff.cutoff_enabled
+                                                ? "Simpan perubahan"
+                                                : "Aktifkan cutoff"}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setIsCutoffFormOpen(false)}
+                                            className="rounded-xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886] hover:bg-[#F0F3FA]"
+                                        >
+                                            Batal
+                                        </Button>
+                                    </div>
+                                </div>
                             </>
                         )}
                     </Form>
                 ) : null}
 
-                {selectedCutoff && isSelectedCutoffElapsed ? (
-                    <div className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center">
+                {selectedCutoff && canManage ? (
+                    <div className="grid gap-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
                         <div>
                             <p className="text-xs leading-relaxed font-medium text-amber-900">
-                                {managedPeriodHasActiveWarnings
-                                    ? `SP ${selectedCutoff.periode_semester} sudah difinalisasi dan sedang tersedia pada API.`
-                                    : `Cutoff ${selectedCutoff.periode_semester} telah lewat. Perpanjang bila masa pengerjaan dibuka kembali, atau finalisasi untuk menerbitkan SP bagi seluruh kandidat yang masih memiliki sisa jam.`}
+                                {isSelectedCutoffFinalized
+                                    ? `SP ${selectedCutoff.periode_semester} sudah final. Data dan catatan SP dikunci agar sesuai dengan artifact XLSX resmi.`
+                                    : isSelectedCutoffRevising
+                                      ? `Koreksi untuk ${selectedCutoff.periode_semester} sedang dibuka. Finalisasi ulang untuk menerbitkan revisi XLSX baru.`
+                                      : `${selectedCutoff.periode_semester} siap difinalisasi. Periksa ${warningPreview ? "pratinjau penerima" : "kandidat SP"}, lalu finalisasi ketika data sudah benar.`}
                             </p>
-                            {managedPeriodHasActiveWarnings ? (
+                            {isSelectedCutoffFinalized ? (
                                 <p className="mt-1 text-xs text-amber-800/80">
-                                    Pembatalan finalisasi menarik seluruh SP aktif
-                                    periode ini dari API tanpa menghapus riwayat.
+                                    Mulai koreksi akan menarik SP periode ini dari API. Artifact sebelumnya dan seluruh riwayat audit tetap tersimpan.
                                 </p>
                             ) : null}
                         </div>
-                        {managedPeriodHasActiveWarnings ? (
-                            <Form
+                        {isSelectedCutoffFinalized ? (
+                            <ConfirmForm
                                 {...rollbackCutoffFinalization.form(
                                     selectedCutoff.id,
                                 )}
-                                className="flex shrink-0 flex-wrap items-center gap-2"
-                                onBefore={() =>
-                                    window.confirm(
-                                        "Batalkan seluruh SP aktif pada periode ini? Mahasiswa akan segera hilang dari API SP, tetapi riwayat tetap tersimpan.",
-                                    )
-                                }
+                                className="grid gap-3 rounded-xl border border-amber-200 bg-white/90 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+                                title="Mulai koreksi"
+                                description="Mulai koreksi seluruh SP pada periode ini? Mahasiswa akan segera hilang dari API SP. Artifact dan riwayat audit tetap tersimpan."
                             >
-                                {({ processing }) => (
+                                {({ errors, processing }) => (
                                     <>
-                                        <Input
+                                        <CorrectionField
+                                            label="Alasan membuka koreksi"
+                                            error={errors.reason}
                                             name="reason"
                                             required
                                             minLength={5}
                                             maxLength={1000}
-                                            placeholder="Alasan pembatalan"
-                                            className="h-9 min-w-52 bg-white text-xs"
+                                            placeholder="Alasan membuka koreksi"
+                                            className="h-10 bg-white text-sm"
                                         />
                                         <Button
                                             disabled={processing}
                                             type="submit"
                                             variant="outline"
-                                            className="rounded-xl border-rose-300 bg-white text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
+                                            className="h-10 rounded-xl border-rose-300 bg-white px-4 text-xs font-bold text-rose-700 hover:bg-rose-600 hover:text-white"
                                         >
                                             <Undo2 className="mr-1.5 size-3.5" />
-                                            Batalkan finalisasi
+                                            Mulai koreksi
                                         </Button>
                                     </>
                                 )}
-                            </Form>
+                            </ConfirmForm>
                         ) : (
                             <Button
                                 type="button"
+                                disabled={actionPending}
                                 onClick={() => {
-                                    if (
-                                        window.confirm(
-                                            "Finalisasi SP periode ini? Setiap kandidat dengan sisa jam akan menerima status SP aktif dan mulai tersedia pada API. Data serta cutoff tetap dapat diperbaiki setelahnya.",
-                                        )
-                                    ) {
-                                        router.post(
-                                            finalizeCutoff.url(selectedCutoff.id),
-                                        );
-                                    }
+                                    const confirmationMessage = isSelectedCutoffRevising
+                                        ? `Finalisasi ulang periode ini untuk ${selectedCutoff.projected_recipient_count} penerima? Artifact XLSX resmi akan diperbarui berdasarkan hasil koreksi terbaru.`
+                                        : hasNoFinalizationRecipients
+                                          ? "Belum ada penerima SP untuk semester ini. Finalisasi tetap membuat artifact XLSX resmi tanpa penerima. Lanjutkan?"
+                                          : `Finalisasi SP periode ini untuk ${selectedCutoff.projected_recipient_count} penerima? Daftar penerima disimpan dalam XLSX resmi dan status SP tersedia melalui API.`;
+
+                                    confirm({
+                                        title: isSelectedCutoffRevising ? "Finalisasi ulang SP" : "Finalisasi SP",
+                                        description: confirmationMessage,
+                                        submit: (onFinish) => router.post(finalizeCutoff.url(selectedCutoff.id), {
+                                            confirm_empty_finalization: hasNoFinalizationRecipients,
+                                        }, { onFinish }),
+                                    });
                                 }}
                                 className="shrink-0 rounded-xl bg-[#395886] text-xs font-bold text-white hover:bg-[#1E293B] hover:text-white"
                             >
                                 <Archive className="mr-1.5 size-3.5" />
-                                Finalisasi SP
+                                {isSelectedCutoffRevising
+                                    ? "Finalisasi ulang SP"
+                                    : "Finalisasi SP"}
                             </Button>
                         )}
                     </div>
                 ) : null}
             </section>
-            {selectedWarning && !isInspectionMode ? (
-                <section className="order-4 grid gap-4 rounded-3xl border border-[#8AAEE0]/60 bg-white p-5 shadow-sm">
+            {selectedWarning && selectedWarning.periode_semester === selectedWarningPeriod && canEditWarning ? (
+                <section key={selectedWarning.id} className="order-4 grid gap-4 rounded-3xl border border-[#8AAEE0]/60 bg-white p-5 shadow-sm">
                     <div className="flex items-start justify-between gap-4">
                         <div>
                             <p className="text-xs font-black tracking-[0.15em] text-[#628ECB] uppercase">
@@ -864,12 +868,14 @@ export function WarningPanel({
                             {...updateWarning.form(selectedWarning.id)}
                             className="grid gap-3 rounded-2xl border border-[#D5DEEF] p-4"
                         >
-                            {({ processing }) => (
+                            {({ errors, processing }) => (
                                 <>
                                     <p className="text-sm font-bold text-[#395886]">
                                         Perbarui catatan SP
                                     </p>
-                                    <Input
+                                    <CorrectionField
+                                        label="Catatan atau alasan perubahan SP"
+                                        error={errors.reason}
                                         name="reason"
                                         required
                                         minLength={5}
@@ -890,16 +896,12 @@ export function WarningPanel({
                                 </>
                             )}
                         </Form>
-                        <Form
+                        <ConfirmForm
                             {...destroyWarning.form(selectedWarning.id)}
                             className="grid gap-3 rounded-2xl border border-rose-200 bg-rose-50/50 p-4"
-                            onBefore={() =>
-                                window.confirm(
-                                    "Rollback SP ini? Riwayat surat dan aktivitas tetap tersimpan, tetapi mahasiswa tidak lagi tampil sebagai SP aktif atau pada API SP.",
-                                )
-                            }
+                            title="Rollback SP" description={"Rollback SP ini? Riwayat surat dan aktivitas tetap tersimpan, tetapi mahasiswa tidak lagi tampil sebagai SP aktif atau pada API SP."}
                         >
-                            {({ processing }) => (
+                            {({ errors, processing }) => (
                                 <>
                                     <p className="text-sm font-bold text-rose-800">
                                         Rollback SP
@@ -909,7 +911,9 @@ export function WarningPanel({
                                         Riwayat surat dan aktivitas tetap dapat
                                         ditinjau dari profil mahasiswa.
                                     </p>
-                                    <Input
+                                    <CorrectionField
+                                        label="Alasan rollback SP"
+                                        error={errors.reason}
                                         name="reason"
                                         required
                                         minLength={5}
@@ -931,7 +935,7 @@ export function WarningPanel({
                                     </Button>
                                 </>
                             )}
-                        </Form>
+                        </ConfirmForm>
                     </div>
                 </section>
             ) : null}
@@ -939,11 +943,10 @@ export function WarningPanel({
                 {isInspectionMode ? (
                     <div className="mb-4 rounded-2xl border border-[#8AAEE0] bg-[#B1C9EF]/20 px-4 py-3 text-xs leading-relaxed text-[#395886]">
                         <span className="font-extrabold">Mode lihat data.</span>{" "}
-                        Menampilkan periode {selectedListPeriod}. Finalisasi dan
-                        pembatalan finalisasi tetap hanya berlaku untuk periode
-                        SP yang dikelola, {selectedWarningPeriod}.
+                        {selectedListPeriod} · {periodLabel(selectedListPeriod)}. Kembali ke semester yang dikelola untuk melakukan perubahan.
                     </div>
                 ) : null}
+                {warningPreview && <WarningCandidateTable data={warningPreview} preview />}
                 {warningCandidates?.data.length ? (
                     <WarningCandidateTable data={warningCandidates} />
                 ) : null}
@@ -952,13 +955,11 @@ export function WarningPanel({
                         <WarningTable
                             data={warnings}
                             onSelect={
-                                isInspectionMode
-                                    ? undefined
-                                    : onSelectWarning
+                                canEditWarning ? onSelectWarning : undefined
                             }
                         />
                     </div>
-                ) : warningCandidates?.data.length ? null : (
+                ) : warningPreview || warningCandidates?.data.length ? null : (
                     <div className="rounded-3xl border-2 border-dashed border-[#8AAEE0] bg-white/80 p-10 text-center text-xs font-semibold text-[#395886]/70">
                         Belum ada kandidat atau SP aktif pada filter yang dipilih.
                     </div>
@@ -979,7 +980,7 @@ export function WarningPanel({
                     <WarningTable
                         data={rolledBackWarnings}
                         onSelect={
-                            isInspectionMode ? undefined : onSelectWarning
+                            canEditWarning ? onSelectWarning : undefined
                         }
                     />
                 </section>

@@ -38,8 +38,8 @@ import { ImportAuditLogTable } from "@/features/kompen-respon-hub/log-upload/imp
 import { ImportAuditFilterPanel } from "@/features/kompen-respon-hub/log-upload/import-audit-filter-panel";
 import { ImportAuditRetentionPanel } from "@/features/kompen-respon-hub/log-upload/import-audit-retention-panel";
 import { ImportVersionList } from "@/features/kompen-respon-hub/list-file/import-version-list";
+import { WarningLetterArtifactList } from "@/features/kompen-respon-hub/list-file/warning-letter-artifact-list";
 import { ActiveStudentImportList } from "@/features/kompen-respon-hub/list-file/active-student-import-list";
-import { DataConsistencyPanel } from "@/features/kompen-respon-hub/list-file/data-consistency-panel";
 import { RecycleBinPanel } from "@/features/kompen-respon-hub/list-file/recycle-bin-panel";
 import { ActivityFilterPanel, ActivityLogTable, ActivityRetentionPanel } from "@/features/kompen-respon-hub/riwayat-aktivitas/activity-panel";
 import { EmptyTableState, TableGuide } from "@/features/kompen-respon-hub/shared/components/feedback";
@@ -67,6 +67,8 @@ export default function KompenResponHubIndex({
     importAuditYears,
     activityFilterOptions,
     warningPeriods,
+    selectableWarningPeriods,
+    warningPeriodOptions,
     flash,
     students,
     details,
@@ -75,18 +77,18 @@ export default function KompenResponHubIndex({
     activeImportVersions,
     activeStudentImportVersions,
     activeStudentImportReferences,
+    warningLetterArtifacts,
     recycledImportVersions,
     recycledActiveStudentImportVersions,
-    dataConsistencyReport,
     warnings,
     warningCandidates,
+    warningPreview,
     rolledBackWarnings,
     activityLogs,
     activityRetentionDays,
     importAuditRetentionDays,
     workbookRecycleBinRetentionDays,
     cutoffs,
-    managedPeriodHasActiveWarnings,
     activeImportTasks,
     exportTasks,
     exportStalledAfterMinutes,
@@ -449,16 +451,18 @@ export default function KompenResponHubIndex({
                                     List File
                                 </h2>
                                 <p className="mt-0.5 text-xs font-medium text-[#395886]/70">
-                                    Tentukan satu workbook yang digunakan untuk setiap periode. Mengganti versi hanya mengganti data sumber periode tersebut; koreksi manual, progres, SP, dan riwayat tetap dipertahankan.
+                                    Pilih satu roster untuk akses login dan satu workbook Kompen dan Responsi untuk setiap semester yang ingin ditampilkan.
                                 </p>
                             </div>
                             <TableGuide
                                 title="Panduan List File"
                                 items={[
-                                    "Kompen dan Respon serta Daftar Mahasiswa Aktif dikelola pada tabel yang terpisah agar versi file mudah ditelusuri.",
+                                    "Daftar Mahasiswa Aktif menentukan akses login dan hanya satu roster yang dapat digunakan secara global.",
                                     "Periode dibaca otomatis dari isi setiap file. Tidak ada pemetaan periode manual.",
-                                    "Pilih satu workbook Kompen dan Respon serta satu daftar mahasiswa aktif untuk setiap periode.",
-                                    "Kedua jenis file dapat diunggah dan digunakan secara mandiri; sistem tidak mewajibkan pasangan periode yang sama.",
+                                    "Pilih satu workbook Kompen dan Respon untuk setiap periode yang ingin ditampilkan; beberapa periode dapat digunakan bersamaan.",
+                                    "Saat roster diganti, hanya NIM yang tercantum pada roster baru yang dapat masuk.",
+                                    "Roster login dan workbook Kompen dan Respon dikelola mandiri. Sistem tidak memasangkan atau membandingkan periode maupun NIM di antara keduanya.",
+                                    "Finalisasi Surat Peringatan menghasilkan artifact XLSX resmi. Mulai koreksi mempertahankan file sebelumnya dengan status sedang dibenarkan sampai finalisasi ulang.",
                                 ]}
                             />
                             {activeStudentImportVersions !== null && activeStudentImportReferences !== null ? (
@@ -467,7 +471,6 @@ export default function KompenResponHubIndex({
                                     versions={activeStudentImportVersions}
                                 />
                             ) : null}
-                            <DataConsistencyPanel records={dataConsistencyReport} />
                             {importVersions?.data.length && activeImportVersions !== null ? (
                                 <ImportVersionList
                                     activeVersions={activeImportVersions}
@@ -478,6 +481,9 @@ export default function KompenResponHubIndex({
                                     Belum ada workbook yang siap dipilih. Upload dokumen terlebih dahulu.
                                 </div>
                             )}
+                            {warningLetterArtifacts !== null ? (
+                                <WarningLetterArtifactList data={warningLetterArtifacts} />
+                            ) : null}
                             {recycledImportVersions !== null &&
                             recycledActiveStudentImportVersions !== null &&
                             workbookRecycleBinRetentionDays !== null ? (
@@ -502,12 +508,12 @@ export default function KompenResponHubIndex({
                                 filterOptions={filterOptions}
                                 filters={filters}
                                 warningPeriods={warningPeriods}
+                                selectableWarningPeriods={selectableWarningPeriods}
+                                warningPeriodOptions={warningPeriodOptions}
                                 warnings={warnings}
                                 warningCandidates={warningCandidates}
+                                warningPreview={warningPreview}
                                 rolledBackWarnings={rolledBackWarnings}
-                                managedPeriodHasActiveWarnings={
-                                    managedPeriodHasActiveWarnings
-                                }
                                 selectedWarning={selectedWarning}
                                 onSelectWarning={setSelectedWarning}
                                 onCloseWarning={() => setSelectedWarning(null)}

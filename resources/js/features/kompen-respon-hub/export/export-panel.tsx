@@ -37,6 +37,9 @@ export function ExportPanel({
     const [tingkat, setTingkat] = useState("");
     const [kelas, setKelas] = useState("");
     const [periode, setPeriode] = useState("");
+    const [kompenStatus, setKompenStatus] = useState("");
+    const [responsiStatus, setResponsiStatus] = useState("");
+    const [warningScope, setWarningScope] = useState<"active" | "all">("active");
     const [importType, setImportType] = useState("");
     const availableClasses = tingkat === ""
         ? filterOptions.kelas
@@ -57,6 +60,9 @@ export function ExportPanel({
             tingkat: tingkat === "" ? undefined : Number(tingkat),
             kelas: kelas || undefined,
             periode_semester: periode || undefined,
+            kompen_status: kompenStatus === "" ? undefined : kompenStatus as Filters["kompen_status"],
+            responsi_status: responsiStatus === "" ? undefined : responsiStatus as Filters["responsi_status"],
+            warning_scope: resource === "warnings" ? warningScope : undefined,
             import_type: importType === "" ? undefined : importType as Filters["import_type"],
         };
     }
@@ -66,6 +72,9 @@ export function ExportPanel({
         setTingkat("");
         setKelas("");
         setPeriode("");
+        setKompenStatus("");
+        setResponsiStatus("");
+        setWarningScope("active");
         setImportType("");
     }
 
@@ -122,6 +131,52 @@ export function ExportPanel({
                             ) : null}
                         </SelectContent>
                     </Select>
+                    {resource === "students" ? (
+                        <>
+                            <Select
+                                value={kompenStatus || "all"}
+                                onValueChange={(value) => setKompenStatus(value === "all" ? "" : value)}
+                            >
+                                <SelectTrigger className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]">
+                                    <SelectValue placeholder="Semua status Kompen" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl text-xs font-semibold">
+                                    <SelectItem value="all">Semua status Kompen</SelectItem>
+                                    <SelectItem value="not_required">Tidak ada Kompen</SelectItem>
+                                    <SelectItem value="outstanding">Kompen belum selesai</SelectItem>
+                                    <SelectItem value="completed">Kompen selesai</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select
+                                value={responsiStatus || "all"}
+                                onValueChange={(value) => setResponsiStatus(value === "all" ? "" : value)}
+                            >
+                                <SelectTrigger className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]">
+                                    <SelectValue placeholder="Semua status Responsi" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl text-xs font-semibold">
+                                    <SelectItem value="all">Semua status Responsi</SelectItem>
+                                    <SelectItem value="not_required">Tidak ada Responsi</SelectItem>
+                                    <SelectItem value="outstanding">Responsi belum selesai</SelectItem>
+                                    <SelectItem value="completed">Responsi selesai</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </>
+                    ) : null}
+                    {resource === "warnings" ? (
+                        <Select
+                            value={warningScope}
+                            onValueChange={(value) => setWarningScope(value as "active" | "all")}
+                        >
+                            <SelectTrigger className="h-10 rounded-2xl border-[#8AAEE0] bg-white text-xs font-bold text-[#395886]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl text-xs font-semibold">
+                                <SelectItem value="active">SP aktif saja</SelectItem>
+                                <SelectItem value="all">SP aktif dan riwayat</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    ) : null}
                     {resource === "import_audits" ? (
                         <Select
                             value={importType || "all"}
@@ -232,7 +287,7 @@ export function ExportPanel({
                         </div>
                     </div>
                     <p className="text-xs font-medium text-[#395886]/70 lg:col-span-2">
-                        {search || tingkat || kelas || periode || importType
+                        {search || tingkat || kelas || periode || kompenStatus || responsiStatus || importType || (resource === "warnings" && warningScope === "all")
                             ? `Ekspor ${resourceLabels[resource]} hanya memakai filter di panel ini.`
                             : `Ekspor ${resourceLabels[resource]} akan memuat seluruh data yang diizinkan.`}
                     </p>

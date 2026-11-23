@@ -11,12 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 class ReleaseKompenResponHubImportVersion
 {
-    /**
-     * Remove a workbook from the active source registry without changing the
-     * operational student records or finalized warning-letter records.
-     *
-     * @return array{import_id: int, periode_semester: string, display_filename: string}
-     */
+    /** @return array{import_id: int, periode_semester: string, display_filename: string} */
     public function execute(
         KompenResponHubImport $import,
         string $actorName,
@@ -28,10 +23,14 @@ class ReleaseKompenResponHubImportVersion
                     ->lockForUpdate()
                     ->findOrFail($import->id);
 
-                KompenResponHubPeriodCutoff::query()
+                $cutoff = KompenResponHubPeriodCutoff::query()
                     ->where('periode_semester', $lockedImport->periode_semester)
                     ->lockForUpdate()
                     ->first();
+
+                if ($cutoff?->closed_at !== null) {
+                    throw new \LogicException('Workbook tidak dapat dilepas karena periode SP sudah difinalisasi. Mulai koreksi periode SP terlebih dahulu.');
+                }
 
                 $activeImport = KompenResponHubActiveImport::query()
                     ->where('periode_semester', $lockedImport->periode_semester)
@@ -51,7 +50,7 @@ class ReleaseKompenResponHubImportVersion
                     ->exists();
 
                 if ($hasActiveWarning) {
-                    throw new \LogicException('Workbook tidak dapat dilepas karena periode ini masih memiliki SP aktif. Rollback atau selesaikan SP terlebih dahulu.');
+                    throw new \LogicException('Workbook tidak dapat dilepas karena periode ini masih memiliki SP aktif. Mulai koreksi periode SP terlebih dahulu.');
                 }
 
                 $activeImport->delete();

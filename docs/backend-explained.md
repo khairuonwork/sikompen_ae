@@ -45,7 +45,7 @@ Password awal mahasiswa adalah NIM. Akun hanya dapat melihat data setelah passwo
 | --- | --- |
 | Workbook Kompen/Respon | `ParseKompenResponHubWorkbook`, `ValidateKompenResponHubWorkbookArchive`, `ImportKompenResponHubWorkbook`, `ActivateKompenResponHubImportVersion`, `ReleaseKompenResponHubImportVersion`. |
 | Roster mahasiswa aktif | `ParseKompenResponHubActiveStudentWorkbook`, `ImportKompenResponHubActiveStudents`, `ActivateKompenResponHubActiveStudentImport`. |
-| Query dan konsistensi | `KompenResponHubDataQuery`, `BuildKompenResponHubDataConsistencyReport`. |
+| Query data | `KompenResponHubDataQuery`. |
 | Lifecycle Kompen/SP | `FinalizeKompenResponHubCutoff`, progress dan override melalui controller lifecycle. |
 | File dan audit | `BuildKompenResponHubExport`, `RecordKompenResponHubActivity`. |
 | API massal | `GenerateKompenResponHubApiSyncArtifact`. |

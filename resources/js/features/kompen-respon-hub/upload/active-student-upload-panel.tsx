@@ -43,9 +43,9 @@ export function ActiveStudentUploadPanel({
                             Upload Daftar Mahasiswa Aktif
                         </CardTitle>
                         <CardDescription className="mt-1 text-xs leading-relaxed font-normal text-[#395886]/70 md:text-sm">
-                            Upload roster mahasiswa aktif untuk satu periode.
-                            Setiap file tersimpan sebagai versi dan dapat dipilih
-                            di List File untuk kelas pada periode tersebut.
+                            Upload roster mahasiswa yang saat ini berhak masuk.
+                            Setiap file tersimpan sebagai versi; satu versi yang
+                            dipilih di List File berlaku untuk seluruh kelas.
                         </CardDescription>
                     </div>
                 </div>
@@ -131,8 +131,8 @@ export function ActiveStudentUploadPanel({
                                     ) : null}
                                 </div>
                                 <p className="text-[11px] leading-tight font-medium text-[#395886]/60">
-                                    Setiap workbook hanya untuk satu periode.
-                                    Tambahkan mahasiswa dalam blok per kelas:
+                                    Periode dalam file hanya disimpan sebagai
+                                    informasi asal. Tambahkan mahasiswa dalam blok per kelas:
                                     isi B4 (Gasal/Genap), C4 (tahun ajaran), E4
                                     (kelas), H4 (tingkat), lalu NIM dan nama.
                                 </p>

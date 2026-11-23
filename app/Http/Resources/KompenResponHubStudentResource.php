@@ -50,19 +50,27 @@ class KompenResponHubStudentResource extends JsonResource
 
     private function progressStatus(): string
     {
-        if (! $this->cutoff?->deadline_at?->isPast()) {
-            return 'none';
+        if ((float) $this->effective_total_hutang_jam <= 0) {
+            return 'no_obligation';
         }
 
         if ((float) $this->effective_sisa_hutang_jam <= 0) {
             return 'completed';
         }
 
+        if ($this->cutoff === null || ! $this->cutoff->cutoff_enabled) {
+            return 'cutoff_unset';
+        }
+
+        if ($this->cutoff->closed_at === null) {
+            return $this->cutoff->deadline_at->isFuture() ? 'in_progress' : 'awaiting_finalization';
+        }
+
         if ($this->hasActiveWarning()) {
             return 'warning_active';
         }
 
-        return 'none';
+        return 'needs_review';
     }
 
     private function hasActiveWarning(): bool
@@ -70,6 +78,7 @@ class KompenResponHubStudentResource extends JsonResource
         return $this->latestWarning !== null
             && $this->latestWarning->classification === 'fixed'
             && $this->latestWarning->resolution === 'outstanding'
-            && $this->latestWarning->letter_status === 'issued';
+            && $this->latestWarning->letter_status === 'issued'
+            && $this->cutoff?->closed_at !== null;
     }
 }
